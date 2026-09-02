@@ -42,9 +42,122 @@
     "Local derivatives: `d(a*b)/da = b`, `d(tanh x)/dx = 1 - tanh²x`, `d(exp x)/dx = exp x`",
     "Central finite differences, `(f(x+h) - f(x-h)) / 2h`, as an independent oracle"
    ],
-   "read": null,
+   "read": [
+    {
+     "title": "One backward pass, every partial",
+     "minutes": 12,
+     "body": "Suppose the network from the next module is in front of you: 41 numbers, and a loss that\ncomes out at 1.18. You want to know, for each of the 41, which way to turn it and by how\nmuch. The direct route is to nudge one number, run the network again, and see where the\nloss went — 41 extra forward passes for one step of training, 82 if you nudge both ways\nfor a cleaner reading. That is tolerable at 41. The models this course is heading toward\nhave a hundred million to a hundred billion of them, and a training run takes a million\nsteps. Nudging is out.\n\nReverse-mode automatic differentiation gets every one of those partial derivatives from\none forward pass and one backward pass, whatever the count. Here is the whole of it, on an\nexpression small enough to hold in your head.\n\n## The expression, forwards\n\n$$f = \\tanh(a \\cdot b + c), \\qquad a = 2,\\; b = -3,\\; c = 10$$\n\nForwards, this is three steps. The product $e = a \\cdot b = -6$. The sum $d = e + c = 4$.\nThen $f = \\tanh 4 = 0.999329$. Three intermediate numbers, each computed from the ones\nbefore it. Draw them as boxes with arrows and you have a computation graph: $a$ and $b$\nfeed $e$, $e$ and $c$ feed $d$, $d$ feeds $f$.\n\n## The same expression, backwards\n\nNow ask the question we want answered: if $a$ moves by a small amount $\\delta$, how far\ndoes $f$ move?\n\nStart at the far end instead. If $d$ moves by $\\delta$, $f$ moves by $\\tanh'(4)\\,\\delta$,\nand since $\\tanh' x = 1 - \\tanh^2 x$ that slope is $1 - 0.999329^2 = 0.001341$. Call it\n$f$'s sensitivity to $d$.\n\nOne step further back. $d = e + c$. If $c$ moves by $\\delta$, $d$ moves by exactly\n$\\delta$ — the slope of a sum with respect to either input is 1 — and so $f$ moves by\n$0.001341\\,\\delta$. The sensitivity to $c$ is the sensitivity to $d$ times the local slope,\nwhich happens to be 1. The same holds for $e$: sensitivity $0.001341$.\n\nOne more. $e = a \\cdot b$. If $a$ moves by $\\delta$, $e$ moves by $b\\,\\delta = -3\\delta$ —\nthe slope of a product with respect to one factor is the *other* factor. So $f$ moves by\n$0.001341 \\times (-3)\\,\\delta = -0.004023\\,\\delta$. And if $b$ moves by $\\delta$, $e$ moves\nby $a\\,\\delta = 2\\delta$, so $f$ moves by $0.002682\\,\\delta$.\n\nThat is the chain rule, and notice the shape of what happened. We never asked \"how does\n$f$ depend on $a$\" directly. We asked how $f$ depends on the node right next to it, then\nmultiplied by how *that* node depends on the node next to *it*, walking backwards one edge\nat a time. Every node only ever needed its own local slope and the sensitivity that had\narrived from above. Nothing needed the whole formula.\n\n```python\nimport math\n\n\nclass Value:\n    def __init__(self, data, children=(), op=\"\"):\n        self.data = float(data)\n        self.grad = 0.0\n        self._backward = lambda: None\n        self._prev = tuple(children)\n        self._op = op\n\n    def __add__(self, other):\n        other = other if isinstance(other, Value) else Value(other)\n        out = Value(self.data + other.data, (self, other), \"+\")\n\n        def _backward():\n            self.grad += out.grad\n            other.grad += out.grad\n\n        out._backward = _backward\n        return out\n\n    def __mul__(self, other):\n        other = other if isinstance(other, Value) else Value(other)\n        out = Value(self.data * other.data, (self, other), \"*\")\n\n        def _backward():\n            self.grad += other.data * out.grad\n            other.grad += self.data * out.grad\n\n        out._backward = _backward\n        return out\n\n    def tanh(self):\n        t = math.tanh(self.data)\n        out = Value(t, (self,), \"tanh\")\n\n        def _backward():\n            self.grad += (1.0 - t * t) * out.grad\n\n        out._backward = _backward\n        return out\n\n    def backward(self):\n        order, seen, stack = [], set(), [(self, False)]\n        while stack:\n            node, expanded = stack.pop()\n            if expanded:\n                order.append(node)\n                continue\n            if id(node) in seen:\n                continue\n            seen.add(id(node))\n            stack.append((node, True))\n            for child in node._prev:\n                stack.append((child, False))\n        self.grad = 1.0\n        for node in reversed(order):\n            node._backward()\n\n\na, b, c = Value(2.0), Value(-3.0), Value(10.0)\ne = a * b\nd = e + c\nf = d.tanh()\nf.backward()\nprint(\"f =\", round(f.data, 6))\nprint(\"df/dd =\", round(d.grad, 6), \" df/de =\", round(e.grad, 6), \" df/dc =\", round(c.grad, 6))\nprint(\"df/da =\", round(a.grad, 6), \" df/db =\", round(b.grad, 6))\n```\n\nThis prints `f = 0.999329`, then `0.001341` three times, then `-0.004023` and `0.002682` —\nthe numbers from the paragraph above, and the numbers the lab's \"Gradients through a\nhand-checked expression\" test asserts to twelve decimal places.\n\n## What a node has to remember\n\nLook at what the code needed at each operation. `__mul__` built the output node and then\nattached a small function — a closure — that knows one thing: push `out.grad` into each\ninput, scaled by the *other* input's value. `tanh` closed over `t` and knows to scale by\n`1 - t*t`. The closure does not know what the expression is, where it sits in the graph,\nor what lies downstream. It knows its own local derivative, and it reads the sensitivity\nthat arrived in `out.grad`.\n\nThat is the pattern for every operation in the engine, and each local rule comes from the\nsame nudge argument. For `exp`: $e^{x+\\delta} = e^x e^\\delta \\approx e^x(1 + \\delta)$, so\nthe slope is the output itself. For `log`: $\\ln(x + \\delta) \\approx \\ln x + \\delta / x$,\nslope $1/x$. For a constant power, $(x + \\delta)^n \\approx x^n + n x^{n-1}\\delta$. For\n`relu`, a nudge above zero passes straight through (slope 1) and below zero goes nowhere\n(slope 0). Subtraction, division and negation get no closures of their own: $a - b$ is\n$a + (-1 \\cdot b)$ and $a / b$ is $a \\cdot b^{-1}$, and the primitives already know what\nto do.\n\n## Two paths into one node\n\nHere is where the picture earns its keep. Take $y = x + x$. Two arrows leave $x$ and both\narrive at $y$. Nudge $x$ by $\\delta$ and $y$ moves by $\\delta$ along the left arrow *and*\n$\\delta$ along the right one: $2\\delta$ in total. Sensitivities along separate paths add.\n\nIn the code this is the `+=` in every closure. The `+` closure runs once, and inside it\n`self` and `other` are the same object, so `self.grad += out.grad` and\n`other.grad += out.grad` both land on `x` and the total is 2.\n\n```python\nclass Value:\n    def __init__(self, data, children=()):\n        self.data = float(data)\n        self.grad = 0.0\n        self._backward = lambda: None\n        self._prev = tuple(children)\n\n    def __add__(self, other):\n        out = Value(self.data + other.data, (self, other))\n\n        def _backward():\n            self.grad += out.grad\n            other.grad += out.grad\n\n        out._backward = _backward\n        return out\n\n\nx = Value(3.0)\ny = x + x\ny.grad = 1.0\ny._backward()\nprint(\"with +=  d(x+x)/dx =\", x.grad)\n\nx = Value(3.0)\ny = x + x\ny.grad = 1.0\ny._backward = lambda: setattr(x, \"grad\", y.grad)   # the overwrite version\ny._backward()\nprint(\"with  =  d(x+x)/dx =\", x.grad)\n```\n\nThe first line reads `2.0`; the second, `1.0`.\n\nThe mistake people make is to write `self.grad = out.grad`. It is tempting because that is\nwhat a closure looks like it should do — compute the gradient of its input and store it —\nand it is correct on every expression where each node is used once, which is every\nexpression you will check by hand. It fails the first time a node is reused, and in a\nnetwork *every weight is reused*: a weight takes part in the forward pass of every example\nin the batch, so the batch loss has one path into that weight per example. Overwrite\ninstead of accumulate, and the weight only ever hears from the last example. The lab's\n\"Reused nodes accumulate rather than overwrite\" test exists because of this.\n\n## Why the order matters\n\nConsider $c = a \\cdot b$ and $d = c + a$, then `d.backward()`. Node $d$'s closure delivers\nsensitivity to $c$ and to $a$. Node $c$'s closure then delivers $c$'s sensitivity, times\n$b$, to $a$, and times $a$ to $b$. Had $c$'s closure run *first*, it would have spent\n`c.grad` while it was still zero and pushed nothing anywhere.\n\nThe rule that falls out: a node's closure may run only once every node that depends on it\nhas finished adding into its `grad`. That is a reverse topological order of the graph, and\n`backward()` obtains it by listing the nodes children-before-parents and walking that list\nbackwards. The listing uses an explicit stack rather than recursion, because a graph is as\ndeep as the longest chain of operations in it, and a recursive walk over a chain of ten\nthousand additions hits Python's recursion limit long before it hits anything\nmathematical.\n\n```text\norder (children first):  a   b   c=a*b   d=c+a\nwalk in reverse:         d  ->  c.grad = 1,  a.grad = 1\n                         c  ->  a.grad += b * 1,  b.grad += a * 1\n```\n\nThere is a second rule in the lab, and it is the flip side of `+=`: `backward()` does not\nclear anything. Call it twice on $x \\cdot x$ at $x = 3$ and `x.grad` reads 12, not 6,\nbecause the second pass added into what the first left behind. That is not an oversight.\nA training loop is the thing that decides when a gradient is finished with, and it zeroes\nthe fields itself — module 2 is built around exactly that line.\n\n## An oracle that owes the engine nothing\n\nEverything above is an argument. The way to find out whether your engine agrees with the\nargument is to measure the slope by nudging, which is the one thing you can do without\ntrusting any of the closures.\n\nThe first estimate anyone reaches for is $(f(x+h) - f(x)) / h$. Expand $f(x + h)$ as a\nTaylor series, $f(x) + h f'(x) + \\tfrac{h^2}{2} f''(x) + \\dots$, subtract $f(x)$ and\ndivide by $h$, and what is left is $f'(x) + \\tfrac{h}{2} f''(x) + \\dots$: the error is\nproportional to $h$. Now do the same with $f(x - h)$, which has the same expansion with\nthe sign of every odd power flipped. Subtract the two expansions and the even powers\ncancel: $f(x+h) - f(x-h) = 2h f'(x) + \\tfrac{h^3}{3} f^{(3)}(x) + \\dots$. Divide by $2h$ and\nthe error is proportional to $h^2$. That is the central difference, and it is why the lab\nuses it.\n\n```python\nimport math\n\n\ndef f(a, b, c):\n    return math.tanh(a * b + c)\n\n\na, b, c = 2.0, -3.0, 10.0\nanalytic = (1.0 - math.tanh(a * b + c) ** 2) * b\nprint(\"chain rule says df/da =\", analytic)\nfor h in (1e-1, 1e-3, 1e-5, 1e-8, 1e-12):\n    forward = (f(a + h, b, c) - f(a, b, c)) / h\n    central = (f(a + h, b, c) - f(a - h, b, c)) / (2 * h)\n    print(f\"h = {h:<6g} forward error {abs(forward - analytic):.1e}   central error {abs(central - analytic):.1e}\")\n```\n\nAt $h = 10^{-3}$ the central estimate is off by $2.4 \\times 10^{-8}$ against\n$1.2 \\times 10^{-5}$ for the one-sided one — five hundred times better — and at\n$h = 10^{-5}$ it agrees with the chain rule to within $2.4 \\times 10^{-12}$. Then the\ntable turns around. At $h = 10^{-12}$ both estimates are off by $2.6 \\times 10^{-5}$,\n*worse* than they were at $h = 0.1$, because $f(x+h)$ and $f(x-h)$ now agree in their\nfirst eleven or twelve digits, subtracting them leaves three or four significant digits\nbehind, and dividing by $2 \\times 10^{-12}$ magnifies what remains. Truncation error\nfalls with $h$, rounding error rises, and $10^{-5}$ is near where the two cross for a\ndouble. The lab's gradient check uses that $h$ on a nastier composite expression and asks\nfor agreement within $10^{-6}$; you should see something around $10^{-9}$.\n\n## Where the picture stops holding\n\nA derivative is a slope, and a slope needs a smooth curve. `relu` has a corner at zero:\nfrom the left the slope is 0 and from the right it is 1, and there is no single number at\nthe point itself. The engine returns 0 there because `out.data > 0.0` is false, which is\na decision rather than a fact; a finite difference straddling the corner reports 0.5, and\nneither is wrong, because the question has no answer. In practice a weight lands on\nexactly 0.0 about never, and the choice does not matter — but if a gradient check\ndisagrees with the engine at a corner, this is why.\n\nThe other limit is memory. The forward pass keeps every intermediate node alive until the\nbackward pass has read it, because each closure needs the values it closed over. On the\n41-parameter network of the next module that is nothing. On a model with a billion\nparameters and a batch of a thousand it is the dominant cost, and it is why the tensor\nlibraries you will eventually use do exactly this bookkeeping on whole arrays at a time\ninstead of one scalar per node. The graph is the same; the boxes are bigger.\n\nIn the lab, \"A scalar autodiff engine\", you build the class this reading walked through:\nthe three primitives with their closures, the unary functions, the composite operators as\none-line rewrites, an iterative `topological_order`, and `backward`. The last test is the\ncentral-difference oracle from above, and it is the one to believe when the others\ndisagree."
+    }
+   ],
    "sandbox": null,
-   "quiz": null,
+   "quiz": {
+    "title": "What the backward pass owes each node",
+    "minutes": 8,
+    "questions": [
+     {
+      "q": "For $f = \\tanh(a \\cdot b + c)$ with $a = 2$, $b = -3$, $c = 10$, the engine reports `a.grad = -0.004023` while `c.grad = 0.001341`. Where does the factor of $-3$ between them come from?",
+      "opts": [
+       "It is `b.data`: a nudge to `a` reaches the product scaled by the other factor, then passes through the same tanh slope as `c`",
+       "It is the slope of tanh at 4, which is negative there because tanh has passed its inflection point and is bending back down",
+       "It is `a.data` divided by `b.data`: the product rule splits the arriving gradient between its two inputs in proportion to their values",
+       "It is one sign flip per edge: `a` is three edges from `f` while `c` is two, and each hop through the graph multiplies by $-1$"
+      ],
+      "a": 0,
+      "why": "Walk backwards. $f$'s sensitivity to $d$ is $1 - \\tanh^2 4 = 0.001341$. The sum passes\nthat through unchanged to both $e$ and $c$. The product $e = a \\cdot b$ then scales it\nby the *other* factor on the way to each input: $b = -3$ for `a`, giving $-0.004023$,\nand $a = 2$ for `b`, giving $0.002682$. The $-3$ is a value that happened to be in the\ngraph, not a property of tanh or of the number of edges.",
+      "whys": [
+       "The product rule's local slope with respect to one factor is the other factor, so the $0.001341$ arriving at $e$ is multiplied by $b = -3$ on its way to $a$.",
+       "The slope of tanh is $1 - \\tanh^2 x$, which is never negative — it is $0.001341$ at 4, and it is the same factor for `a` and `c` alike. The sign comes from the product below it, not from tanh.",
+       "Nothing is split. Each input of a product receives the *whole* arriving gradient scaled by the other input; `b.grad` came out as $0.001341 \\times 2$, not as a share of something.",
+       "Edges carry local slopes, not sign flips. The `+` edge from $e$ to $d$ has slope 1, the tanh edge has slope $0.001341$, and only the product edge carries a factor of $-3$ — which is the value of $b$, not a count of hops."
+      ]
+     },
+     {
+      "q": "`y = x + x` followed by `y.backward()` leaves `x.grad == 1.0` instead of 2. Which defect produces that number?",
+      "opts": [
+       "The `+` closure writes `self.grad = out.grad`, so the second path into `x` overwrites what the first delivered",
+       "`topological_order` listed `x` twice, so its own closure ran twice and the second run reset what the first had done",
+       "`backward()` seeded `y.grad = 1.0` but never divided that seed between the two edges that lead down to `x`",
+       "`__add__` wrapped the second `x` in a fresh `Value`, so half the gradient went to a copy that nothing else can see"
+      ],
+      "a": 0,
+      "why": "Nudge `x` by $\\delta$ and `y` moves by $\\delta$ along each of two edges, so the\nsensitivity is 2. In the closure, `self` and `other` are the same object; with `+=`\nthe two lines add 1 and 1, with `=` the second assignment replaces the first and the\nanswer is 1. Every reused node in a network — every weight, once per example in the\nbatch — fails the same way with the same symptom.",
+      "whys": [
+       "Two edges arrive at `x`, each carrying 1, and `=` keeps only the last to arrive. `+=` is the whole fix.",
+       "A leaf has no closure worth running — `x._backward` is the do-nothing lambda — and `topological_order` de-duplicates on `id(node)`, so `x` appears once. The number 1.0 comes from an overwrite, not a repeat.",
+       "The seed is not divided along edges; it is *copied* along every edge that leaves the node, because a sum's slope with respect to each input is 1. Two edges, two contributions of 1, total 2 — provided they are added.",
+       "`x` is already a `Value`, so `__add__` uses it as is on both sides; `self` and `other` are the same object. There is no copy, which is exactly why both `+=` lines land on the one `grad` field."
+      ]
+     },
+     {
+      "q": "Why must the closures run in *reverse topological* order rather than in the order the nodes were created?",
+      "opts": [
+       "A closure spends `out.grad`, which is complete only once every node that depends on `out` has added its own share",
+       "Creation order starts at the leaves, and a leaf's closure has nothing to push because a leaf has no children below it",
+       "The closures must run from the leaves toward the output so that the seed of 1.0 reaches every parameter first",
+       "Creation order is lost once a node is reused, so the topological walk exists to reconstruct the sequence of operations"
+      ],
+      "a": 0,
+      "why": "Each closure reads its output's accumulated gradient and pushes it down. If any consumer\nof that output has not yet run, the number being read is incomplete, and whatever is\npushed down is wrong by the missing share. Listing the graph children-before-parents and\nwalking it in reverse guarantees every consumer has run first. Creation order happens to\ncoincide with topological order for a straight-line expression, which is why the defect\nhides until a graph has a reused node.",
+      "whys": [
+       "Run $c$'s closure before $d$'s in $d = a \\cdot b + a$ and it multiplies a `c.grad` of zero. Order is about completeness of what is spent, not about where the walk starts.",
+       "That is true and beside the point. The leaves' closures are harmless whenever they run; the danger is an *interior* node whose closure runs before all of its consumers have delivered. Creation order guarantees nothing about that.",
+       "Backwards from the output is the direction, and this describes the opposite one. The seed is planted on the output and flows *down* to the parameters; it does not need to reach them before anything else runs.",
+       "Creation order is never lost — a node's children are fixed at construction. The ordering problem is not reconstructing what happened; it is scheduling the closures so that no gradient is read before it is finished."
+      ]
+     },
+     {
+      "q": "With $h = 10^{-3}$ the one-sided estimate $(f(x+h) - f(x))/h$ is off by $1.2 \\times 10^{-5}$ while $(f(x+h) - f(x-h))/2h$ is off by $2.4 \\times 10^{-8}$. Why is the central one so much better?",
+      "opts": [
+       "Its error term is proportional to $h^2$: the $h f''$ term of the two Taylor expansions cancels when they are subtracted",
+       "It evaluates the function twice, so its rounding errors are averaged and its error halves at every step size",
+       "The one-sided version is biased upward wherever the function is increasing, and the central one has no bias for any function",
+       "It uses a step of $2h$, and the wider gap keeps the two function values from cancelling each other's digits"
+      ],
+      "a": 0,
+      "why": "Expand both $f(x+h)$ and $f(x-h)$. The terms in $h^2 f''$ have the same sign in both and\nvanish when one is subtracted from the other, while the $h f'$ terms have opposite signs\nand add. What survives after dividing by $2h$ is $f'(x)$ plus a term in $h^2 f^{(3)}$. The\none-sided estimate keeps the $h f''/2$ term, so its error is a thousand times larger at\n$h = 10^{-3}$ — a ratio the table shows as five hundred, because the third derivative\nis not the same size as the second.",
+      "whys": [
+       "Odd powers of $h$ flip sign between $f(x+h)$ and $f(x-h)$, even powers do not — so subtracting kills the $h^2 f''$ term and the leading error becomes $\\tfrac{h^2}{6} f^{(3)}$.",
+       "Both estimates evaluate the function twice — the one-sided one uses $f(x)$ and $f(x+h)$. Rounding is the *same* in both; what differs is the truncation term, and it differs by a power of $h$, not a factor of two.",
+       "The one-sided estimate's bias is $\\tfrac{h}{2} f''(x)$, which depends on the second derivative, not on whether the function is increasing. And the central estimate is not unbiased — its bias is $\\tfrac{h^2}{6} f^{(3)}(x)$, which is smaller, not absent.",
+       "A wider gap on its own would make the truncation error *worse*, not better — the one-sided estimate with step $2h$ has twice the error. The improvement comes from symmetry about $x$, not from the width."
+      ]
+     },
+     {
+      "q": "Shrinking $h$ from $10^{-5}$ to $10^{-12}$ makes the central-difference error *worse*, from $2.4 \\times 10^{-12}$ to $2.6 \\times 10^{-5}$. What is going on?",
+      "opts": [
+       "Subtracting two nearly equal doubles leaves only a few significant digits, and dividing by a tiny $h$ magnifies that loss",
+       "The truncation error grows again below a certain $h$, because the Taylor series stops converging for very small steps",
+       "At $10^{-12}$ the nudge is below the double's resolution, so $f(x+h)$ and $f(x-h)$ are the same number and the estimate is zero",
+       "The analytic gradient carries the error: at tiny $h$ the finite difference becomes exact and exposes the engine's rounding"
+      ],
+      "a": 0,
+      "why": "$f(x+h)$ and $f(x-h)$ are both about $0.9993$ and agree in their first eleven digits\nwhen $h = 10^{-12}$. Their difference keeps only the digits where they disagree — three\nor four of them — and dividing by $2 \\times 10^{-12}$ scales that noise up by\n$5 \\times 10^{11}$. The total error is roughly $h^2$ from truncation plus\n$\\epsilon / h$ from rounding, with $\\epsilon \\approx 10^{-16}$; the sum is smallest\naround $h \\approx 10^{-5}$, which is why the lab uses that value.",
+      "whys": [
+       "Truncation error falls with $h$, rounding error climbs as $1/h$, and $10^{-5}$ is near where the two cross for a double.",
+       "The Taylor series of $\\tanh$ converges for any step, and the truncation term $\\tfrac{h^2}{6} f^{(3)}$ only gets *smaller* as $h$ shrinks. The thing that grows is not truncation — it is the rounding error in the subtraction, which scales like $\\epsilon / h$.",
+       "Doubles near 2 are spaced about $4 \\times 10^{-16}$ apart, so a nudge of $10^{-12}$ does move the argument and the two function values do differ. They differ in only their last three or four digits, which is the problem — the estimate is noisy, not zero.",
+       "The chain rule value is computed from $\\tanh 4$ and $b$ with two roundings; it is good to about $10^{-16}$. The finite difference at $h = 10^{-12}$ is the one that has lost eleven digits to cancellation."
+      ]
+     },
+     {
+      "q": "Calling `backward()` twice on the same graph doubles every gradient. Is that a defect in the engine?",
+      "opts": [
+       "No: `backward` accumulates by design, and the training loop is responsible for zeroing gradients before each pass",
+       "Yes: `backward` should reset every `grad` to zero before seeding, so that one call always means one gradient",
+       "No: the second call is correct because the second call rebuilt the whole graph, and both copies then contribute",
+       "Yes: the topological order should be cached after the first call, so a second pass finds nothing left to push"
+      ],
+      "a": 0,
+      "why": "`backward()` seeds 1.0 and runs the closures, and every closure adds. Nothing in the\nengine subtracts or resets, and that is deliberate: the same `+=` that makes a reused\nnode correct within one pass makes two passes accumulate. The training loop in module 2\ncalls `zero_grad()` before `backward()` on every step, and forgetting that line is the\nmistake this behaviour exists to make visible.",
+      "whys": [
+       "The `+=` that makes reused nodes correct also adds across calls; the loop that owns the parameters decides when to clear them.",
+       "If `backward` cleared gradients itself, a loop that accumulates over several small batches before stepping — a common thing to want — would be impossible, and the engine would be making a policy decision that belongs to the caller. The lab's test asserts 12, not 6.",
+       "`backward()` builds nothing. It walks the graph that the forward pass already built; there is one copy of the graph, and the second walk adds into the same `grad` fields the first one filled.",
+       "Caching the order would not change what the closures do, and the closures are the part that accumulates. A second pass that pushed nothing would silently drop the gradient contribution of any later forward pass — which is worse than doubling."
+      ]
+     }
+    ]
+   },
    "blanks": null,
    "numeric": null,
    "match": null,
@@ -119,9 +232,122 @@
     "Forgetting `zero_grad` accumulates gradients across steps and diverges",
     "Learning rate as a step size: too small stalls, too large oscillates"
    ],
-   "read": null,
+   "read": [
+    {
+     "title": "A weighted vote, and a walk downhill",
+     "minutes": 11,
+     "body": "Four rows of three numbers, and a label on each:\n\n```text\n[2.0,  3.0, -1.0]   ->  +1\n[3.0, -1.0,  0.5]   ->  -1\n[0.5,  1.0,  1.0]   ->  -1\n[1.0,  1.0, -1.0]   ->  +1\n```\n\nThe job is a machine that reads a row and produces a number near $+1$ for the first and\nlast rows and near $-1$ for the middle two. That is the whole of this module's lab, and\neverything below exists to make it happen.\n\n## One neuron is a weighted vote\n\nThink of the three inputs as three advisors, each shouting a number. You do not trust them\nequally, so you give each a weight $w_i$ and add up the weighted votes. You also have a\nthreshold of your own, $b$, that shifts the total before you decide. The decision is\n\n$$z = b + w_1 x_1 + w_2 x_2 + w_3 x_3$$\n\nwhich can be any real number, and the labels are $\\pm 1$. So squash it: $\\tanh z$ lives\nin $(-1, 1)$, is about $z$ itself near zero, and flattens toward $\\pm 1$ far from it. That\nsquashed value is the neuron's output, and `Neuron.__call__` in the lab computes exactly\nthis — the bias first, then each `weight * value` folded in, then the activation.\n\nWith four parameters you could find a working set by hand. The point of what follows is a\nprocedure that finds them when there are forty-one, or forty-one million.\n\n## Layers, and why the squash is not optional\n\nFour neurons reading the same three inputs give four outputs; that is a `Layer(3, 4)`.\nFeed those four numbers to another four neurons, then to a single output neuron, and you\nhave `MLP([3, 4, 4, 1])`. Count what it has to learn:\n\n```python\nsizes = [3, 4, 4, 1]\ntotal = 0\nfor nin, nout in zip(sizes, sizes[1:]):\n    layer = nout * (nin + 1)\n    total += layer\n    print(f\"{nin} -> {nout}: {nout} neurons x ({nin} weights + 1 bias) = {layer}\")\nprint(\"total:\", total)\n```\n\nThat prints 16, 20 and 5, and a total of 41 — the number the lab's \"Layers and networks\nflatten their parameters\" test expects from `model.parameters()`.\n\nNow suppose you left the activation out — `activation=\"linear\"` everywhere. The first\nlayer computes $W_1 x + b_1$; the second computes $W_2(W_1 x + b_1) + b_2$, which is\n$(W_2 W_1)\\,x + (W_2 b_1 + b_2)$. That is one affine map with a $4 \\times 3$ matrix and\na 4-vector — nothing a single `Layer(3, 4)` could not have done, and the same collapse\nhappens again at the next layer. Stacking linear layers buys width and nothing else. The\ntanh between them is what makes the second layer able to compute something the first\ncould not, and it is why every hidden layer in the lab defaults to it.\n\n## One number to be wrong by\n\nTraining needs a single measure of how wrong the whole network is, across all four rows.\nTake each prediction's distance from its label, square it so that a miss in either\ndirection counts and big misses count more, and average:\n\n$$L = \\frac{1}{n}\\sum_{i=1}^{n}\\,(\\hat y_i - y_i)^2$$\n\nTwo decisions are hiding in that line. It is a *mean* rather than a sum so that the size\nof the gradient — and therefore the right learning rate — does not change when the batch\ndoes. And it is *one* `Value`, not a list of four, because `backward()` in module 1 seeds\nexactly one node with 1.0 and pushes from there. A list of losses has no single \"how much\ndoes the whole thing move\"; the mean gives it one. `mse_loss` in the lab returns that one\nnode, with the graph of all four forward passes hanging beneath it.\n\n## The step, derived\n\nFrom module 1 you can get $\\partial L / \\partial p$ for every parameter $p$ in one backward\npass. Collect them into a vector $g$. What should you do with it?\n\nMove all the parameters by a small vector $\\Delta$. To first order,\n$L(p + \\Delta) \\approx L(p) + g \\cdot \\Delta$. To make $L$ fall as fast as possible for a\ngiven size of $\\Delta$, point $\\Delta$ straight against $g$: $\\Delta = -\\eta\\, g$ for some\nsmall $\\eta > 0$. Then $L$ changes by about $-\\eta\\,|g|^2$, which is negative whenever the\ngradient is not zero. That is the whole of gradient descent: `p.data -= lr * p.grad` for\nevery parameter, with $\\eta$ written as `lr`.\n\nThe approximation is only good while $\\Delta$ is small enough that the loss surface looks\nflat, which is the condition the learning rate has to satisfy. Watch it on a case small\nenough to follow with a pencil.\n\n## The walk, with the numbers on show\n\nOne linear neuron, one input $x = 2$, one target $y = 3$, starting at $w = 0.5$, $b = 0$.\nThe prediction is $wx + b = 1$, so $L = (1 - 3)^2 = 4$. The chain rule gives\n$\\partial L/\\partial \\hat y = 2(\\hat y - y) = -4$, then $\\partial L/\\partial w = -4 \\cdot x\n= -8$ and $\\partial L/\\partial b = -4$. With $\\eta = 0.05$ the step is $w \\leftarrow 0.5\n+ 0.4 = 0.9$ and $b \\leftarrow 0 + 0.2 = 0.2$, and the new prediction is $1.8 + 0.2 =\n2.0$.\n\n```python\nx, y = 2.0, 3.0\nw, b, lr = 0.5, 0.0, 0.05\nfor step in range(1, 4):\n    pred = w * x + b\n    loss = (pred - y) ** 2\n    d_pred = 2 * (pred - y)\n    d_w, d_b = d_pred * x, d_pred\n    print(f\"step {step}: pred={pred:.3f} loss={loss:.4f} dw={d_w:.2f} db={d_b:.2f}\")\n    w -= lr * d_w\n    b -= lr * d_b\nprint(f\"after 3 steps: w={w:.3f} b={b:.3f} pred={w * x + b:.3f}\")\n```\n\nThe loss goes 4, 1, 0.25, and the prediction 1, 2, 2.5, 2.75. Each step closes exactly\nhalf the remaining gap, and you can see why: write the error as $e = \\hat y - y$. One step\nchanges $w$ by $-2\\eta e x$ and $b$ by $-2\\eta e$, so the prediction changes by\n$-2\\eta e (x^2 + 1)$ and the new error is $e\\,(1 - 2\\eta(x^2 + 1)) = e\\,(1 - 10\\eta)$.\nAt $\\eta = 0.05$ that factor is $0.5$; the error halves and the squared error quarters.\n\n## What the learning rate does\n\nThe same factor, $1 - 10\\eta$, says what every other learning rate does on this problem.\n\n```python\nx, y = 2.0, 3.0\nfor lr in (0.05, 0.1, 0.2, 0.3):\n    w, b = 0.5, 0.0\n    losses = []\n    for _ in range(4):\n        pred = w * x + b\n        losses.append(round((pred - y) ** 2, 4))\n        d_pred = 2 * (pred - y)\n        w -= lr * d_pred * x\n        b -= lr * d_pred\n    print(f\"lr = {lr:<5}\", losses)\n```\n\nAt $0.1$ the factor is $0$ and the loss is exactly zero after one step. At $0.2$ the\nfactor is $-1$: the step overshoots the minimum by precisely the distance it started\nfrom, the error flips sign with the same size, and the loss reads 4 for ever. At $0.3$\nthe factor is $-2$ and the loss quadruples every step: 4, 16, 64, 256. Too small and you\ncrawl; too large and you oscillate or diverge; and the threshold is set by the curvature\nof the loss — $x^2 + 1$ here — which on a real network is different in every direction\nand not known in advance. That is why the learning rate is found by trying, and why the\nlab's $0.05$ on the 41-parameter network is a value that was found to work: it takes\nthe loss from 1.18 to about 0.011 in a hundred epochs, and a larger one does not.\n\n## The mistake, and why it looks right\n\nEvery closure in the engine *adds* into `grad`. That made reused nodes correct in module\n1, and it has a consequence here: nothing ever subtracts. If the training loop does not\nzero the gradients before `backward()`, the second epoch's gradient lands on top of the\nfirst, the third on top of both, and the step applied at each epoch is the sum of every\ngradient so far.\n\n```python\nx, y = 2.0, 3.0\nw, b, lr = 0.5, 0.0, 0.05\ngw = gb = 0.0\nfor step in range(1, 9):\n    pred = w * x + b\n    d_pred = 2 * (pred - y)\n    gw += d_pred * x\n    gb += d_pred\n    w -= lr * gw\n    b -= lr * gb\n    print(f\"step {step}: loss={(pred - y) ** 2:8.4f}   stored dw={gw:8.3f}\")\n```\n\nThe first three steps look identical to the correct run — 4, 1, 0.25 — because the\naccumulated gradient happens to keep pointing the right way. Then the stored gradient\nkeeps pushing after the error has changed sign: step 4 is back at 3.06, step 5 at 4.52,\nstep 7 reads 0.0010 and looks converged, and step 8 is at 1.93 again. The loop never\nsettles, because it is applying a momentum that nothing ever damps.\n\nThis is the mistake people make, and it is tempting because `backward()` looks like the\nthing that *computes* the gradient, so the field ought to hold the current one after it\nruns. It holds the running total. The lab's `train` therefore does, in this order:\nforward, build the loss, `model.zero_grad()`, `loss.backward()`, step. Zeroing *after*\n`backward()` erases exactly the numbers you were about to use, which is a different way\nto write the same wrong loop.\n\n## Where the picture stops holding\n\nThe tanh that made the output match the labels has a cost. Its slope is $1 - \\tanh^2 z$,\nand far from zero that is almost nothing:\n\n```python\nimport math\n\nfor z in (0.0, 1.0, 2.0, 4.0, 8.0):\n    t = math.tanh(z)\n    print(f\"z = {z:3}: tanh = {t:.5f}   slope 1 - tanh^2 = {1 - t * t:.5f}\")\n```\n\nAt $z = 4$ the slope is $0.00134$; at $z = 8$ it prints as zero. A neuron whose\npre-activation sits out there passes almost no gradient back to its weights, however\nwrong its output is, and it stops learning. That is why the weights start small — the lab\ndraws them from `uniform(-1, 1)` — and why inputs should be of order one: feed this\nnetwork rows in the hundreds and every neuron is saturated at birth.\n\nTwo more edges. Squared error on $\\pm 1$ labels works on four points, but for a\nclassifier with many classes the loss of choice is cross-entropy, which the capstone\nuses, because its gradient does not vanish when a confident prediction is wrong. And\nthe lab's loop is *full-batch*: every epoch sees all four rows. On a dataset of a million\nrows one would take a random handful per step — the \"stochastic\" in stochastic gradient\ndescent — which makes each step a noisy estimate of the true gradient. That noise is\ntolerated because it is cheap, and it turns out to help, but it is not what you are\nbuilding here.\n\nIn the lab, \"Training an MLP by hand\", you write `Neuron`, `Layer` and `MLP` on top of\nthe engine, `mse_loss` as one differentiable scalar, and the five-line `train` loop with\nits zero-forward-backward-step order. Seeded with `random.Random(7)`, the first loss must\ncome out at exactly 1.1845288187388343 — which it will only if the weights are drawn in\nthe documented order — and the hundredth below 0.05, with all four predictions on the\ncorrect side of zero."
+    }
+   ],
    "sandbox": null,
-   "quiz": null,
+   "quiz": {
+    "title": "Why the loss goes where it goes",
+    "minutes": 8,
+    "questions": [
+     {
+      "q": "`MLP([3, 4, 4, 1])` has 41 parameters. Which accounting produces that number?",
+      "opts": [
+       "One weight per input plus one bias for every neuron: $4(3+1) + 4(4+1) + 1(4+1)$, which is 41",
+       "One bias per layer rather than per neuron: $12 + 16 + 4$ weights and 3 biases, which is 35",
+       "Every unit including the inputs owns a weight and a bias: $3 + 4 + 4 + 1$ units, twice over, is 24",
+       "Weights alone, since a bias that starts at 0.0 is not a trainable value: $12 + 16 + 4$, which is 32"
+      ],
+      "a": 0,
+      "why": "A layer from $n_{in}$ to $n_{out}$ has $n_{out}$ neurons, each with $n_{in}$ weights\nand one bias: $n_{out}(n_{in} + 1)$. For $[3, 4, 4, 1]$ that is $16 + 20 + 5 = 41$.\nBiases are per neuron, inputs own nothing, and a value that starts at zero is still a\nparameter if gradient reaches it.",
+      "whys": [
+       "16, 20 and 5: each neuron in a layer reads every output of the previous one and adds its own bias.",
+       "The bias is per *neuron*, not per layer — each of the four neurons in a hidden layer has its own threshold. Three biases would give 35 and the test expects 41.",
+       "Inputs are not units with parameters; they are the numbers being read. Parameters belong to neurons, and a neuron's count is its input width plus one.",
+       "Starting at 0.0 says nothing about whether a value is trained. The bias is a `Value` in `parameters()`, it receives gradient, and it moves; the lab's `Neuron.parameters()` returns weights followed by the bias."
+      ]
+     },
+     {
+      "q": "Build the three-layer network with `activation=\"linear\"` on every layer. What can it compute?",
+      "opts": [
+       "What one affine map from 3 inputs to 1 output computes, because composed affine maps collapse into one",
+       "Everything the tanh version can, provided the learning rate is lowered to compensate for the steeper slope",
+       "Almost everything the tanh version can, since tanh is close to linear near zero where the weights start",
+       "More than a single layer, because the two hidden widths of 4 add capacity whatever sits between them"
+      ],
+      "a": 0,
+      "why": "Two affine maps in a row are one affine map: multiply the matrices, combine the offsets.\nThree in a row are still one. Whatever the widths, the linear network is a single\n$1 \\times 3$ weight row and a bias, and it can only separate the four rows if a plane\nthrough them does. The tanh between layers is what makes depth add anything.",
+      "whys": [
+       "$W_2(W_1 x + b_1) + b_2 = (W_2 W_1)x + (W_2 b_1 + b_2)$, and the same collapse repeats at the next layer.",
+       "The learning rate changes how fast the parameters move, not what functions are reachable. No setting of 41 linear parameters escapes being one affine map of the inputs.",
+       "Near zero tanh is close to linear, and that is precisely where a *linear* network is stuck — it never leaves the linear regime. The tanh network can move its pre-activations away from zero and use the curve; the linear one has no curve to use.",
+       "Width without a non-linearity is width in an intermediate representation that is then linearly recombined. The product $W_2 W_1$ is a $4 \\times 3$ matrix whatever the widths in between; capacity did not increase."
+      ]
+     },
+     {
+      "q": "Why must `mse_loss` return one `Value` rather than a list of four per-example losses?",
+      "opts": [
+       "`backward` seeds a single node with 1.0; a list has no single gradient to seed, only a scalar node does",
+       "A list of `Value`s would each need their own `zero_grad`, and the parameters can only be zeroed once per epoch",
+       "The mean keeps the loss between 0 and 1, which the tanh outputs require in order not to saturate",
+       "Per-example losses would each need a separate forward pass, and the engine keeps only the most recent graph"
+      ],
+      "a": 0,
+      "why": "`backward()` sets one node's gradient to 1.0 and walks its graph. Four separate losses\nwould need four separate walks, each pushing a partial gradient into the same weights —\nwhich is what the mean does in one walk, with the $1/n$ folded in so that the step size\ndoes not depend on how many rows the batch holds.",
+      "whys": [
+       "\\\"How much does the whole thing move\\\" is a question about one number; the mean gives training that number.",
+       "`zero_grad` clears parameters, not losses, and it runs once per step regardless of how the loss was assembled. The constraint comes from `backward`, which starts from one seed on one node.",
+       "The mean of squared errors is not bounded by 1 — the lab's first loss is 1.18 — and tanh saturation is about pre-activations inside the network, not about the loss value. The mean is there so the gradient's scale does not depend on batch size.",
+       "All four forward passes already happen, and all four graphs are alive at once, hanging beneath the loss node. The engine keeps every graph it built; what it needs is a single root to walk down from."
+      ]
+     },
+     {
+      "q": "On the one-neuron example ($x = 2$, $y = 3$, $w = 0.5$, $b = 0$) a learning rate of 0.2 leaves the loss at 4.0 on every step. What is happening?",
+      "opts": [
+       "Each step overshoots the minimum by the distance it started from, so the error flips its sign and keeps its size",
+       "The gradient is zero at that learning rate, because the weight update and the bias update cancel each other exactly",
+       "The parameters have landed on a saddle point where the slope vanishes, so no learning rate would move them further",
+       "A learning rate of 0.2 rounds each update to zero in floating point, so the parameters never actually change"
+      ],
+      "a": 0,
+      "why": "One step changes the prediction by $-2\\eta e(x^2 + 1)$, so the new error is\n$e(1 - 10\\eta)$. At $\\eta = 0.2$ the factor is $-1$: from an error of $-2$ the step\nlands at $+2$, then back at $-2$. The loss, being the square, cannot tell the two apart\nand reads 4 for ever. At $0.1$ the factor is 0 and the problem is solved in one step;\nat $0.3$ it is $-2$ and the loss quadruples.",
+      "whys": [
+       "The error is multiplied by $1 - 2\\eta(x^2+1) = 1 - 10\\eta = -1$ each step: same size, opposite sign, same squared loss.",
+       "The gradient is $-4$ on the bias and $-8$ on the weight at the start, and it is never zero while the error is not. The two updates push the prediction the same way; nothing cancels.",
+       "A squared-error loss in two parameters is a bowl with one minimum and no saddle. The parameters are not stuck — they are jumping across the minimum to its mirror image every step.",
+       "The updates are $-0.2 \\times -8 = 1.6$ on $w$ and $0.8$ on $b$, nowhere near rounding. The prediction goes from 1 to 5 and back to 1: it moves a great deal, to the wrong places."
+      ]
+     },
+     {
+      "q": "A training loop omits `zero_grad()`. What does it actually apply as the gradient on the third epoch?",
+      "opts": [
+       "The sum of the gradients from all three epochs, because every closure adds into a field that nothing cleared",
+       "The third epoch's gradient multiplied by three, because the backward pass re-walks the graph once per epoch so far",
+       "Only the first epoch's gradient, because a closure runs once and later passes find the node already spent",
+       "The average of the three gradients, which is why the loss still falls but more slowly than in the correct loop"
+      ],
+      "a": 0,
+      "why": "The gradient fields are running totals. On epoch three they hold $g_1 + g_2 + g_3$,\nand the step applies all of it — an undamped momentum that keeps pushing after the\nerror has changed sign. The reading's trace shows the loss at 0.25, then 3.06, then\n4.52, never settling. `zero_grad()` before `backward()` is the whole fix; zeroing after\nit is a different way to write the same wrong loop.",
+      "whys": [
+       "`+=` never subtracts. Each `backward()` adds a fresh gradient onto whatever the field already held.",
+       "Each `backward()` walks the graph of *its own* forward pass once; it does not revisit earlier ones. What accumulates is the sum of three different gradients from three different parameter values, not one gradient scaled.",
+       "Closures are rebuilt on every forward pass, and every one of them runs. Nothing is spent — the field keeps growing, which is the opposite of stopping after the first.",
+       "Nothing divides by three. The applied step is the *sum*, which is typically larger than any single gradient, and the example in the reading shows the loop overshooting into oscillation rather than merely slowing."
+      ]
+     },
+     {
+      "q": "The slope of tanh at $z = 4$ is $0.00134$. What follows for a neuron whose pre-activation sits there?",
+      "opts": [
+       "Almost no gradient reaches its weights through that slope, so it barely learns however wrong its output is",
+       "Its output is nearly $\\pm 1$, so its contribution to the loss is small and it needs no further training",
+       "The gradient through it is large, because a tiny change in input snaps the output between $-1$ and $+1$",
+       "That neuron alone needs a higher learning rate, which is why the network trains each layer at its own rate"
+      ],
+      "a": 0,
+      "why": "The tanh closure multiplies the incoming gradient by $1 - \\tanh^2 z$, which is\n$0.00134$ at 4 and effectively zero at 8. A saturated neuron is a neuron whose weights\nstop receiving useful gradient, right or wrong. Small initial weights and inputs of order\none keep the pre-activations near zero where the slope is close to 1, and that is the\nwhole reason the lab draws from `uniform(-1, 1)`.",
+      "whys": [
+       "The closure multiplies the arriving gradient by $1 - t^2 = 0.00134$; whatever came in, almost nothing gets through.",
+       "An output near $+1$ is only good if the label is $+1$. If the label is $-1$ the neuron is as wrong as it can be — and the gradient that would fix it is scaled by $0.00134$ on its way back, which is the problem.",
+       "Snapping is what happens at the *centre* of tanh, where the slope is 1. Out at $z = 4$ the curve is flat; a change in input changes the output almost not at all, which is exactly why the gradient is small.",
+       "The lab's `train` uses one learning rate for every parameter, and no per-layer rate would help: the factor of $0.00134$ is inside the closure, and a larger step on a near-zero gradient is still near zero."
+      ]
+     }
+    ]
+   },
    "blanks": null,
    "numeric": null,
    "match": null,
@@ -209,9 +435,122 @@
     "An embedding table is a lookup: token id to a learned dense vector",
     "Cosine similarity measures direction, ignoring magnitude — undefined at the origin"
    ],
-   "read": null,
+   "read": [
+    {
+     "title": "From bytes to merges to a vector",
+     "minutes": 11,
+     "body": "Here is a string, and here is what the computer has of it:\n\n```text\n\"aaabdaaabac\"\n[97, 97, 97, 98, 100, 97, 97, 97, 98, 97, 99]\n```\n\nEleven bytes. A language model is a machine that reads a sequence of symbols and predicts\nthe next one, and the first decision is what a *symbol* is. Take whole words and you need\na dictionary; the first typo, name or URL that is not in it has no id at all, and every\nmodel trained that way carries an `<unk>` token for the things it cannot name. Take single\nbytes and nothing is ever unknown — there are 256 of them and every string is made of\nthem — but a sequence is now ten times longer than it would be in words, and each symbol\ncarries almost no meaning on its own.\n\nByte-pair encoding starts at bytes and lets the data grow the alphabet. The idea comes\nfrom one observation about the string above: `97, 97` occurs over and over, so a symbol\nthat means \"two a's\" would shorten it.\n\n## The merges, one at a time\n\nCount every adjacent pair. In the eleven bytes there are ten pairs, and `(97, 97)`\naccounts for four of them — note that the counting slides along one position at a time,\nso `97, 97, 97` contributes two. `(97, 98)` occurs twice; everything else, once. Give the\nmost frequent pair the next free id, 256, and rewrite the sequence with it. Then count\nagain.\n\n```python\ndef get_stats(ids):\n    stats = {}\n    for left, right in zip(ids, ids[1:]):\n        stats[(left, right)] = stats.get((left, right), 0) + 1\n    return stats\n\n\ndef merge(ids, pair, new_id):\n    out, i = [], 0\n    while i < len(ids):\n        if i < len(ids) - 1 and (ids[i], ids[i + 1]) == pair:\n            out.append(new_id)\n            i += 2\n        else:\n            out.append(ids[i])\n            i += 1\n    return out\n\n\nids = list(\"aaabdaaabac\".encode(\"utf-8\"))\nprint(\"bytes:\", ids)\nmerges = {}\nfor new_id in (256, 257, 258):\n    stats = get_stats(ids)\n    pair, count = min(stats.items(), key=lambda item: (-item[1], item[0]))\n    ids = merge(ids, pair, new_id)\n    merges[pair] = new_id\n    print(f\"merge {pair} seen {count}x -> {new_id}:\", ids)\nprint(merges)\n```\n\nThe first merge turns the eleven ids into nine: `[256, 97, 98, 100, 256, 97, 98, 97, 99]`.\nLook at what happened to `97, 97, 97`. The counter saw two pairs there, but the rewrite\nwalks left to right and *consumes* both bytes of a match — that is the `i += 2` — so the\nthree a's become one 256 and a leftover 97, never two 256s sharing a byte. Overlapping\ncounts, non-overlapping replacement; the counts are a heuristic for choosing, the\nreplacement is what has to be exact.\n\nThe second round is a tie: `(256, 97)` and `(97, 98)` both occur twice. Something has to\ndecide, and it has to decide the same way every time or two runs of the trainer disagree\non the tokeniser. The lab's rule is the numerically smallest pair, and `(97, 98)` wins\nbecause $97 < 256$. That gives `[256, 257, 100, 256, 257, 97, 99]` — seven ids, and the\nexact sequence the lab's \"Encoding replays the merges\" test expects. The lab stops there,\nat a vocabulary of 258. The block above goes one round further to show what a third merge\nwould take: `(256, 257)`, which is `aaab`, and the sequence shrinks to five.\n\n## The merge list is the tokeniser\n\nEverything learned is in the dictionary the block printed: `{(97, 97): 256, (97, 98):\n257, (256, 257): 258}`. To encode new text, take its bytes and replay those merges *in\nthe order they were learned*. Order is not a nicety. The third merge is defined over ids\n256 and 257, which exist only after the first two have been applied; replay it first and\nit matches nothing. The lab's `encode` sorts the merges by their id — which is learned\norder, since ids are handed out in sequence — and applies each in turn.\n\nTo decode, each id has to spell a byte string. Base ids spell themselves; a merged id\nspells the concatenation of what its two halves spell, which is why `build_vocab` also\nwalks the merges in learned order — a merge's halves must already have their spellings.\n\n```python\nmerges = {(97, 97): 256, (97, 98): 257, (256, 257): 258}\nvocab = {i: bytes([i]) for i in range(256)}\nfor (left, right), new_id in sorted(merges.items(), key=lambda item: item[1]):\n    vocab[new_id] = vocab[left] + vocab[right]\n    print(new_id, \"spells\", vocab[new_id])\nprint(b\"\".join(vocab[i] for i in [258, 100, 258, 97, 99]).decode(\"utf-8\"))\n```\n\nThat prints `b'aa'`, `b'ab'`, `b'aaab'`, and then the original string back.\n\nHere is the property that makes byte-level BPE safe to use on anything. `encode` only ever\nreplaces adjacent ids by an id that spells exactly their concatenation, and any byte it\ncannot merge keeps its own id. So the bytes of `decode(encode(text))` are the bytes of\n`text`, for *any* text — a string the trainer never saw merges less, but it never loses a\nbyte. The lab checks that round trip on `\"héllo wörld\"`, on an empty string, and on text\nthat shares nothing with the training corpus.\n\n## Where the bytes stop being characters\n\nUTF-8 spends more than one byte on most characters outside ASCII. The `é` in `héllo` is\nthe two bytes 195 and 169, and a token boundary — or a generation that stops early — can\nland between them.\n\n```python\nids = list(\"héllo\".encode(\"utf-8\"))\nprint(ids)\nprint(bytes(ids[:2]).decode(\"utf-8\", errors=\"replace\"))\nprint(bytes(ids[:3]).decode(\"utf-8\", errors=\"replace\"))\n```\n\nThe first two bytes decode to `h` followed by the replacement character `�`; the first\nthree decode to `hé`. This is why `decode` in the lab uses `errors=\"replace\"`: a strict\ndecode would raise on half a character, and a model that has emitted 195 and not yet 169\nhas not done anything wrong. The `�` is honest — it says a character was cut.\n\n## What a vocabulary size buys\n\nEvery merge shortens sequences and lengthens the alphabet, and both have a price. The\nlab's second corpus, `\"the cat sat on the mat, the cat ran\"`, is 35 bytes; trained to a\nvocabulary of 280 it encodes to fewer tokens, and the test only requires *fewer*, because\nhow many depends on which of the 24 merges the ties allowed. The model then has fewer\npositions to process — and attention, in the next module, costs the square of that\ncount — but the embedding table, which holds one learned row per id, has 24 more rows,\nand each of those rows is learned only from the places its token occurs.\n\nScale it. A vocabulary of 50,257 with 768 numbers per row — the numbers of one well-known\nmodel — is 38.6 million parameters before the first attention layer exists, and the rarest\nof those 50,257 tokens might appear a handful of times in the training text. Somewhere\nbetween 256 and a few hundred thousand is a vocabulary that balances sequence length\nagainst a table that can be learned, and that number is chosen by experiment, not derived.\n\n## An id is a name, not a number\n\nToken 257 is not \"more than\" token 100, and 256 is not \"close to\" 257. Ids are labels,\nand the first thing a model does with a label is look it up: an *embedding table* has one\nrow per id, `dim` numbers wide, and `vector(token_id)` returns that row. The rows start\nrandom — the lab draws them from a seeded `uniform(-1, 1)`, row by row — and they are\nparameters like any weight in module 2: the row for token 257 receives gradient whenever\n257 appears in a training example, and it moves. What the row *means* is whatever\ntraining makes it mean.\n\nTo compare two rows you want a measure of whether they point the same way, without\ncaring how long they are. The dot product gives $u \\cdot v = |u|\\,|v| \\cos\\theta$, so\ndividing out the two lengths leaves $\\cos\\theta$ alone:\n\n$$\\text{cosine}(u, v) = \\frac{u \\cdot v}{|u|\\,|v|}$$\n\n```python\nimport math\n\n\ndef cosine(u, v):\n    dot = sum(a * b for a, b in zip(u, v))\n    return dot / (math.sqrt(sum(a * a for a in u)) * math.sqrt(sum(b * b for b in v)))\n\n\nprint(cosine([1.0, 2.0, 3.0], [2.0, 4.0, 6.0]))\nprint(cosine([1.0, 0.0], [0.0, 1.0]))\nprint(cosine([1.0, 0.0], [-1.0, 0.0]))\nprint(cosine([3.0, 4.0], [4.0, 3.0]))\n```\n\n`1.0`, `0.0`, `-1.0`, `0.96`. The first pair differ in every component and score a\nperfect 1, because one is the other scaled by two and scaling does not turn a vector.\nRight angles score 0, opposite directions $-1$. And the zero vector scores nothing at\nall: it has no direction, the denominator is 0, and the lab's `cosine_similarity` raises\n`ValueError` rather than divide.\n\n## Where the idea stops holding\n\nThe mistake people make with a fresh embedding table is to compute the cosine between\ntwo rows and read something into it. It is tempting because the function returns a\nnumber between $-1$ and $1$ and the number is small, which sounds like \"unrelated\". Watch\nwhat random rows do as the dimension grows:\n\n```python\nimport math\nimport random\n\nrng = random.Random(7)\nfor dim in (2, 8, 64, 512):\n    total = 0.0\n    for _ in range(500):\n        u = [rng.uniform(-1.0, 1.0) for _ in range(dim)]\n        v = [rng.uniform(-1.0, 1.0) for _ in range(dim)]\n        dot = sum(a * b for a, b in zip(u, v))\n        total += abs(dot) / (math.sqrt(sum(a * a for a in u)) * math.sqrt(sum(b * b for b in v)))\n    print(f\"dim {dim:>3}: mean |cosine| of two random rows = {total / 500:.3f}\")\n```\n\nIn 2 dimensions two random directions have a mean $|\\cos\\theta|$ of about 0.62; in 512\ndimensions it is 0.035. Random vectors in high dimension are almost always nearly\northogonal. A cosine of 0.03 between two rows of an untrained table says something about\nthe number 512 and nothing about the tokens. Similarity means something only after\ntraining has moved the rows, and even then it means \"these tokens were used in similar\nplaces\", which is not the same as \"these tokens mean similar things\".\n\nThe tokeniser has its own edge. A merge list learned on English prose compresses English\nprose; hand it source code, or a language in a different script, and it falls back\ntoward one token per byte, with a Chinese character costing three tokens where an English\nword costs one. The round trip still holds — nothing is lost — but the sequence is long,\nand everything downstream pays for the length.\n\nIn the lab, \"Byte-pair encoding and vector lookup\", you build the four BPE functions\nexactly as traced above — pair counts, non-overlapping merge, the trainer with its\nsmallest-pair tie-break, and the vocabulary spelled out in learned order — then `encode`\nand `decode` that round-trip anything, and the seeded `EmbeddingTable` with a\n`cosine_similarity` that refuses the zero vector."
+    }
+   ],
    "sandbox": null,
-   "quiz": null,
+   "quiz": {
+    "title": "Merges, ids and directions",
+    "minutes": 8,
+    "questions": [
+     {
+      "q": "The pair `(97, 97)` is counted four times in `[97, 97, 97, 98, 100, 97, 97, 97, 98, 97, 99]`, yet the first merge produces `[256, 97, 98, ...]` and not `[256, 256, ...]`. Why?",
+      "opts": [
+       "Counting slides over every adjacent pair, but a replacement consumes both bytes, so `aaa` becomes one 256 and a leftover `a`",
+       "The tie-break on the numerically smallest pair chose to leave the second occurrence in `aaa` for a later merge round",
+       "The count of four is an error in `get_stats`: `aaa` holds one pair, and the statistics ought to be corrected to count it once",
+       "A merge may replace only one occurrence per pass over the sequence, so the trainer returns for the others on later rounds"
+      ],
+      "a": 0,
+      "why": "`get_stats` counts with a sliding window, so `97, 97, 97` contributes two. `merge` walks\nleft to right and, on a match, emits the new id and skips *both* bytes. The third `97`\nhas no partner left and stays as it is. Overlapping counts are a heuristic for choosing\nthe next merge; non-overlapping replacement is what keeps decode exact.",
+      "whys": [
+       "`i += 2` after a match is the whole of it: overlapping counts to choose, non-overlapping replacement to rewrite.",
+       "The tie-break chooses *which pair* to merge when two have equal counts; it says nothing about which occurrences to rewrite. Within `aaa` there is no second occurrence left once the first two bytes are consumed.",
+       "The count is correct for what it measures — `zip(ids, ids[1:])` sees `(97, 97)` at two positions in `aaa`, and the lab's test asserts `get_stats([7, 7, 7]) == {(7, 7): 2}`. Counting and replacing are different operations with different rules.",
+       "`merge` replaces every non-overlapping occurrence in one pass — the sequence goes from eleven ids to nine in a single call. What it cannot do is replace two occurrences that share a byte."
+      ]
+     },
+     {
+      "q": "Why must `encode` replay the merges in the order they were learned, rather than longest-token-first?",
+      "opts": [
+       "A later merge is defined over ids that earlier merges created, so applied first it finds nothing to match",
+       "Replaying in any other order yields more tokens, and learned order is the one that compresses the text best",
+       "The ids must come out in increasing order along the sequence, and only replay in learned order guarantees that",
+       "Longest-first would merge across word boundaries, which the byte-level alphabet has no way to represent"
+      ],
+      "a": 0,
+      "why": "Each merge is a pair of ids, and the ids in a later merge may themselves be the products\nof earlier merges. `(256, 257)` matches nothing in a sequence of raw bytes; it can only\nfire after `(97, 97)` and `(97, 98)` have produced the ids it names. Replaying in learned\norder is what makes every merge's inputs exist by the time it runs.",
+      "whys": [
+       "`(256, 257) -> 258` can only fire on a sequence in which 256 and 257 already exist.",
+       "Compression is not the reason, and it is not even reliably true — the reason is correctness. Merge 258 spells `aaab`, but it is written as the pair `(256, 257)`, and before those two merges have run the sequence contains neither id.",
+       "Ids along an encoded sequence come out in whatever order the text dictates — `[256, 257, 100, 256, 257, 97, 99]` is not sorted. Learned order is about *which merges have already happened*, not about the output.",
+       "Byte-level BPE merges across whatever bytes are adjacent, spaces included; nothing about the alphabet forbids it. The constraint is dependency between merges, not word boundaries."
+      ]
+     },
+     {
+      "q": "Why does `decode(encode(text))` return `text` exactly, even for text the tokeniser never saw in training?",
+      "opts": [
+       "Every id spells a fixed byte string and unmerged bytes keep their own ids, so the exact byte sequence is rebuilt",
+       "Because `train_bpe` sees enough text that every byte pair that could occur appears somewhere in its merge list",
+       "`encode` emits a special unknown-token id for unseen text, and `decode` fills its bytes back in from the original",
+       "It does not in general; the round trip holds only for text whose pairs all appear in the training corpus"
+      ],
+      "a": 0,
+      "why": "Two invariants do it. Ids 0–255 are the bytes themselves, so any text is already a valid\nid sequence before a single merge runs. And every merge replaces two adjacent ids by one\nwhose spelling is exactly their spellings joined, so applying merges never changes the\nunderlying bytes — only how they are grouped. Decode concatenates the spellings and the\nbytes come back untouched.",
+      "whys": [
+       "Merging only ever replaces adjacent ids by one that spells their concatenation, and a byte that matches no merge stays a byte.",
+       "No trainer sees every pair — the lab's trainer sees eleven bytes. Coverage is not what makes the round trip work; the fact that unmerged bytes are already valid ids is.",
+       "There is no unknown token in a byte-level scheme, and there is nothing to fill in from — `decode` receives ids and nothing else. That is the point of starting from bytes: every input is already made of ids.",
+       "The lab's test round-trips `\\\"héllo wörld\\\"` and `\\\"banana bandana\\\"` through merges learned on `\\\"aaabdaaabac\\\"`. Unseen text merges less, and loses nothing."
+      ]
+     },
+     {
+      "q": "Raising the vocabulary from 256 to 50,000. What is gained, and what is paid?",
+      "opts": [
+       "Shorter sequences to process, paid for with a 50,000-row embedding table whose rare rows are learned from few examples",
+       "More precise tokens, paid for with longer sequences because the rarer merges split the text more finely than bytes do",
+       "A smaller model overall, because fewer tokens per text means fewer weights are needed to process each one of them",
+       "Nothing downstream changes: tokens are renumbered, but the attention layers see the same number of positions either way"
+      ],
+      "a": 0,
+      "why": "A larger vocabulary trades length for width. Sequences get shorter — which matters\nbecause attention costs the square of sequence length — and the embedding table gets\ntaller, with each new row learned only from the places its token appears. Somewhere\nbetween the two extremes is a vocabulary that balances the two costs, and it is found by\ntrying, not by derivation.",
+      "whys": [
+       "Every merge shortens sequences and adds a row that must be learned from wherever its token happens to occur.",
+       "Merges never split; they join. More merges means each token spells more bytes and the sequence gets *shorter*, not longer. The price is on the table side, not the sequence side.",
+       "The processing weights — attention, the MLP — do not depend on vocabulary size at all; the embedding table and the output layer do, and both grow with it. Fewer positions makes each forward pass cheaper, not the model smaller.",
+       "The number of positions is the number of tokens, and that is precisely what changes: the lab's 35-byte sentence becomes fewer tokens at vocabulary 280. Attention's cost grows with the square of that count."
+      ]
+     },
+     {
+      "q": "`cosine_similarity([1, 2, 3], [2, 4, 6])` is exactly 1.0 although the vectors differ in every component. What does that say about the measure?",
+      "opts": [
+       "It compares direction only: scaling a vector by any positive factor leaves its cosine with anything unchanged",
+       "It saturates: any two vectors whose dot product exceeds 1 are reported as identical, as the result is capped",
+       "It rounds: the two vectors are close enough in each component to fall inside the same one-decimal-place bucket",
+       "It measures the ratio of lengths: 2 to 1 in every component gives the maximal score, as any constant ratio would"
+      ],
+      "a": 0,
+      "why": "$u \\cdot v = |u|\\,|v|\\cos\\theta$, so dividing by the two lengths leaves the cosine of\nthe angle and nothing else. `[2, 4, 6]` is `[1, 2, 3]` stretched, the angle between them\nis zero, and the cosine is 1 exactly. Magnitude is invisible to the measure — which is\nwhy it is useful for comparing embeddings and why the zero vector, having no direction,\nhas no cosine at all.",
+      "whys": [
+       "Dividing the dot product by both lengths leaves $\\cos\\theta$, and the angle between $v$ and $2v$ is zero.",
+       "Nothing is capped. The dot product here is 28, the lengths are $\\sqrt{14}$ and $\\sqrt{56}$, and $28 / \\sqrt{784}$ is 1 exactly — arithmetic, not a ceiling.",
+       "Cosine returns a full float; `[3, 4]` against `[4, 3]` gives 0.96, not 1. The 1.0 here is exact because the angle is exactly zero.",
+       "Length is what cosine *discards*. A constant ratio of 2 gives 1.0, and so would a ratio of 1000, because the two vectors point the same way regardless of how long they are."
+      ]
+     },
+     {
+      "q": "Two rows of a freshly built `EmbeddingTable(300, 512)` have a cosine similarity of 0.03. What can you conclude?",
+      "opts": [
+       "Nothing about the tokens: two random vectors in 512 dimensions are nearly orthogonal whatever they will later mean",
+       "The two tokens are unrelated, which is what the seeded initialisation encodes about byte pairs that never co-occur",
+       "The table is defective: rows drawn from the same distribution should agree far more closely than 0.03",
+       "The two tokens are weakly related, since 0.03 is positive and a truly unrelated pair would score exactly zero"
+      ],
+      "a": 0,
+      "why": "In high dimension, independently random vectors are nearly orthogonal: the mean\n$|\\cos\\theta|$ of two random rows is about 0.62 in 2 dimensions and 0.035 in 512. A\ncosine of 0.03 between untrained rows is what chance produces, and it says nothing\nabout tokens 256 and 257. Similarity between embeddings means something only after\ntraining has moved the rows — and then it means \"used in similar places\".",
+      "whys": [
+       "The reading's block shows random pairs averaging $|\\cos| \\approx 0.035$ at 512 dimensions; 0.03 is what *any* two rows score before training.",
+       "The initialisation encodes nothing — it is `uniform(-1, 1)` from a seed, with no knowledge of which ids are which. A cosine near zero is a property of the dimension, not of the tokens.",
+       "Rows drawn independently from the same distribution are *expected* to be nearly orthogonal in high dimension; agreement would be the surprise. The table is behaving exactly as random vectors do.",
+       "Random pairs land on either side of zero, and the sign carries no information. With 500 random pairs in 512 dimensions the typical magnitude is 0.035; a value of 0.03 is indistinguishable from chance."
+      ]
+     }
+    ]
+   },
    "blanks": null,
    "numeric": null,
    "match": null,
@@ -290,9 +629,122 @@
     "Heads split the model dimension, attend independently, then concatenate",
     "Attention is permutation-equivariant, which is why positional information is added"
    ],
-   "read": null,
+   "read": [
+    {
+     "title": "A weighted average that picks its own weights",
+     "minutes": 12,
+     "body": "Three tokens sit in a row, each carrying a vector of numbers. The third one has to\nproduce a summary of what came before it — something it can use to guess the fourth.\nThe crudest summary is the plain average of the three vectors. It throws away which one\nmattered: if the third token is `it`, the vector that should dominate is whichever noun\n`it` refers to, and a plain average weights the noun the same as the comma.\n\nSo use a weighted average, and let the weights depend on the tokens themselves. That\nsingle decision is attention. Everything else in this module is about how the weights are\nchosen and how to keep the arithmetic honest.\n\n## Similarity as a dot product\n\nGive each token two views of itself: a *query*, meaning \"what am I looking for\", and a\n*key*, meaning \"what do I offer\". The natural measure of how well a key answers a query\nis the dot product $q \\cdot k$: large when the two point the same way, zero at right\nangles, negative when opposed. One query against every key gives one score per position.\n\nScores are not weights. Weights should be positive, should sum to one so that the output\nstays the same size as the values it averages, and should preserve the order of the\nscores. Exponentiate — $e^{s}$ is positive for any $s$ and increasing — then divide by the\ntotal. That is softmax:\n\n$$w_j = \\frac{e^{s_j}}{\\sum_k e^{s_k}}$$\n\nThen give each token a third view, the *value* $v_j$ — what it contributes if attended\nto — and the output for the query is $\\sum_j w_j v_j$.\n\nHere it is on the smallest case worth doing by hand, which is also the case the lab's\n\"hand-computed attention example\" test checks. One query $[1, 0]$; two keys $[1, 0]$ and\n$[0, 1]$; two values $[1, 2]$ and $[3, 4]$.\n\n```python\nimport math\n\nQ = [[1.0, 0.0]]\nK = [[1.0, 0.0], [0.0, 1.0]]\nV = [[1.0, 2.0], [3.0, 4.0]]\nscale = 1 / math.sqrt(len(Q[0]))\nscores = [sum(q * k for q, k in zip(Q[0], key)) * scale for key in K]\nprint(\"scores :\", scores)\ntop = max(scores)\nexps = [math.exp(s - top) for s in scores]\nweights = [e / sum(exps) for e in exps]\nprint(\"weights:\", weights)\noutput = [sum(w * row[d] for w, row in zip(weights, V)) for d in range(2)]\nprint(\"output :\", output)\n```\n\nThe raw dot products are 1 and 0. Divided by $\\sqrt{2}$ — the reason for that is next —\nthey are $0.7071$ and $0$. Exponentiated, $2.0281$ and $1$; normalised, the weights are\n$0.6698$ and $0.3302$. The output is $0.6698 \\times [1, 2] + 0.3302 \\times [3, 4] =\n[1.6605, 2.6605]$, which is what the block prints to full precision. The query leaned\ntoward the first key, so the first value got two thirds of the say.\n\nSet the query to $[0, 0]$ instead and every score is 0, the weights are $[0.5, 0.5]$,\nand the output is the plain average $[2, 3]$ — the crude summary from the opening\nparagraph is what attention does when it has no preference.\n\n## Why divide by the square root\n\nSuppose the entries of $q$ and $k$ are independent with mean 0 and variance 1 — roughly\nwhat a fresh projection produces. Then $q \\cdot k$ is a sum of $d_k$ terms, each with\nvariance 1, so its variance is $d_k$ and its typical size is $\\sqrt{d_k}$. Dividing by\n$\\sqrt{d_k}$ brings the typical score back to order 1 whatever the width.\n\n```python\nimport math\nimport random\n\nrng = random.Random(7)\nfor d in (2, 16, 64, 256):\n    dots = []\n    for _ in range(2000):\n        q = [rng.gauss(0.0, 1.0) for _ in range(d)]\n        k = [rng.gauss(0.0, 1.0) for _ in range(d)]\n        dots.append(sum(a * b for a, b in zip(q, k)))\n    std = math.sqrt(sum(x * x for x in dots) / len(dots))\n    print(f\"d_k = {d:>3}: spread of q.k is {std:5.2f}, after dividing by sqrt(d_k) it is {std / math.sqrt(d):.2f}\")\n```\n\nThe spread comes out at $1.41$, $3.94$, $7.98$ and $15.97$ — the square roots of the\nwidths — and after scaling it is $1.0$ every time. Why care? Because softmax of scores\nthat are typically $\\pm 16$ is a one-hot vector: $e^{16}$ against $e^{-16}$ leaves the\nrunner-up with a weight of $10^{-14}$. The weighted average collapses to \"copy one\nvalue\", and, exactly as with tanh at $z = 8$ in module 2, the slope of softmax out there\nis nearly zero and gradient stops flowing. The $\\sqrt{d_k}$ keeps the scores where\nsoftmax still has a slope.\n\n## Keeping exp finite\n\nSoftmax has a property worth deriving because it is the whole reason the lab's `softmax`\nis written the way it is. Add the same constant $c$ to every score:\n\n$$\\frac{e^{s_j + c}}{\\sum_k e^{s_k + c}} = \\frac{e^{c}\\,e^{s_j}}{e^{c}\\sum_k e^{s_k}} =\n\\frac{e^{s_j}}{\\sum_k e^{s_k}}$$\n\nNothing changes. So you may subtract whatever you like from all the scores, and the useful\nchoice is their maximum, because then the largest exponent is $e^0 = 1$ and every other\nis between 0 and 1. Without that, a score that is large for any reason at all breaks the\narithmetic:\n\n```python\n# raises OverflowError\nimport math\n\nprint(math.exp(1000.0))\n```\n\nA double tops out near $e^{709}$. With the subtraction, the same scores are harmless:\n\n```python\nimport math\n\nscores = [1000.0, 0.0]\ntop = max(scores)\nexps = [math.exp(s - top) for s in scores]\nprint([e / sum(exps) for e in exps])\n```\n\nThat prints `[1.0, 0.0]`, which is also the right answer: a lead of 1000 is a certainty.\nThe lab's test \"Softmax is normalised, shift-invariant and stable\" checks all three\nproperties from this section.\n\n## Looking only backwards\n\nA model that generates text left to right must not let position 1 read position 2 while\ntraining — at generation time position 2 does not exist yet. So position $i$ is allowed\nto attend only to $j \\le i$. The lab's `causal_mask(n)` is that rule as a grid of\nbooleans, and the question is where in the arithmetic to apply it.\n\nThe answer is: to the *scores*, before the softmax, by setting each forbidden score to\n$-\\infty$. Then $e^{-\\infty - \\text{top}}$ is exactly 0, the forbidden position gets\nweight 0, and the remaining weights still sum to 1 because they were normalised among\nthemselves. Here is what happens if you instead zero the weights afterwards:\n\n```python\nimport math\n\n\ndef softmax(xs):\n    top = max(xs)\n    exps = [math.exp(x - top) for x in xs]\n    return [e / sum(exps) for e in exps]\n\n\nscores = [0.9, 0.4, 1.3]\nbefore = softmax([scores[0], scores[1], float(\"-inf\")])\nafter = softmax(scores)\nafter[2] = 0.0\nprint(\"masked before softmax:\", [round(w, 4) for w in before], \"sum\", round(sum(before), 4))\nprint(\"zeroed after softmax: \", [round(w, 4) for w in after], \"sum\", round(sum(after), 4))\n```\n\nMasked first, the two allowed weights are $0.6225$ and $0.3775$ and they sum to 1.\nZeroed afterwards, they are $0.3228$ and $0.1958$ and sum to $0.5185$ — the forbidden\nposition had the highest score, so it took half the mass with it when it was deleted,\nand the output is now the allowed average scaled by about a half. This is the mistake\npeople make, and it is tempting because the mask looks like it belongs on the weights —\n\"weight of the future is zero\" reads as a statement about weights. It is a statement\nabout what softmax is allowed to see.\n\nOne edge falls out of doing it right: a row in which *every* score is $-\\infty$ has\nnothing to normalise, `max` is $-\\infty$, and $-\\infty - (-\\infty)$ is not a number. The\nlab's `softmax` raises `ValueError` for that row rather than return `nan`, and\n`causal_mask` never produces one, since position $i$ can always see itself.\n\n## Several heads\n\nA single set of weights per query can express one pattern of \"what to look at\". Split the\nmodel's width into $h$ equal blocks, run attention separately in each block with its own\nprojections, and concatenate the results, and each head can attend somewhere different\n— one to the previous token, one to the nearest noun — at the same time. `split_heads`\nslices columns, `concat_heads` glues them back, and `multi_head_attention` projects\nthrough $W_q$, $W_k$, $W_v$, does the per-head attention, and projects the concatenation\nthrough $W_o$. With one head and identity projections it must reduce to plain\n`attention(X, X, X)`, which is the lab's last test, and with two heads on the same\ninput it must *differ*, because each head is now scoring similarity on half the\nfeatures.\n\n## Where the idea stops holding\n\nAttention does not know where anything is. Reverse the order of the keys and the values\ntogether and every output row is unchanged:\n\n```python\nimport math\n\n\ndef attend(q, K, V):\n    scale = 1 / math.sqrt(len(q))\n    scores = [sum(a * b for a, b in zip(q, k)) * scale for k in K]\n    top = max(scores)\n    exps = [math.exp(s - top) for s in scores]\n    weights = [e / sum(exps) for e in exps]\n    return [round(sum(w * v[d] for w, v in zip(weights, V)), 6) for d in range(len(V[0]))]\n\n\nK = [[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]\nV = [[1.0, 0.0], [0.0, 1.0], [2.0, 2.0]]\nq = [0.5, -0.5]\nprint(attend(q, K, V))\nprint(attend(q, K[::-1], V[::-1]))\n```\n\nBoth lines print `[1.09526, 0.864339]`. The scores are a set, softmax is a function of\nthe set, and the weighted sum does not care which term came first. A mechanism that\ncannot tell `dog bites man` from `man bites dog` needs order supplied from outside, and\nthat is what the capstone's position embeddings are for: a learned vector per position,\nadded to the token's vector before any attention happens.\n\nThe second limit is cost. Every query scores every key, so a sequence of $n$ tokens\nneeds $n^2$ scores per head per layer: 9 for the three tokens in the lab, about 16.8\nmillion for a context of 4096. That quadratic is the reason context windows are a\nheadline number, and the reason a good deal of current research is about approximating\nthis exact computation with something cheaper.\n\nIn the lab, \"Scaled dot-product attention from scratch\", you write the matrix helpers\nwith their error paths, a `softmax` that subtracts the maximum and refuses an all-masked\nrow, `causal_mask`, `attention` returning both output and weights, and the split, attend\nand concatenate of `multi_head_attention` — every number above reproduced by code you\nwrote."
+    }
+   ],
    "sandbox": null,
-   "quiz": null,
+   "quiz": {
+    "title": "Where attention's numbers come from",
+    "minutes": 8,
+    "questions": [
+     {
+      "q": "With `Q = [[0, 0]]` the weights come out as `[0.5, 0.5]` and the output is the mean of the two value rows. Why?",
+      "opts": [
+       "A zero query scores every key at 0, and softmax of equal scores hands every value the same weight",
+       "Softmax of an all-zero score vector is undefined, so the implementation falls back to averaging the values",
+       "A zero query matches the keys $[1, 0]$ and $[0, 1]$ equally well because both keys have unit length",
+       "Scaling by $1/\\sqrt{d_k}$ maps each score to 0.5, and those scaled scores are used directly as weights"
+      ],
+      "a": 0,
+      "why": "A zero query has no preference: its dot product with every key is 0, so all scores tie.\nSoftmax over tied scores is uniform, and a uniform weighted sum of the value rows is\ntheir mean, $[2, 3]$. Attention reduces to the crude average exactly when the query\ngives it no reason to do otherwise.",
+      "whys": [
+       "$0 \\cdot k = 0$ for every key, and $e^0 / (e^0 + e^0)$ is a half. Attention with no preference is a plain average.",
+       "Softmax of `[0, 0]` is perfectly well defined — $e^0 = 1$ each, total 2, weights a half each. There is no fallback path; the average is what the formula gives.",
+       "The keys' lengths are irrelevant to a zero query: the dot product is zero whatever the key. Two keys of different lengths would still tie at 0.",
+       "The scores are $0 / \\sqrt{2} = 0$, not 0.5, and scores are never used as weights — they pass through exponentiation and normalisation first. The 0.5 comes from the normalisation of two equal exponentials."
+      ]
+     },
+     {
+      "q": "Why are the scores divided by $\\sqrt{d_k}$ before the softmax?",
+      "opts": [
+       "A sum of $d_k$ unit-variance products has spread $\\sqrt{d_k}$, and softmax saturates at scores that large",
+       "It normalises the scores to sum to 1 across the keys, so the softmax that follows has less correcting to do",
+       "It undoes the $\\sqrt{d_k}$ factor that the projection matrices introduce when they narrow the width per head",
+       "Dividing by the dimension makes the output independent of how many keys the query is scored against"
+      ],
+      "a": 0,
+      "why": "$q \\cdot k$ is a sum of $d_k$ products. If each has variance 1, the sum has variance\n$d_k$ and typical size $\\sqrt{d_k}$. Left alone, a width of 256 gives scores around\n$\\pm 16$, softmax becomes one-hot, and its gradient vanishes — the attention equivalent\nof a saturated tanh. Dividing by $\\sqrt{d_k}$ keeps the typical score near 1 whatever\nthe width.",
+      "whys": [
+       "The reading's block shows the spread at $1.41, 3.94, 7.98, 15.97$ for widths $2, 16, 64, 256$ — and $1.0$ after scaling, every time.",
+       "Softmax does the normalising; the scaling changes the *size* of the scores, not their sum. Scores of $[0.7, 0]$ do not sum to 1 and are not meant to.",
+       "The projections introduce no such factor — they are learned matrices with whatever entries training gives them. The $\\sqrt{d_k}$ is about the statistics of a sum of $d_k$ products, and it would apply with no projections at all.",
+       "The divisor is the *width* of a key, not the number of keys; it is the same whether there are two keys or two thousand. And it is the square root of the width, because that is how the spread of a sum of $d_k$ terms grows."
+      ]
+     },
+     {
+      "q": "Subtracting the maximum score from every score before exponentiating changes what, exactly?",
+      "opts": [
+       "Nothing in the result: $e^{-\\max}$ cancels between numerator and denominator, and `exp` stays finite",
+       "The result slightly: the largest weight becomes exactly 1.0 and the others are scaled down to fit beneath it",
+       "The ordering: the largest score maps to zero, so the smallest score now receives the largest weight",
+       "Only the running time: `exp` of a small argument is cheaper to evaluate than `exp` of a large one"
+      ],
+      "a": 0,
+      "why": "Softmax is invariant to adding a constant to every score, because the constant becomes\na common factor in numerator and denominator. Subtracting the maximum makes the largest\nexponent zero and every other negative, so `exp` never overflows. The weights are\nidentical to the unshifted ones — where the unshifted ones can be computed at all.",
+      "whys": [
+       "$e^{s_j - c} / \\sum e^{s_k - c}$ is $e^{s_j} / \\sum e^{s_k}$ for any $c$; choosing $c = \\max$ keeps every exponent at or below 0.",
+       "The largest *exponential* becomes 1, not the largest weight — after dividing by the total, the weights are exactly what they would have been. The lab's test checks that shifting all scores by 100 changes nothing.",
+       "Subtracting the same constant from everything preserves order: the largest score becomes 0 and the rest become negative, so the largest still has the largest exponential. Nothing is reversed.",
+       "`exp` costs the same whatever its argument, up to the point where it overflows and raises. The subtraction is about correctness — `exp(1000)` is an `OverflowError`, `exp(0)` is 1 — not speed."
+      ]
+     },
+     {
+      "q": "A causal mask is implemented by zeroing the forbidden weights *after* the softmax. What goes wrong?",
+      "opts": [
+       "The surviving weights no longer sum to 1, so the output is shrunk by whatever mass the future held",
+       "Nothing: the forbidden positions contribute zero either way, and the two orders produce the same output",
+       "The softmax raises on that row, because the maximum score may lie in the forbidden region",
+       "The gradient into the masked positions stays non-zero, but the forward output is the same as masking first"
+      ],
+      "a": 0,
+      "why": "Softmax normalises against the sum of all the exponentials, including the forbidden\nones. Zero a weight afterwards and the others are left normalised against a total they no\nlonger make up. Setting the forbidden *scores* to $-\\infty$ first makes their\nexponentials exactly zero, so the allowed weights are normalised among themselves and\nstill sum to 1.",
+      "whys": [
+       "The reading's example: $[0.6225, 0.3775]$ masked first, against $[0.3228, 0.1958]$ summing to $0.5185$ when zeroed after.",
+       "The forbidden position's *exponential* was in the denominator when the other weights were normalised. Delete its weight afterwards and the others keep their too-small values; the output is a fraction of what it should be.",
+       "Softmax over the unmasked row is fine — it is a row of ordinary finite scores. The row that makes softmax raise is one where *every* score is $-\\infty$, which is the opposite situation.",
+       "The forward output is not the same — that is the whole defect. The weights that remain were normalised against a total that included the future, and removing the future afterwards does not renormalise them."
+      ]
+     },
+     {
+      "q": "Reversing the rows of `K` and `V` together leaves attention's output row unchanged. What does that imply?",
+      "opts": [
+       "Attention alone cannot tell which token came first, so position has to be supplied from outside",
+       "Keys and values are interchangeable, so one matrix could serve as both without any loss",
+       "Attention is symmetric in queries and keys, so swapping `Q` and `K` also leaves the output unchanged",
+       "The softmax weights are always uniform, so any reordering of the values yields their plain mean"
+      ],
+      "a": 0,
+      "why": "Each key gets a score, each score becomes a weight, each weight multiplies its own\nvalue, and the products are summed. Permute the keys and values together and the same\nproducts are summed in a different order — the same sum. Attention is therefore blind\nto sequence order, which is why a learned vector per position is added to the token\nembeddings before the first attention layer.",
+      "whys": [
+       "The scores form a set, softmax is a function of the set, and the weighted sum does not care which term came first. Order has to be added — the capstone's position embeddings.",
+       "Keys and values play different roles — keys are scored, values are averaged — and they are different projections of the input. The experiment reorders them *together*; it says nothing about swapping them.",
+       "Queries and keys are not symmetric: the query decides the weights, the keys are what it is scored against, and the two projections are learned separately. Permuting the key rows is a different operation from swapping the roles.",
+       "The weights in the example are far from uniform — the query $[0.5, -0.5]$ prefers the first key. The output is unchanged because the *same* weight travels with the *same* value wherever the pair is moved."
+      ]
+     },
+     {
+      "q": "Two heads of width 2 on a width-4 model, versus one head of width 4. What does the split change?",
+      "opts": [
+       "Each head scores similarity over its own half of the features, so the two can attend to different positions",
+       "Nothing in the output: concatenating the two halves back together rebuilds the single-head result exactly",
+       "It doubles the parameter count, because every head needs its own copy of the full-width projection matrices",
+       "It halves the sequence length each head must process, which is where the speed-up over one head comes from"
+      ],
+      "a": 0,
+      "why": "`split_heads` divides columns, not rows. Each head computes its own scores from its own\nslice of the query and key features, so each head produces its own weighting of the\nvalue rows, and the concatenation carries two different weighted averages side by side.\nOne head can express one pattern of where to look; two heads can express two at once.",
+      "whys": [
+       "The weights in a head come from dot products over that head's columns only, so two heads can produce two different weightings of the same values.",
+       "The lab's test asserts the two-head result *differs* from one head. The weights are computed per head from half-width dot products, so the halves of the output were averaged with different weights, and concatenation does not undo that.",
+       "The projections are shared across heads and the same size regardless of head count — $W_q$ is $4 \\times 4$ either way; heads slice its output. Splitting changes how the width is used, not how much of it there is.",
+       "Every head sees every position — the sequence is not divided, the *feature width* is. Each head still computes $n^2$ scores; the cost per head falls only because each dot product is over fewer columns."
+      ]
+     }
+    ]
+   },
    "blanks": null,
    "numeric": null,
    "match": null,
@@ -371,9 +823,122 @@
     "Inverse-transform sampling: one uniform draw against the cumulative distribution",
     "Perplexity is `exp` of the mean negative log-likelihood — the effective branching factor"
    ],
-   "read": null,
+   "read": [
+    {
+     "title": "From logits to a token, and how surprised the model was",
+     "minutes": 12,
+     "body": "The model has read `the cat sat on the` and its last layer has produced four numbers, one\nper token in a vocabulary of four:\n\n```text\ntoken:   mat     rug     floor   cat\nlogit:  -0.693  -1.204  -1.897  -2.996\n```\n\nThose are *logits*: unnormalised scores, any real numbers, larger meaning more favoured.\nThey are not probabilities and the model does not owe you probabilities. Turning four\nnumbers into one chosen token is the subject of this module, and there are several\ndefensible ways to do it that produce different text from the same model.\n\nThe four logits above are the lab's `LOGITS`: they are $\\ln 0.5$, $\\ln 0.3$, $\\ln 0.15$\nand $\\ln 0.05$, chosen so that the probabilities they encode can be read off by eye.\n\n## Logits to probabilities\n\nPositive, summing to one, order-preserving: exponentiate and normalise, as in module 4.\n$e^{\\ln 0.5} = 0.5$ and so on, so softmax of these logits returns\n$[0.5, 0.3, 0.15, 0.05]$ — and the lab's test checks that recovery to twelve places.\n\nNow add one dial. Divide every logit by a *temperature* $T$ before the softmax. Since\n$e^{z/T} = (e^{z})^{1/T}$, and $e^{z_i}$ is proportional to $p_i$, the result is\nproportional to $p_i^{1/T}$. So $T = 0.5$ squares the probabilities and renormalises:\n$[0.25, 0.09, 0.0225, 0.0025]$ over their sum $0.365$ is $[0.685, 0.247, 0.062, 0.007]$.\n$T = 2$ takes square roots: $[0.707, 0.548, 0.387, 0.224]$ over $1.866$ is\n$[0.379, 0.294, 0.208, 0.120]$.\n\n```python\nimport math\n\nlogits = [math.log(0.5), math.log(0.3), math.log(0.15), math.log(0.05)]\n\n\ndef softmax(logits, temperature=1.0):\n    scaled = [x / temperature for x in logits]\n    top = max(scaled)\n    exps = [math.exp(x - top) for x in scaled]\n    return [e / sum(exps) for e in exps]\n\n\nfor t in (1.0, 0.5, 2.0, 0.1, 10.0):\n    print(f\"T = {t:<4}\", [round(p, 3) for p in softmax(logits, t)])\n```\n\nBelow 1 the distribution sharpens toward its peak; at $T = 0.1$ the top token has $0.994$\nof the mass. Above 1 it flattens; at $T = 10$ the four are within $0.06$ of each other.\nIn the limit $T \\to 0$ every bit of mass sits on the largest logit, and $T \\to \\infty$\nis uniform. $T = 0$ itself is a division by zero, and the lab's `softmax` raises\n`ValueError` for it rather than pretend. Note the order in the code: scale first, then\nsubtract the maximum. Subtracting first and scaling after gives a different, wrong\nanswer, because the shift is no longer the same constant across the logits once divided.\n\n## Four ways to pick\n\n**Greedy** takes the largest logit, index 0 here, on every step — the lowest index on a\ntie, so that it is a function and not a coin. It is deterministic and it is what you want\nwhen there is one right answer. Its failure mode is a loop:\n\n```python\ntable = {\"the\": \"cat\", \"cat\": \"sat\", \"sat\": \"on\", \"on\": \"the\"}\nword = \"the\"\nout = [word]\nfor _ in range(9):\n    word = table[word]\n    out.append(word)\nprint(\" \".join(out))\n```\n\n`the cat sat on the cat sat on the cat`. A model whose likeliest next word after `on` is\n`the`, and after `the` is `cat`, will say so for ever under greedy decoding, and real\nmodels do exactly this. The fix is to sample — draw from the distribution instead of\ntaking its mode — and the remaining three strategies are ways of sampling without letting\nthe long tail of unlikely tokens in.\n\n**Top-k** keeps the $k$ largest logits and sets every other to $-\\infty$, which softmax\nturns into an exact zero. With $k = 2$ on our four, the survivors are $0.5$ and $0.3$,\nand renormalised among themselves they become $0.625$ and $0.375$ — the lab's test\nasserts that $0.5 / 0.8$.\n\n**Nucleus**, or top-$p$, keeps the smallest set of most-probable tokens whose mass reaches\n$p$. Sort by probability, accumulate, stop when the running total reaches $p$. With\n$p = 0.8$: $0.5$, then $0.5 + 0.3 = 0.8$ — reached, two tokens. With $p = 0.9$:\n$0.8$ is short, add $0.15$ to get $0.95$, three tokens. The lab's brief gives exactly\nthese two counts.\n\nThe difference between the two is what happens when the shape of the distribution\nchanges:\n\n```python\ndef nucleus_keep(probs, p, slack=0.0):\n    running, kept = 0.0, []\n    for i in sorted(range(len(probs)), key=lambda i: -probs[i]):\n        kept.append(i)\n        running += probs[i]\n        if running >= p - slack:\n            break\n    return kept\n\n\nfor probs in ([0.5, 0.3, 0.15, 0.05], [0.94, 0.02, 0.02, 0.02], [0.25, 0.25, 0.25, 0.25]):\n    print(probs, \" top-2 keeps 2 tokens;  nucleus 0.8 keeps\", len(nucleus_keep(probs, 0.8)))\nprint(\"0.7 + 0.1 =\", 0.7 + 0.1)\nprint(\"without slack:\", nucleus_keep([0.7, 0.1, 0.1, 0.1], 0.8))\nprint(\"with slack:   \", nucleus_keep([0.7, 0.1, 0.1, 0.1], 0.8, 1e-12))\n```\n\nTop-2 keeps two tokens whatever the numbers. Nucleus at $0.8$ keeps two on the first\ndistribution, one on the peaked one — where top-2 would have let a $0.02$ token in — and\nall four on the flat one, where cutting at two would have thrown away half the mass for\nno reason. Nucleus cuts by mass; top-k cuts by count; and only mass adapts to how sure\nthe model is.\n\nThe last three lines are the floating-point trap in this function. $0.7 + 0.1$ is\n$0.7999999999999999$ in a double, one unit short of $0.8$, so a strict `>=` keeps a third\ntoken that the arithmetic never meant to include. The lab's hint is to compare against\n`p - 1e-12`, and the block shows what the slack buys: `[0, 1]` instead of `[0, 1, 2]`.\n\n## Drawing one token\n\nGiven probabilities, how do you draw? Lay the four probabilities end to end on the unit\ninterval: $[0, 0.5)$, $[0.5, 0.8)$, $[0.8, 0.95)$, $[0.95, 1)$. Draw one uniform number\n$r$ and see which segment it fell in — the first index at which the running sum exceeds\n$r$. That is inverse-transform sampling, and it uses exactly one random number per token.\n\n```python\nimport random\n\n\ndef sample_index(probs, rng):\n    draw = rng.random()\n    running = 0.0\n    for i, prob in enumerate(probs):\n        running += prob\n        if draw < running:\n            return i\n    return len(probs) - 1\n\n\nprobs = [0.5, 0.3, 0.2]\nrng = random.Random(7)\nprint([sample_index(probs, rng) for _ in range(10)])\nrng = random.Random(7)\ndraws = [sample_index(probs, rng) for _ in range(2000)]\nprint([round(draws.count(i) / 2000, 3) for i in range(3)])\n```\n\nSeeded with 7, the first ten draws are `[0, 0, 1, 0, 1, 0, 0, 1, 0, 0]` — the lab's test\nasserts that exact list — and over two thousand draws the frequencies are\n$[0.515, 0.279, 0.206]$ against the $[0.5, 0.3, 0.2]$ they estimate. The final\n`return` is for the case where rounding leaves the running sum a hair under $1$ and the\ndraw lands in the gap.\n\n## The mistake, and why it looks right\n\nThe tempting version draws a fresh random number for each token in turn: \"accept token\n$i$ with probability $p_i$, otherwise move on\".\n\n```python\nimport random\n\n\ndef coin_per_token(probs, rng):\n    for i, prob in enumerate(probs):\n        if rng.random() < prob:\n            return i\n    return len(probs) - 1\n\n\nprobs = [0.5, 0.3, 0.2]\nrng = random.Random(7)\ndraws = [coin_per_token(probs, rng) for _ in range(2000)]\nprint([round(draws.count(i) / 2000, 3) for i in range(3)])\n```\n\n$[0.507, 0.146, 0.346]$. The first token is fine, because its coin is flipped\nunconditionally. The second token's coin is only flipped when the first one failed, so it\nis chosen with probability $0.5 \\times 0.3 = 0.15$, half of what it was owed, and the\nthird collects everything left over. It looks right because each token *is* accepted with\nits own probability — on the occasions its coin is flipped at all. One draw against the\ncumulative sum flips no conditional coins.\n\n`sample` in the lab composes the pieces in a fixed order: top-k, then nucleus, then the\ntemperature softmax, then one draw. The filters are defined on the untempered\ndistribution — `nucleus_filter` calls `softmax` at $T = 1$ to decide what to keep — and\nthe temperature is applied to whatever survives.\n\n## How surprised was the model\n\nSampling picks tokens; something else has to say whether the model is any good. Take a\ntext the model did not write, feed it through, and record the probability the model gave\nto each token that actually came next. A model that assigns $0.9$ to what happened is\ndoing well; one that assigns $0.01$ is not.\n\nAverage those in the right way. The natural quantity is surprise, $-\\ln p$, which is 0\nfor a certainty and grows without bound as $p \\to 0$. Average the surprises over the\n$n$ tokens and undo the log:\n\n$$\\text{perplexity} = \\exp\\!\\left(-\\frac{1}{n}\\sum_{i=1}^{n} \\ln p_i\\right)$$\n\nWhy undo the log? Because of what the number then means. A model that is uniform over\n$N$ choices assigns $p = 1/N$ every time; its mean surprise is $\\ln N$, and its perplexity\nis $N$. So a perplexity of 4 means \"as uncertain as a fair four-way choice\", whatever the\nvocabulary size. It is the effective number of options the model is hesitating between.\n\n```python\nimport math\n\n\ndef perplexity(probs):\n    return math.exp(-sum(math.log(p) for p in probs) / len(probs))\n\n\nprint(perplexity([0.25, 0.25, 0.25, 0.25]))\nprint(perplexity([0.5, 0.5]))\nprint(round(perplexity([0.9, 0.9, 0.9, 0.1]), 4))\nprint(round(perplexity([0.9, 0.9, 0.9, 0.9]), 4))\nprint(perplexity([1.0, 1.0, 1.0]))\n```\n\n`4.0`, `2.0`, `1.9245`, `1.1111`, `1.0`. The third and fourth lines are worth a look\ntogether: three confident tokens and one at $0.1$ score $1.92$, against $1.11$ for four\nconfident ones. Because the average is taken in log space, perplexity is a *geometric*\nmean of $1/p$ — one token at $1/0.1 = 10$ is a factor of ten shared across four\npositions, $10^{1/4} \\approx 1.78$ on its own — and a single badly predicted token costs\nmore than an arithmetic mean would suggest. A probability of exactly 0 has infinite\nsurprise, and the lab's `perplexity` raises `ValueError` rather than return `inf` and\nlet it propagate into an average.\n\n## Where the idea stops holding\n\nPerplexity is per *token*, and a token is whatever the tokeniser said it was. A model\nover bytes and a model over a 50,000-token vocabulary are predicting different things\nper step, and their perplexities cannot be compared; per-byte or per-character\nperplexity has to be reconstructed before two such models can be lined up. And a lower\nperplexity is not better text. The capstone's model reaches a perplexity under $1.05$ on\nits four-character cycle, and greedy decoding from it produces exactly the cycle — which\nis correct, and would also be the behaviour of a model that had memorised its training\nset and nothing more.\n\nThe sampling side has its own edge. Reproducibility depends on the seed and on the\n*order* of the cumulative sum, so two implementations that accumulate in different\norders can give different tokens from the same seed and both be right. And every filter\nhere trusts the model's probabilities: a model that is confidently wrong has a small\nnucleus around the wrong answer, and no decoding strategy can fix that.\n\nIn the lab, \"Four decoding strategies and a perplexity\", you write the temperature\nsoftmax with its refusals, `greedy` with its tie rule, the two filters with $-\\infty$ as\nthe mask, `sample_index` with its single draw, `sample` composing them in order, and\n`perplexity` — every number in this reading recomputed by your own code, on the same\nfour logits."
+    }
+   ],
    "sandbox": null,
-   "quiz": null,
+   "quiz": {
+    "title": "Choosing a token, scoring a model",
+    "minutes": 8,
+    "questions": [
+     {
+      "q": "A temperature of 0.5 turns $[0.5, 0.3, 0.15, 0.05]$ into $[0.685, 0.247, 0.062, 0.007]$. What operation is that on the probabilities?",
+      "opts": [
+       "Each probability squared, then the four renormalised so that they add up to 1 again",
+       "Each probability halved, with the mass that was lost handed over to the largest one",
+       "Each logit halved, which multiplies every probability by the same constant factor",
+       "The top probability doubled and the rest shrunk in proportion so that the total stays 1"
+      ],
+      "a": 0,
+      "why": "Dividing the logits by $T$ raises each $e^{z_i}$, and hence each $p_i$, to the power\n$1/T$. At $T = 0.5$ that is a square: $[0.25, 0.09, 0.0225, 0.0025]$, which sum to\n$0.365$, and dividing through gives $[0.685, 0.247, 0.062, 0.007]$. Powers below 1\nflatten, powers above 1 sharpen, and the limit $T \\to 0$ is the argmax.",
+      "whys": [
+       "$e^{z/T} = (e^z)^{1/T}$, and $1/T = 2$: the squares are $[0.25, 0.09, 0.0225, 0.0025]$, summing to $0.365$.",
+       "Halving and topping up the largest would give $[0.75, 0.15, 0.075, 0.025]$, which is not the result. The small probabilities shrink far more than by half — $0.05$ becomes $0.007$ — because the operation is a power, not a scale.",
+       "Halving the logits is what happens, but dividing a logit by 2 does not multiply its probability by a constant — it takes the square root of $e^{z}$, which changes each token by a different factor. Renormalisation then makes the result sum to 1.",
+       "Doubling $0.5$ gives $1$, leaving nothing for the rest; the actual top value is $0.685$. Temperature is not an adjustment to the top token — it reshapes the whole distribution by a power."
+      ]
+     },
+     {
+      "q": "Top-k with $k = 2$ and nucleus with $p = 0.8$ keep the same two tokens on $[0.5, 0.3, 0.15, 0.05]$. On $[0.94, 0.02, 0.02, 0.02]$?",
+      "opts": [
+       "Top-2 still admits a 0.02 token; nucleus keeps only the first, since it cuts by mass rather than count",
+       "Both keep exactly the first token, because a probability above 0.9 satisfies either rule on its own",
+       "Both keep two tokens, since the two rules coincide whenever the distribution is sorted in descending order",
+       "Nucleus keeps all four, because reaching 0.8 needs the small tokens once the first is taken out"
+      ],
+      "a": 0,
+      "why": "Top-k cuts by count, nucleus by mass. On the peaked distribution the first token alone\nholds $0.94 \\ge 0.8$, so nucleus keeps one token and stops; top-2 keeps a $0.02$ token\nas well. On a flat distribution the two diverge the other way, with nucleus keeping\neverything needed to reach the mass. Mass adapts to how sure the model is; a fixed\ncount does not.",
+      "whys": [
+       "$0.94 \\ge 0.8$ after one token, so nucleus stops; top-2 counts to two regardless of how little the second holds.",
+       "Top-k never looks at the probabilities' sizes, only at their rank — $k = 2$ keeps two tokens on any distribution with two or more entries. Only the nucleus rule notices that $0.94$ is already enough.",
+       "They coincided on the first distribution by arithmetic accident ($0.5 + 0.3 = 0.8$ exactly). On the peaked one they differ, and on a flat $[0.25] \\times 4$ they differ the other way — nucleus keeps all four, top-2 keeps two.",
+       "The first token is never \\\"taken out\\\" — it is the first one *kept*, and it alone reaches the mass target. The accumulation stops the moment the running total is at least $p$."
+      ]
+     },
+     {
+      "q": "`sample_index` draws one random number and walks the cumulative sum. Drawing a fresh number for each token instead — accept token $i$ with probability $p_i$, else move on — yields what?",
+      "opts": [
+       "A different distribution: a later token is reached only if every earlier coin failed, so its share shrinks",
+       "The same distribution, since each token is still accepted with exactly its own stated probability",
+       "The same distribution but slower, because several random numbers are drawn where one would have done",
+       "Greedy decoding in disguise: the first token whose probability exceeds 0.5 is the one chosen every single time"
+      ],
+      "a": 0,
+      "why": "Token $i$ is reached only when tokens $0$ to $i-1$ have all declined, so its\nunconditional probability is $p_i$ times the product of $(1 - p_j)$ for every earlier\n$j$. For $[0.5, 0.3, 0.2]$ that gives $0.5$, $0.15$ and the remaining $0.35$. One\nuniform draw against the cumulative sums has no conditional coins in it, which is why\nit reproduces the distribution.",
+      "whys": [
+       "The reading measured it: $[0.507, 0.146, 0.346]$ for probabilities $[0.5, 0.3, 0.2]$. The middle token gets $0.5 \\times 0.3$.",
+       "Each token is accepted with its own probability *when its coin is flipped*, and its coin is only flipped after every earlier token has declined. The unconditional probability of the second token is $0.5 \\times 0.3 = 0.15$, not $0.3$.",
+       "Speed is not the issue; correctness is. The per-token coins produce conditional acceptances that compound, and the frequencies come out wrong — the middle token at half its due, the last one at nearly double.",
+       "A coin with probability 0.5 lands either way; the method is random, not greedy. Its defect is that the randomness is distributed wrongly across the tokens, not that it is absent."
+      ]
+     },
+     {
+      "q": "Why is the perplexity of a uniform distribution over four tokens exactly 4?",
+      "opts": [
+       "Mean surprise is $\\ln 4$ per token, and $e^{\\ln 4}$ recovers the number of equally likely choices",
+       "Perplexity counts the tokens in the vocabulary, whatever probabilities the model assigns to them",
+       "The four probabilities of 0.25 add to 1, and perplexity is the reciprocal of the smallest of them",
+       "Perplexity is the sum of the negative logs, and $-4 \\ln 0.25$ happens to come out at 4"
+      ],
+      "a": 0,
+      "why": "Each token that occurred was given $p = 0.25$, so each has surprise $-\\ln 0.25 = \\ln\n4$. The mean surprise is $\\ln 4$, and $\\exp(\\ln 4) = 4$. That is the point of the\nexponential: a model that is uniform over $N$ options has perplexity $N$, so the number\nreads as \"how many equally likely choices the model is hesitating between\".",
+      "whys": [
+       "$-\\ln 0.25 = \\ln 4$ at every position, the mean is $\\ln 4$, and the exponential undoes the log.",
+       "A model that assigns $[1.0, 1.0, 1.0]$ to what occurred has perplexity 1 over the same vocabulary. Perplexity depends entirely on the probabilities given to the tokens that actually occurred.",
+       "The reciprocal of the smallest probability would make $[0.9, 0.9, 0.9, 0.1]$ score 10; it scores $1.92$. Perplexity is a geometric mean of the reciprocals, not the largest of them.",
+       "$-4 \\ln 0.25$ is about $5.55$, not 4. Perplexity divides the sum of surprises by $n$ *and* exponentiates; leave out either step and the number stops meaning \\\"effective number of choices\\\"."
+      ]
+     },
+     {
+      "q": "A model gives $[0.9, 0.9, 0.9, 0.1]$ to four tokens that occurred, for a perplexity of $1.92$, against $1.11$ for $[0.9, 0.9, 0.9, 0.9]$. Why does one token cost so much?",
+      "opts": [
+       "Perplexity is a geometric mean of $1/p$, so one token at $0.1$ brings a factor of 10 spread over the four",
+       "The arithmetic mean of the probabilities fell from 0.9 to 0.7, and perplexity is the reciprocal of that mean",
+       "The $0.1$ token is treated as an error, and each error adds a fixed penalty of 1 to the perplexity",
+       "A probability under $0.5$ counts as a wrong prediction, and perplexity is one plus the number of wrong ones"
+      ],
+      "a": 0,
+      "why": "Averaging in log space and exponentiating is a geometric mean: perplexity is\n$\\prod (1/p_i)^{1/n}$. Three tokens at $10/9$ and one at $10$ multiply to $13.7$, and\nthe fourth root is $1.92$. A single token at $0.1$ carries a factor of ten on its own,\nwhich no amount of confidence elsewhere can average away the way an arithmetic mean\nwould.",
+      "whys": [
+       "$\\left(\\tfrac{10}{9}\\cdot\\tfrac{10}{9}\\cdot\\tfrac{10}{9}\\cdot 10\\right)^{1/4}$ is $1.92$; the log-space average turns products into sums.",
+       "$1 / 0.7$ is $1.43$, not $1.92$. Perplexity averages surprises — logarithms — and undoes the log afterwards, which is a geometric mean of $1/p$ and weights a bad token far more heavily than an arithmetic mean would.",
+       "There is no threshold and no fixed penalty; the cost is continuous in $p$. Change the $0.1$ to $0.01$ and the perplexity rises to $3.4$, to $0.001$ and it is $6$. A penalty of 1 would not move.",
+       "Perplexity never counts predictions as right or wrong. $[0.4, 0.4, 0.4, 0.4]$ has every token \\\"wrong\\\" by that rule and a perplexity of $2.5$, while $[0.9, 0.9, 0.9, 0.1]$ has one \\\"wrong\\\" token and scores $1.92$."
+      ]
+     },
+     {
+      "q": "Greedy decoding from a model whose likeliest word after `on` is `the`, after `the` is `cat`, and after `sat` is `on`, produces `the cat sat on the cat sat on ...`. What is the root cause?",
+      "opts": [
+       "Greedy takes the likeliest token each step, so a cycle among the likeliest transitions repeats for ever",
+       "The model's position embeddings are defective, so it forgets everything before the most recent token",
+       "Greedy decoding is deterministic, and every deterministic decoder eventually emits a fixed-length cycle",
+       "The temperature defaulted to 1.0, which is too high for greedy decoding to break out of a repeated phrase"
+      ],
+      "a": 0,
+      "why": "Greedy decoding is a deterministic function from context to next token. When the\nlikeliest transitions form a cycle, the context after one lap is the same as before it,\nso the same tokens follow, for ever. Sampling — with or without top-k or nucleus\ntruncation — draws from the distribution instead of taking its mode, and a cycle that\nholds with probability 0.6 breaks four times in ten.",
+      "whys": [
+       "`argmax` is a function of the context: same context, same token, and a context that recurs starts the cycle again.",
+       "The reading's example has no model at all — a four-entry lookup table loops under greedy decoding. Position information does not help when the argmax itself points around a cycle.",
+       "Determinism is necessary for the loop but not the cause; a deterministic decoder that emitted a non-repeating sequence is perfectly possible. The cause is that the *argmax* transitions form a cycle in this model.",
+       "Greedy decoding does not use the temperature — it takes the largest logit, and dividing every logit by any positive number leaves the largest one largest. Temperature only matters when sampling."
+      ]
+     }
+    ]
+   },
    "blanks": null,
    "numeric": null,
    "match": null,
