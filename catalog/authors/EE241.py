@@ -2849,6 +2849,248 @@ assert wait_states(168e6) == 5, "the top of the range needs five"
                 "PWM comes from a compare register: the output is high while the counter is below the compare value and low above it, so the duty cycle is $\\text{CCR}/(\\text{ARR}+1)$. The frequency is fixed by the reload, the duty by the compare, and the two are independent.",
                 "A PWM output is a square wave, not a voltage. Averaging it with a low-pass filter turns it into one, and the filter's corner frequency has to be far below the PWM frequency for the ripple to disappear — which is the same trade against response time as any other filter.",
             ],
+            "read": [
+                {
+                    "title": "Three milliseconds late, and nothing in the code changed",
+                    "minutes": 15,
+                    "body": r'''
+Put two channels of a logic analyser on a running board. Channel 1 is a sensor's
+data-ready line. Channel 2 is a spare pin that the program toggles the instant it reads
+the sensor. Capture two hundred presses of the trigger and measure the gap between the
+two edges:
+
+```text
+gap between DATA-READY rising and the pin toggling, 200 captures
+  shortest    12 us
+  median    1590 us
+  longest   3150 us
+```
+
+The code that reads the sensor takes eleven microseconds. The other three milliseconds
+are not spent reading anything. They are spent somewhere else in the program, and the
+distribution is flat, which is the tell: a delay caused by work would cluster, and a
+delay caused by *waiting your turn* spreads evenly across whatever you are waiting for.
+
+## Polling promises a number, and the number is the whole loop
+
+The program is a superloop. It reads the sensor, runs a control law, repaints a display
+and services a console, then goes round again. The flag it polls can be set at any
+moment, including one instruction after the poll that missed it — and then the next look
+is a full trip away.
+
+So the worst case is not the slowest thing in the loop. It is the sum of everything in
+it, because a flag set at the wrong instant waits for all of them:
+
+$$t_{\text{worst}} = \sum_{i} t_i$$
+
+Put the four tasks in and the histogram above stops being mysterious.
+
+```python
+LOOP = [
+    ("read the sensor", 120),
+    ("run the control law", 340),
+    ("repaint the display", 2600),
+    ("service the console", 90),
+]
+
+total = 0
+for name, us in LOOP:
+    total += us
+    print("%-22s %5d us" % (name, us))
+print("%-22s %5d us  <- the worst-case wait for any flag" % ("once round the loop", total))
+
+grown = total + 6800
+print("add a 6.8 ms card write: %d us, and every deadline in the loop moved with it"
+      % grown)
+print("an interrupt instead: 12 cycles at 48 MHz = %.2f us" % (1e6 * 12 / 48e6))
+```
+
+The total is **3150 µs**, which is the longest gap the analyser found, to the
+microsecond. Nothing else needed explaining.
+
+The next line is the property that makes polling dangerous rather than merely slow. Add
+a 6.8 ms write to an SD card — an unrelated feature, in an unrelated part of the
+program — and the loop becomes 9950 µs. Every deadline in the system has now moved,
+including deadlines belonging to code that nobody touched. Polling couples everything to
+everything, and the coupling is invisible in the source.
+
+The last line is the alternative. An interrupt is the hardware branching into a handler
+between two instructions of whatever was running, and the branch costs about a dozen
+cycles for the vector fetch and the register save — a quarter of a microsecond at
+48 MHz. That is four orders of magnitude below the loop, and, more usefully, it does not
+grow when the loop does.
+
+## An interrupt is not free, and it is not magic
+
+Two costs come with it. The first is the entry and exit: the processor stacks the
+caller-saved registers on the way in and unstacks them on the way out, and any work the
+pipeline had speculatively started is thrown away, because an interrupt is a branch
+nothing predicted. This module's sandbox, **What an interruption costs, drawn as
+cycles**, draws that directly — a mispredicted branch opening a three-column hole in an
+otherwise clean staircase of instructions. A handler that does nothing at all still pays
+for it.
+
+The second cost is that the handler runs *between two instructions of the main program*,
+so anything they share is now a race. The classic case is a counter incremented in both
+places: `count++` is a read, an add and a store, and a handler landing between the read
+and the store has its own increment overwritten. `volatile` does not help, because both
+accesses genuinely happen — they interleave badly. Module 7 takes that apart and prices
+the fix.
+
+What follows in practice is a rule about size. A handler should do the smallest thing
+that cannot wait — store one sample, set one flag — and hand everything else to the
+loop, because whatever it does, it does while every interrupt of equal or lower priority
+waits.
+
+## A timer counts, and two registers divide
+
+A timer is a counter clocked from the peripheral clock through a prescaler. It counts up
+to an auto-reload value and wraps. Both registers count from zero, so a prescaler holding
+$\text{PSC}$ divides by $\text{PSC}+1$, and a counter reloading at $\text{ARR}$ visits
+$\text{ARR}+1$ distinct values before it comes back round. Two divisions in series:
+
+$$f_{\text{PWM}} = \frac{f_{clk}}{(\text{PSC}+1)(\text{ARR}+1)}$$
+
+PWM comes out of a third register. The output is high while the counter is below the
+compare value $\text{CCR}$ and low above it, so out of the $\text{ARR}+1$ ticks in a
+period it spends $\text{CCR}$ of them high:
+
+$$D = \frac{\text{CCR}}{\text{ARR}+1}$$
+
+The reload sets the frequency and the compare sets the duty, and neither disturbs the
+other. What the reload *does* decide, besides the frequency, is how finely the duty can
+be adjusted — one count of $\text{CCR}$ is one step, and there are only $\text{ARR}+1$ of
+them. Three settings that all produce 1 kHz at 25% make the point:
+
+```python
+F_CLK = 48000000
+
+
+def pwm(psc, arr, ccr):
+    return F_CLK / ((psc + 1) * (arr + 1)), 100.0 * ccr / (arr + 1)
+
+
+for psc, arr, ccr in ((47, 999, 250), (0, 47999, 12000), (479, 99, 25)):
+    f, duty = pwm(psc, arr, ccr)
+    print("PSC=%5d ARR=%5d CCR=%5d -> %8.3f Hz at %5.2f %%, one step = %6.4f %%"
+          % (psc, arr, ccr, f, duty, 100.0 / (arr + 1)))
+
+slip = F_CLK / (47 * 1000)
+print("dividing by PSC rather than PSC+1: %.1f Hz, %+.2f %% off"
+      % (slip, 100 * (slip - 1000) / 1000))
+```
+
+All three lines report 1000.000 Hz at 25.00%. What separates them is the last column:
+$\text{PSC}=47$ with $\text{ARR}=999$ gives duty steps of **0.1000%**, prescaling by
+nothing at all and reloading at 47999 gives **0.0021%**, and prescaling hard so that
+$\text{ARR}$ is only 99 leaves steps of a whole **1%**. The rule falls out of it — take
+the prescaler as low as the reload register's width allows, because every count you throw
+away in the prescaler is resolution you cannot get back in the compare.
+
+The fourth line is what happens when the two `+1`s are forgotten. Dividing 48 MHz by 47
+instead of 48 gives **1021.3 Hz**, 2.13% high.
+
+## From a square wave to a voltage
+
+A PWM output is not an analogue level; it is a pin slamming between 0 V and 3.3 V. What
+makes it usable as one is that its *average* over a period is $D \cdot V_{DD}$, which
+follows from the definition of an average: the pin holds 3.3 V for a fraction $D$ of
+every period and 0 V for the rest.
+
+Averaging is what a low-pass filter does. Feed the square wave through an RC and the DC
+term passes untouched, while the fundamental at $f_{\text{PWM}}$ is attenuated by
+
+$$|H(f)| = \frac{1}{\sqrt{1 + (f/f_c)^2}}, \qquad f_c = \frac{1}{2\pi RC}$$
+
+and the same $RC$ that removes the ripple is the time constant the output takes to reach
+a new value. One component choice, two consequences pulling in opposite directions:
+
+```python
+import math
+
+F_PWM = 10000.0
+
+print("    R        C      corner    ripple at 10 kHz     tau    98 % after")
+for r, c in ((20e3, 8e-9), (20e3, 100e-9), (20e3, 200e-9), (20e3, 1e-6)):
+    tau = r * c
+    fc = 1.0 / (2 * math.pi * tau)
+    att = 1.0 / math.sqrt(1.0 + (F_PWM / fc) ** 2)
+    print("%5.0f k  %7.0f nF  %8.2f Hz  %9.3f %%       %6.2f ms  %7.1f ms"
+          % (r / 1e3, c * 1e9, fc, 100 * att, 1000 * tau, 4000 * tau))
+```
+
+Four rows, one resistor, four capacitors. At 8 nF the corner is 994.72 Hz and **9.898%**
+of the 10 kHz fundamental survives — an output that is recognisably a square wave with
+rounded corners, not a level. The quiz in this module describes a worse version of the
+same failure, with the corner only one octave below the switching frequency. At
+100 nF the corner is 79.58 Hz, the ripple is down to 0.796%, and the output reaches 98%
+of a new value in 8.0 ms. At 200 nF the ripple halves again to 0.398% and the settling
+doubles to 16.0 ms. At 1 µF there is essentially no ripple left and the thing takes
+80 ms to respond, which for a control loop is not a filter, it is a lag.
+
+## The mistake, and why it is tempting
+
+Writing the divisor into the prescaler.
+
+The datasheet's prose says "a prescaler value of 48", the register is called `PSC`, and
+so 48 goes into it — which divides by 49. The same reflex puts 1000 into `ARR` for a
+thousand-tick period. Each `+1` is worth about 0.1% on its own, and both together on the
+numbers above give a 2% frequency error.
+
+It is tempting for a reason that has nothing to do with not knowing the rule: on an
+oscilloscope, 1021 Hz and 1000 Hz are the same trace. Nothing looks wrong, nothing
+reports anything, and the error surfaces only when the timer has to agree with something
+external — a servo's pulse window, a UART's bit rate, a real-time count that is a minute
+out after a day.
+
+Its relative belongs to the filter. Putting the corner "below the switching frequency"
+is the rule everybody remembers, and one octave below is below — which is the 8 nF row,
+with a tenth of the input still on the output. Ripple rejection is a matter of *decades*,
+not of being on the correct side.
+
+## Where these models stop holding
+
+The polling bound assumes the loop is the only thing running. Add interrupts and the loop
+takes longer than the sum of its parts, by an amount that depends on the handlers' share
+of the processor — which is the arithmetic the derivation in module 7 sets out.
+
+The interrupt latency of "about a dozen cycles" is the hardware's entry cost and not the
+number you can promise. The real bound also contains every higher-priority handler that
+could be running first, and the longest stretch anywhere in the program during which
+interrupts are switched off. That second term is under your control and invisible in the
+source, and it is where deadlines are actually missed.
+
+The PWM equations are exact and the duty is not continuous. $\text{CCR}$ is an integer,
+so the achievable duty cycles are a grid of $1/(\text{ARR}+1)$, and a control loop that
+asks for a finer adjustment than the grid allows sits between two values and dithers, or
+stops moving altogether.
+
+Finally, the filter arithmetic treats the pin as an ideal source and the output as
+unloaded. Neither survives contact: the pin has tens of ohms of its own, which add to $R$,
+and anything you connect to the output forms a divider with it. That is why the build's
+resistor window has a ceiling as well as a floor — a filter made from megohms has the
+right corner and no ability to drive what comes next.
+
+## What you are about to build
+
+The sandbox, **What an interruption costs, drawn as cycles**, is the interrupt-entry cost
+drawn as a picture: instructions down the page, cycles across it, and the hole that
+appears when the processor takes a branch it did not predict. Turn forwarding on and off
+and watch which gaps close and which do not — the one that survives is the branch, and an
+interrupt is a branch.
+
+The build, **Turning a PWM pin into a voltage**, is the table above turned into a
+component. A 10 kHz PWM pin and a 20 kΩ resistor are already on the canvas, and the
+resistor has no partner, so the output follows the input at every frequency. Add the
+capacitor. Five checks measure what you draw: the slow signal within 2%, the corner
+between 60 Hz and 90 Hz, the 10 kHz ripple down by a hundred times, settling to 2% inside
+15 ms, and every resistor between 1 kΩ and 100 kΩ. The second row of the table above meets
+all five. The third row has half the ripple and fails on both the corner and the settling,
+which is the whole exercise: the two requirements are the same number read from opposite
+ends, and only a window of values satisfies both.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "What an interruption costs, drawn as cycles",
                 "visualiser": "pipeline",
@@ -3127,6 +3369,258 @@ rs.forEach(function (r) {
                 "Worst-case response time is not the entry latency. It is the entry latency, plus every higher-priority handler that can legitimately be running or arrive first, plus the longest stretch anywhere in the program during which interrupts are disabled. The last term is the one you control and the one that is invisible in the source: a critical section inside a library function lengthens the deadline of an interrupt written by somebody else.",
                 "A critical section is how a read-modify-write is made indivisible against a handler: save the current interrupt-enable state, disable, do the sequence, restore what you saved. Restore rather than blanket-enable — a function that ends with an unconditional enable, called from inside another critical section, silently opens the outer one. And `volatile` is no substitute: it guarantees that accesses happen, not that a pair of them cannot be split.",
             ],
+            "read": [
+                {
+                    "title": "An array of addresses, and the microseconds nobody wrote down",
+                    "minutes": 16,
+                    "body": r'''
+Open a memory window at address zero on a board that boots, and read the first few words:
+
+```text
+00000000   0x20005000
+00000004   0x08000141
+00000008   0x08000165
+0000000C   0x08000165
+00000010   0x08000165
+```
+
+Two things in that dump are worth stopping over.
+
+The first word is not code and is not an address in flash. `0x20005000` is in SRAM, and
+in fact it is the top of it — the processor loads that word into the stack pointer before
+executing a single instruction, which is what lets the very first line of the startup
+code push a register.
+
+And three consecutive entries hold the same value, `0x08000165`. Three different
+exceptions, one handler. Nobody wrote three identical handlers; the linker put the same
+default one in every slot that no named function claimed.
+
+## The table is an array, and the index is the exception number
+
+There is no dispatch, no lookup, no comparison. When exception number $n$ fires, the
+hardware loads the word at $4n$ and branches to it. That is the whole mechanism, and
+everything else about interrupts on this architecture is a consequence of it.
+
+The numbering starts with the system exceptions and continues into the peripheral
+interrupts, so peripheral IRQ $k$ is exception $16+k$ and lives at
+
+$$\text{offset} = 4(16 + k)$$
+
+```python
+def offset(exception):
+    return 4 * exception
+
+
+for name, exc in (("initial stack pointer", 0), ("Reset", 1), ("NMI", 2),
+                  ("HardFault", 3), ("SysTick", 15)):
+    print("%-22s exception %2d -> offset 0x%04X" % (name, exc, offset(exc)))
+for n in (0, 28, 37):
+    print("%-22s exception %2d -> offset 0x%04X" % ("IRQ %d" % n, 16 + n, offset(16 + n)))
+
+stored = 0x08000141
+print("a handler at 0x%08X is stored as 0x%08X" % (stored & ~1, stored))
+```
+
+The initial stack pointer sits at offset 0 and the reset vector at 4, which is the pair
+in the dump. SysTick is exception 15 at **0x003C**, so the peripheral interrupts start
+immediately after it at **0x0040**, and IRQ 28 — a timer, on a good many parts — is at
+**0x00B0**. If you ever need to know where a vector lives, that multiplication is the
+whole answer.
+
+The last line explains the odd address. The handler is at `0x08000140`, an even address
+as every instruction must be, and the *stored* word is `0x08000141`. Bit 0 is not part of
+the address; it tells the processor to enter in Thumb state. A hand-written table with
+the even address in it faults on the first interrupt, and the fault is a
+`HardFault` with a `UsageFault` reason that says nothing about vectors.
+
+Now the three identical entries. A handler is bound to a slot by *name*: the startup file
+defines every handler as a weak symbol aliased to an infinite loop, and your definition
+overrides it if — and only if — the names match. Misspell `TIM2_IRQHandler`, and nothing
+warns you. There is no reference to resolve, no link error, no unused-function warning.
+The slot keeps the default, the interrupt fires, the chip spins in a loop it never leaves,
+and the symptom is that the peripheral is configured perfectly and the handler never runs.
+A breakpoint on the first line of the handler that never hits is the fastest way to see it.
+
+## Entry costs cycles, and so does leaving
+
+Taking an interrupt is not a branch. The processor stacks the caller-saved registers and
+the return address, fetches the vector, and starts the handler — around a dozen cycles —
+and unstacks the same on the way out. That is why splitting one job across two handlers
+costs the pair twice, and it is why a Cortex-M optimises the case of a second interrupt
+already pending when a handler returns: it *tail-chains* straight into it, skipping the
+unstack and the restack entirely.
+
+## Priority is a number, and the small numbers win
+
+A higher-priority interrupt preempts a running handler. An equal or lower one stays
+pending and is taken when the current handler returns. The numbers run backwards from
+the intuition — priority 1 outranks priority 3 — and that inversion is where most of the
+confusion in this subject is planted.
+
+Two consequences are worth carrying. The first is a cost: with several levels in use, the
+worst case has one stacked frame per level, all at once, so a stack budget is not the
+deepest handler but the sum of them. The second is a tool. Two sources given the *same*
+priority can never preempt each other, so a buffer shared between them needs no lock at
+all. Choosing priorities is partly a locking decision, not only a timing one.
+
+## The number that is actually missed
+
+Entry latency is a hardware constant and it is not the answer to "will this handler start
+in time". The bound has three terms: the entry cost, everything of higher priority that
+can legitimately go first, and the longest stretch anywhere in the program during which
+interrupts are switched off.
+
+$$R = t_{\text{entry}} + \sum_{j \in \text{higher}} C_j + B_{\text{max}}$$
+
+```python
+F_CORE = 48e6
+
+
+def us(cycles):
+    return 1e6 * cycles / F_CORE
+
+
+ENTRY = 12
+AHEAD = (("the ADC handler, 10 kHz", 300), ("the SPI handler", 90))
+
+total = ENTRY
+print("%-38s %7.2f us" % ("hardware entry latency", us(ENTRY)))
+for name, cyc in AHEAD:
+    total += cyc
+    print("%-38s %7.2f us" % ("+ " + name, us(cyc)))
+for disabled in (0, 200, 1500):
+    worst = us(total + disabled)
+    print("+ %4d cycles of interrupts-off  -> worst case %7.2f us   %s"
+          % (disabled, worst, "inside 20 us" if worst <= 20 else "MISSES 20 us"))
+```
+
+Entry is **0.25 µs** and rounds to nothing. The two handlers that can be ahead cost
+6.25 µs and 1.88 µs, so with interrupts never disabled the worst case is **8.38 µs**,
+comfortably inside a 20 µs deadline. Two hundred cycles of critical section takes it to
+12.54 µs, still inside. Fifteen hundred cycles takes it to **39.62 µs** and the deadline
+is gone.
+
+Read the last term again, because it is the one that behaves differently from the others.
+$B_{\text{max}}$ belongs to whatever code holds the longest critical section anywhere in
+the program, which is frequently a library, frequently written by somebody else, and
+never visible from the interrupt whose deadline it destroys. Raising the priority does
+not help: disabling interrupts is not a priority mechanism, it is an off switch, and the
+hardware will not take the interrupt at any priority while it is thrown.
+
+## Making a sequence indivisible, without lengthening everyone else's bound
+
+A critical section is the fix for the race in the previous module — the increment that a
+handler lands in the middle of. It has exactly four steps, and the first one is the one
+people leave out:
+
+```c
+uint32_t primask = __get_PRIMASK();   /* remember whether they were already off */
+__disable_irq();
+count += 1;                           /* the read-modify-write, now indivisible */
+__set_PRIMASK(primask);               /* put back what you found */
+```
+
+Save, disable, do the work, *restore*. Restoring rather than enabling is what lets the
+function be called from anywhere, including from inside a longer critical section that
+somebody else opened, and it is what makes the pattern compose.
+
+## The mistake, and why it is tempting
+
+Ending the section with `__enable_irq()`.
+
+It reads as the natural counterpart of `__disable_irq()`, and on its own it behaves
+correctly: interrupts were on, they went off, they came back on. It is tempting because
+it is symmetric, because it is one line shorter, and above all because the function is
+tested by calling it from the main loop, where it is right.
+
+What it does not do is restore. Called from inside another critical section, it enables
+interrupts halfway through somebody else's indivisible sequence, and the outer sequence
+is now split at a point its author proved could not be split. The corruption is rare,
+timing-dependent, and lives in code that reviews perfectly. That is why every RTOS wraps
+critical sections as save-and-restore, and why the intrinsic pair exists at all.
+
+Its relative is reaching for `volatile` when the problem is atomicity. `volatile`
+guarantees that every access happens, where the source says, unmerged. It says nothing
+about a pair of accesses being inseparable, and adding it to a shared counter makes the
+lost-update bug rarer without making it absent — which is worse than leaving it alone,
+because it moves the failure out of the tests and into the field.
+
+## Where these models stop holding
+
+The response-time sum above assumes each higher-priority handler goes ahead of you once.
+If one of them can fire repeatedly inside your window — a 10 kHz source against a 200 µs
+deadline — the term is not $C_j$ but $C_j$ multiplied by how many times it can arrive,
+and the honest calculation is a fixed-point iteration rather than a sum. Treat the block
+above as the shape of the argument on a lightly loaded system, not as a proof.
+
+Disabling interrupts does not disable everything. A non-maskable interrupt and a
+HardFault are taken regardless, which is the point of them. Nor does it stop a DMA
+controller, which moves data without asking the core at all: a buffer shared with DMA is
+not protected by a critical section, and the mechanisms for it are different.
+
+The utilisation argument in this module's derivation is an *average*. It answers whether
+the work fits over a long window and says nothing about the worst case at any instant —
+those are two different questions with two different formulas, and using one where the
+other belongs is how a system passes a soak test and misses a deadline.
+
+And the RC debounce in the tune unit is an idealisation. A real button charges through
+the internal pull-up and discharges through the closed contacts, so the two directions
+have different time constants, and the filtered edge crosses the input threshold slowly
+enough to sit in the undefined band on the way through — which is what a Schmitt-trigger
+input is for, and why the software answer, a timer that ignores further edges for a few
+milliseconds, is the more common one in production.
+
+## What you are about to build
+
+The derivation, **What the handlers leave for the main loop**, is four steps from a
+handler's cost to the work a deadline can actually hold: a share $C_h/T_h$ per source,
+what is left after both, the wall-clock time $W/(1-u)$ that $W$ cycles of loop work then
+take, and the budget $D(1-u)$ that follows. Watch what the last one does as $u$ nears 1.
+
+The tune unit, **One press, one interrupt**, is a resistor and a capacitor against three
+requirements at once: keep 0.95 of a 10 Hz press, put the 1 kHz bounce 26 dB down, and
+hold the time constant under 5 ms so the button still feels immediate. Those pull two
+ways, and the window between them is narrower than it looks:
+
+```python
+import math
+
+F_PRESS, F_BOUNCE = 10.0, 1000.0
+
+amp = 10.0 ** (-26.0 / 20.0)
+lo_keep = F_PRESS / math.sqrt(1.0 / (0.95 * 0.95) - 1.0)
+hi_rej = F_BOUNCE / math.sqrt(1.0 / (amp * amp) - 1.0)
+lo_tau = 1.0 / (2 * math.pi * 5.0e-3)
+print("keep 0.95 of 10 Hz needs a corner above %6.2f Hz" % lo_keep)
+print("26 dB down at 1 kHz needs a corner below %6.2f Hz" % hi_rej)
+print("a 5 ms time constant needs a corner above %6.2f Hz" % lo_tau)
+print("so RC lands between %.2f ms and %.2f ms"
+      % (1000 / (2 * math.pi * hi_rej), 1000 / (2 * math.pi * lo_tau)))
+
+print("    R        C     corner    kept at 10 Hz   1 kHz down    tau")
+for r, c in ((1000, 100), (10000, 100), (4700, 1000), (10000, 1000)):
+    tau = r * c * 1e-9
+    fc = 1.0 / (2 * math.pi * tau)
+    keep = 1.0 / math.sqrt(1.0 + (F_PRESS / fc) ** 2)
+    rej = 20.0 * math.log10(1.0 / math.sqrt(1.0 + (F_BOUNCE / fc) ** 2))
+    print("%6d ohm %5d nF %8.2f Hz %10.4f %10.2f dB %7.2f ms"
+          % (r, c, fc, keep, rej, 1000 * tau))
+```
+
+The three bounds print as **30.42 Hz**, **50.18 Hz** and **31.83 Hz**, so the corner has
+to land between about 31.8 and 50.2 Hz, which is a time constant between **3.17 ms and
+5.00 ms**. Notice which constraint binds at the bottom: the settling requirement, not the
+one about keeping the press.
+
+Then the four rows. The sliders open at 1 kΩ and 100 nF, a corner at 1591.55 Hz, which
+passes the press through untouched and attenuates the bounce by 1.45 dB — a filter in
+name only. Ten times the resistance reaches −16.07 dB, better and still nowhere near.
+4.7 kΩ with 1 µF gives a corner of 33.86 Hz, keeps 0.9591 of the press, puts the bounce
+**29.41 dB** down and has a 4.70 ms time constant: all three at once. Ten kilohms with
+the same capacitor rejects the bounce better still, at −35.96 dB, and fails the other two.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Vectors, priorities and indivisible sequences",
                 "minutes": 10,
@@ -3359,6 +3853,240 @@ the whole processor, and that no main loop exists at all.
                 "The baud rate comes from an integer divider off the peripheral clock, so what you get is $f_{clk}/\\text{DIV}$ rather than what you asked for. The error that matters is the accumulated one: the sampling point drifts by the fractional error on every bit, and the middle of the stop bit is 9.5 bit times from the start edge, so an error of $e$ has become $9.5e$ of a bit by the time the frame ends. Half a bit is where the sample lands in the wrong bit, and both ends contribute, which is where the familiar 2% budget comes from.",
                 "The three errors a UART reports mean three different things. **Framing**: the stop bit was not high, which nearly always means the two ends disagree about the baud rate. **Parity**: an odd number of bits changed, and an even number is invisible. **Overrun**: the data register was not read before the next byte arrived, and a byte that was received correctly has been lost — a software failure, not a wiring one.",
                 "A logic-level UART is not RS-232. RS-232 idles at about −12 V and inverts the data, so connecting one directly to a 3.3 V pin destroys the pin. Between two boards sharing a supply, two wires and a common ground are enough; across a room, or between separately powered boxes, the ground is no longer common and the link needs a transceiver, or an isolator.",
+            ],
+            "read": [
+                {
+                    "title": "One falling edge, and nine and a half bit times of trust",
+                    "minutes": 16,
+                    "body": r'''
+Send the single character `A` — `0x41` — down a serial link at 115200 baud and capture the
+line with a logic analyser:
+
+```text
+     ____        _____________________        ____________
+ ____|   |______|                     |______|
+       t = 0                             8.68 us per division
+```
+
+Ten divisions of 8.68 µs, and reading the line left to right the pattern is
+`0 1 0 0 0 0 0 1 0 1`. Strip the first and last and eight bits remain: `1 0 0 0 0 0 1 0`,
+which read as a binary number is `0x82`.
+
+`0x41` went in. `0x82` is on the wire. Nothing is broken — the link works, the far end
+recovers an `A` — and the two numbers are bit-reversals of each other, which is the first
+thing this module has to explain.
+
+## There is no clock on the wire, so the receiver has to invent one
+
+Asynchronous means what it says: the two devices share no timing signal. The line idles
+high; a start bit takes it low; and that single falling edge is the only synchronisation
+the receiver will ever get for the whole frame. From it, and from its own idea of how long
+a bit lasts, it places its sampling points:
+
+$$t_k = \left(k + \tfrac{1}{2}\right) T_{\text{bit}}, \qquad T_{\text{bit}} = \frac{1}{\text{baud}}$$
+
+The half is what matters. Sampling in the middle of a bit rather than at its edge is what
+buys tolerance: the sample can drift by nearly half a bit in either direction before it
+lands in a neighbour. Real receivers oversample the line sixteen times per bit and take
+three samples around the centre, which also gives them a way to reject a glitch, but the
+geometry is the one above.
+
+Now the bit order. The transmitter shifts the byte out of a shift register, and a shift
+register gives up its least significant bit first — so `d0` goes first and `d7` last. The
+analyser draws time left to right, and we write numbers most significant digit first, so
+the two conventions run in opposite directions and the trace looks backwards. It is not
+backwards; it is a number written in the order a shift register produces it.
+
+```python
+def frame(byte, stops=1):
+    bits = [0]
+    for i in range(8):
+        bits.append((byte >> i) & 1)
+    bits.extend([1] * stops)
+    return bits
+
+
+f = frame(0x41)
+print("0x41 is %s, and one 8N1 frame of it is" % format(0x41, "08b"))
+print("   " + "  ".join(str(b) for b in f))
+print("   S  b0 b1 b2 b3 b4 b5 b6 b7 T")
+naive = 0
+for b in f[1:9]:
+    naive = (naive << 1) | b
+print("reading those eight left to right as a number gives 0x%02X" % naive)
+print("ten bits carry eight, so 115200 baud is %d bytes/s and one frame is %.2f us"
+      % (115200 // 10, 1e6 * 10 / 115200))
+```
+
+The frame prints as `0 1 0 0 0 0 0 1 0 1`, which is the capture, and reading it the wrong
+way gives **0x82**, which is the puzzle at the top of this reading dissolved.
+
+The last line carries a fact worth more than it looks. `8N1` puts **ten** bits on the wire
+for eight of payload, so the byte rate is the baud rate divided by ten: 115200 baud is
+**11520 bytes per second**, not 14400. The start and stop bits are 20% overhead and they
+do not go away, and one whole frame occupies **86.81 µs** — a number to keep, because it
+is how long your software has to collect a byte before the next one lands on top of it.
+
+## The divider, and the error it cannot avoid
+
+The peripheral makes its bit clock by dividing the peripheral clock by an integer. You ask
+for a baud rate; the hardware gives you $f_{clk}/\text{DIV}$, and the two agree only when
+the division happens to come out whole.
+
+$$\text{DIV} = \operatorname{round}\!\left(\frac{f_{clk}}{\text{baud}}\right), \qquad
+e = \frac{f_{clk}/\text{DIV} - \text{baud}}{\text{baud}}$$
+
+```python
+def divisor(f_clk, baud):
+    d = int(f_clk / baud + 0.5)
+    return d if d >= 1 else 1
+
+
+for f_clk in (48e6, 8e6, 1e6, 72e6):
+    d = divisor(f_clk, 115200)
+    actual = f_clk / d
+    err = 100.0 * (actual - 115200) / 115200
+    print("%5.1f MHz: DIV = %4d -> %9.1f baud, error %+6.2f %%" % (f_clk / 1e6, d, actual, err))
+```
+
+Four clocks, four different answers to the same request. A 48 MHz clock wants a divider of
+416.667 and gets 417, so the rate lands at 115107.9 baud, **−0.08%** low — and note the
+sign, because the divider is underneath: rounding it *up* makes the rate *lower*. An
+ordinary 8 MHz clock gives a divider of 69 and **+0.64%**. A 1 MHz internal oscillator
+gives a divider of **9**, and with an integer that small the reachable rates are far apart:
+9 gives 111111 baud and 8 would give 125000, with nothing in between, so the error is
+**−3.55%**. And 72 MHz divides by exactly 625 and has no error at all, which is why
+peripheral clocks get chosen with serial rates in mind rather than for roundness.
+
+Rounding rather than truncating is not a detail. Truncating 416.667 to 416 gives +0.16%
+where rounding gives −0.08%, so a cast to `int` doubles the error for nothing.
+
+## Where the error goes: nine and a half bit times
+
+A per-bit error of a fraction of a percent sounds harmless, and taken one bit at a time it
+is. The trouble is that every sampling point is measured from the *same* start edge, so
+the error does not reset — it accumulates across the frame, and the last sample is the
+worst placed.
+
+The middle of the stop bit of an 8N1 frame is 9.5 bit times after the start edge: one
+half-bit into the start bit, eight bits of data, and half of the stop bit. So a fractional
+rate error $e$ has become $9.5e$ of a bit by the time the receiver checks the stop bit, and
+both ends contribute their own:
+
+$$9.5\,(|e_{rx}| + |e_{tx}|) < \tfrac{1}{2}$$
+
+```python
+STOP = 9.5
+
+for e_rx, e_tx in ((0.08, 0.0), (0.64, 1.0), (3.0, 2.0), (3.55, 2.0)):
+    drift = STOP * (e_rx + e_tx)
+    print("receiver %4.2f %% + transmitter %4.2f %% -> %5.1f %% of a bit by the stop bit  %s"
+          % (e_rx, e_tx, drift, "ok" if drift < 50 else "FRAMING ERRORS"))
+print("so the two ends together have %.2f %% to share" % (50.0 / STOP))
+```
+
+The 48 MHz part against a perfect transmitter drifts 0.8% of a bit and is not doing
+anything interesting. The 8 MHz part against a transmitter that is 1% out reaches 15.6%,
+still comfortable. A 3% receiver against a 2% transmitter reaches **47.5%** — it works,
+and it works with nothing left over, so it fails the first time temperature moves either
+crystal. Push the receiver to 3.55% and the total is **52.7%**: the stop-bit sample has
+crossed into the next bit and the link reports framing errors on nearly every byte.
+
+The last line is the rule the whole subject is usually reduced to. The two ends together
+have **5.26%** to share, which is where the familiar "2% each" budget comes from, with the
+rest kept back for temperature and part spread.
+
+## Three errors, three different accusations
+
+When a link goes wrong the peripheral names the failure, and the three names mean genuinely
+different things.
+
+**Framing** means the stop bit was not high where the receiver looked. That is the
+arithmetic above going wrong, so it accuses the bit timing — and the first thing to doubt
+is not the configured baud rate but the *peripheral clock the divider was computed from*.
+If the PLL did not lock, or the bus prescaler is not what the header assumes, the constant
+is wrong and every rate derived from it is wrong with it. Repeatable wrong values are the
+signature; random corruption points at noise instead.
+
+**Parity** means an odd number of bits changed. An even number is invisible, which is the
+honest limit of a single parity bit: it detects, it does not correct, and it misses half
+of everything that could go wrong.
+
+**Overrun** means a byte arrived before the previous one had been read out of the data
+register. Every byte on the wire was perfect and one of them was thrown away inside your
+own chip — because a handler was slow, or a higher-priority one was ahead of it, or
+interrupts were disabled somewhere for longer than the 86.81 µs a frame takes. That is a
+latency failure, and the response-time argument from module 7 is what bounds it.
+
+## The mistake, and why it is tempting
+
+Shifting the byte out most significant bit first.
+
+It is what writing looks like. You have `0x41`, you write it `0100 0001`, and you send it
+in the order you wrote it — and it is reinforced by the analyser trace at the top of this
+reading, which appears to show exactly that.
+
+What makes it survive is the test people run. A single byte, checked by eye, chosen from
+the small set that happens to be a palindrome in binary: `0x00`, `0xFF`, `0x18`, `0x3C`.
+Every one of those round-trips perfectly through a bit-reversed codec. It is only when
+arbitrary data goes through that the received byte turns out to be the bit-reversal of the
+sent one — `0x41` arriving as `0x82` — and the symptom looks so much like a timing fault
+that the search goes to the baud rate, where there is nothing wrong.
+
+The test that catches it in one line is the round trip over all 256 values, which is the
+last test of this module's lab, and it is the only kind of test worth writing for a codec.
+
+The related slip is a data-rate budget divided by eight. Ten bits carry eight, so
+`115200/8 = 14400` bytes per second is 25% optimistic, and the overhead it forgets is
+sitting in plain sight on the wire.
+
+## Where these models stop holding
+
+The accumulation argument assumes 8N1. Add a parity bit or a second stop bit and the frame
+is longer, the last sample is further from the start edge, and the tolerance shrinks —
+9.5 becomes 10.5 or 11.5, and a 5% budget becomes 4.3%. Send nine data bits and it moves
+again.
+
+The two errors are treated above as constants that add, which is a worst case rather than
+a description. Crystal error is roughly constant; an internal RC drifts with temperature
+and supply during the very minutes a product warms up, so a link that passes on the bench
+can fail after twenty minutes in a case.
+
+The whole of this reading is about *timing* and says nothing about *levels*. A UART frame
+is only recoverable if the receiver reads a 1 as a 1, and a signal arriving through a
+divider and a metre of cable takes real time to get there. If the edge has not settled by
+the time the sample is taken, the timing arithmetic was irrelevant. That is the design
+problem this module's build sets.
+
+And a logic-level UART is not RS-232. RS-232 carries the same frame at ±5 to ±12 V with the
+sense inverted, so wiring one to a 3.3 V pin puts voltages above the supply and below
+ground onto it and the protection diodes conduct until something gives. Two boards sharing
+a supply need two wires and a common ground; two separately powered boxes do not have a
+common ground at all, and the link needs a transceiver or an isolator.
+
+## What you are about to build
+
+Three exercises, one per section above.
+
+The build, **A 5 V talker and a 3.3 V listener**, is the levels problem: a 5 V transmit
+pin, a 3.3 V input, and 1 nF of cable already on the canvas that you may not delete. Two
+resistors set the level and the *pair* of them in parallel sets the speed, so the ratio and
+the time constant are not independent choices. The budget is 1.7 µs to cross 2.0 V — a
+fifth of the 8.68 µs bit, so the level is long settled before the receiver samples at
+4.34 µs.
+
+The fill-in drill, **The baud divider, and where the error goes**, is the second and third
+blocks above done by hand on three clocks, ending at the 33.7% of a bit that the 1 MHz part
+has drifted by the stop bit.
+
+The lab, **A frame on the wire, and a divider that misses**, asks for `parity_bit`,
+`frame`, `decode`, `divisor` and `error_pct`. `frame` and `decode` are the pair to watch:
+feeding one into the other has to return the byte you started with for all 256 values, and
+`decode` has to reject what a receiver rejects — a wrong length, a start bit that is not 0,
+a stop bit that is not 1, a parity bit that does not match. That last rejection is a
+framing error, written out in Python.
+''',
+                },
             ],
             "quiz": {
                 "title": "What is on the wire, and how far it can drift",
@@ -3922,6 +4650,226 @@ assert abs(error_pct(48e6, 9600)) < 1e-9, "and 9600 from 48 MHz is exact too"
                 "I²C is two wires for any number of devices, so it must supply the two things SPI leaves out: an address, sent as the first seven bits of the first byte, and an acknowledgement, which is a ninth clock in which the addressed device pulls the data line down. Nine bits per byte is an 11% tax on everything you send, and it buys the ability to know that something answered.",
                 "Both I²C lines are open-drain: a device can pull down or let go, never drive up. That is what makes it safe for several devices to share one wire, and it means the rising edge is not driven at all — a pull-up resistor and the bus capacitance charge it. Choosing that resistor is the whole of I²C's electrical design: small enough to charge the capacitance inside the rise-time budget, large enough that whichever device is pulling down stays inside its sink-current limit.",
             ],
+            "read": [
+                {
+                    "title": "One wire, two kinds of edge",
+                    "minutes": 16,
+                    "body": r'''
+Put a scope on the SDA line of a working I²C bus and look at one byte going past. The
+falling edges are vertical. The rising edges are not — each one is a curve, and the
+measurement cursors put it a little under a microsecond from the bottom of the swing to
+the top:
+
+```text
+        _____                   ______
+SDA  \ /     \                 /
+      X       \_______________/
+     / \
+      |         |
+   20 ns      940 ns
+   falling     rising
+```
+
+Same wire, same capacitance, same two devices. One edge is fifty to a hundred times slower
+than the other, and nothing about the protocol asked for that asymmetry. It is a
+consequence of how the pin is built, and everything else about designing an I²C bus
+follows from it.
+
+## One edge is driven and the other is left to a resistor
+
+An I²C pin is open-drain. It contains a transistor to ground and nothing to the supply, so
+a device has exactly two things it can do: pull the line down, or let go of it. Pulling
+down puts a saturated transistor of a few tens of ohms across the bus capacitance. Letting
+go leaves the pull-up resistor to charge that same capacitance on its own.
+
+Both edges are the same exponential, $\tau = RC$, with two very different values of $R$:
+
+```python
+C_BUS = 200e-12
+R_ON, R_PULLUP = 40.0, 4700.0
+
+for name, r in (("held down by a transistor", R_ON),
+                ("released, charged by the pull-up", R_PULLUP)):
+    print("%-34s R = %7.0f ohm, tau = %8.2f ns" % (name, r, 1e9 * r * C_BUS))
+print("the rising edge is %.0f times slower than the falling one, on the same wire"
+      % (R_PULLUP / R_ON))
+```
+
+Forty ohms against 200 pF is a time constant of **8 ns**; 4.7 kΩ against the same 200 pF
+is **940 ns**. The rising edge is **118 times** slower, which is the scope picture,
+and the ratio is nothing but the ratio of the two resistances.
+
+## Why the protocol insists on it
+
+Being unable to drive high is what makes sharing safe. Any number of devices can pull the
+line down at the same moment and nothing is damaged, because pulling down twice is the
+same as pulling down once — the line is the logical AND of everything on it. Two push-pull
+outputs disagreeing would instead put the supply and ground in series through two
+transistors.
+
+That is also what makes the acknowledgement possible. After eight bits the master releases
+the data line and issues a ninth clock, and the *addressed* device pulls it down to say it
+is there. A device answering on a line the master has let go of works because letting go is
+a state the hardware supports.
+
+So the two things SPI leaves out — an address and an acknowledgement — are exactly what
+I²C spends its two wires on, and it can afford them because open-drain makes a shared wire
+safe.
+
+## Choosing the resistor is a floor and a ceiling on the same number
+
+The ceiling comes from the rising edge. The specification does not measure it from zero; it
+measures $t_r$ between $0.3\,V_{DD}$ and $0.7\,V_{DD}$, which are the two logic thresholds.
+Charging towards $V_{DD}$, the line reaches a fraction $f$ of the supply at
+$t = \tau \ln\frac{1}{1-f}$, so the specified edge is the difference of two of those:
+
+$$t_r = \tau\left(\ln\frac{1}{0.3} - \ln\frac{1}{0.7}\right) = \tau \ln\frac{7}{3}$$
+
+The floor comes from the falling edge, or rather from what holds the line down. A device
+pulling down holds the line at $V_{OL} = 0.4$ V and is specified to sink no more than 3 mA,
+and every milliamp of that comes through your pull-up:
+
+$$R_p \geq \frac{V_{DD} - V_{OL}}{I_{sink}}$$
+
+```python
+import math
+
+V_DD, V_OL, I_SINK = 3.3, 0.4, 3.0e-3
+K = math.log(7.0 / 3.0)
+print("the edge from 0.3 to 0.7 V_DD takes %.4f tau" % K)
+for c in (100e-12, 200e-12, 400e-12):
+    print("at %3.0f pF the pull-up must be under %5.0f ohm, and over %3.0f ohm to stay inside 3 mA"
+          % (1e12 * c, 1e-6 / (K * c), (V_DD - V_OL) / I_SINK))
+print("4.7 k against 200 pF gives an edge of %.0f ns" % (1e9 * 4700 * 200e-12 * K))
+```
+
+The constant is **0.8473**, so the useful form of the rule is $t_r \approx 0.85\,R_pC$.
+Against the 1 µs that 100 kHz standard mode allows, a bus with 100 pF on it can take a
+pull-up up to **11802 Ω**; at 200 pF that halves to **5901 Ω**; and at the 400 pF the
+specification permits as an absolute maximum it is down to **2951 Ω**. The floor stays at
+**967 Ω** throughout, because it has nothing to do with capacitance.
+
+Look at what those two columns are doing. The floor is fixed and the ceiling falls as
+$1/C_{bus}$, so the window closes as the bus grows. That is the honest reason the
+specification caps bus capacitance at 400 pF, and it is why adding a sixth device, or
+half a metre of ribbon cable, can stop a bus that has worked for three years.
+
+## SPI drives both edges, and pays for it in pins
+
+SPI makes the opposite trade. Every line is push-pull and driven hard, so there is no
+resistor, no rise-time budget, and no reason it cannot run at tens of megahertz.
+
+It is four wires: a clock, one data line in each direction, and a select line per device.
+The master generates every clock edge, and each edge shifts one bit out of the master and
+one bit in from the peripheral at the same time — the two devices are a single ring of
+shift registers. So a read *is* a write. Clocking a byte out is how you clock a byte in,
+which is why an SPI driver is one `transfer(byte)` function rather than a read and a write,
+and why reading a sensor means sending a byte nobody cares about.
+
+What both ends still have to agree on is which edge the data is valid on, and that is all
+CPOL and CPHA are: the clock's idle level, and whether the sample is taken on the first or
+the second edge of each bit. Get it wrong and both devices clock away contentedly while the
+master samples half a bit early or late — the received byte is often the right one shifted
+by a position, repeatably, with nothing reporting an error, because SPI has no mechanism
+for reporting one.
+
+That absence is the real cost of the four wires. No address means nothing needs a name; no
+acknowledgement means nothing can tell you it is not there. A peripheral whose select line
+is never asserted returns whatever the idle line reads as — `0x00` or `0xFF` — completely
+and forever, through a transfer that completes normally with a clean status register.
+
+## Nine clocks a byte, and what that buys
+
+The acknowledgement is not free either. Every I²C byte takes nine clock periods: eight of
+data and one in which somebody pulls the line down. That is an 11% tax on everything the
+bus carries, and it is worth pricing against what the bus is asked to do.
+
+```python
+for f_bus in (100e3, 400e3):
+    t = 9 * 4 / f_bus
+    print("%3.0f kHz: one four-byte read takes %6.1f us, and 200 a second is %5.1f %% of the bus"
+          % (f_bus / 1e3, 1e6 * t, 100.0 * t * 200))
+t8 = 8 * 4 / 100e3
+print("eight clocks a byte instead of nine: %.1f %%, the acknowledgement quietly dropped"
+      % (100.0 * t8 * 200))
+spi = 8 * 4 / 8e6
+print("the same four bytes on an 8 MHz SPI bus: %.1f us, %.2f %% at the same rate"
+      % (1e6 * spi, 100.0 * spi * 200))
+```
+
+Reading one register out of a sensor is four bytes on the wire — the address with a write
+bit, the register number, the address again with a read bit after a repeated start, and the
+data — so 36 clock periods. At 100 kHz that is **360 µs**, and two hundred reads a second
+is **7.2%** of every second gone. Counting eight clocks a byte instead of nine gives 6.4%
+and has silently thrown the acknowledgement away. Moving to 400 kHz brings it to **1.8%**,
+which is the honest reason to raise a bus speed: not that any single transaction felt slow,
+but that the bus is a shared resource with a budget. The same four bytes over SPI at 8 MHz
+take 4 µs and **0.08%**.
+
+## The mistake, and why it is tempting
+
+Fitting 4.7 kΩ.
+
+It is on nearly every reference schematic and in nearly every application note, and against
+200 pF it genuinely does meet standard mode: the block above puts that edge at **796 ns**,
+inside the microsecond. It is not a wrong number. It is a number with no margin, chosen
+without reference to the bus it is on.
+
+What makes it dangerous is the direction it fails in. The ceiling falls as capacitance
+rises, so at 400 pF the largest legal pull-up is 2951 Ω and the same 4.7 kΩ is 59% over —
+and nobody re-checks a resistor when they add a device. The failure is not immediate
+either: an edge that is slightly too slow still crosses the threshold most of the time, so
+the bus works, mostly, and the occasional missed acknowledgement is put down to the sensor.
+Raise the clock to 400 kHz, where the rise-time budget is 300 ns, and it stops working
+altogether — and the change that broke it was in software.
+
+The related trap is the other end. Reaching for 1 kΩ to be safe on rise time puts 2.9 mA
+through whichever device is holding the line down, at the very edge of what it is specified
+to sink, and its $V_{OL}$ climbs until the line no longer reads as a low.
+
+## Where these models stop holding
+
+The single-RC model treats the bus as one lumped capacitor charged through one resistor.
+Real capacitance is distributed along the tracks and cable, the pull-up is not the only
+current path, and every device's input adds a few picofarads plus a leakage current. Use it
+to size a resistor and to know which direction to move it, not as a prediction of an edge
+to the nanosecond.
+
+The rise-time budget above is standard mode's. Fast mode at 400 kHz allows 300 ns, which is
+a third of the ceiling from the same arithmetic, and fast-mode-plus at 1 MHz allows 120 ns
+and expects a driven pull-up rather than a resistor. The method survives the change of
+mode; the numbers do not.
+
+The timing budget also assumes the master controls the pace. It does not: I²C explicitly
+permits a peripheral to hold the clock line down while it thinks — clock stretching — and a
+device that stretches for a millisecond has taken a millisecond of your bus whatever your
+arithmetic said. Multi-master arbitration, where two masters start talking at once and one
+detects that the line is lower than it is driving, is the same open-drain property again
+and adds its own delays.
+
+And SPI stops being a digital problem at speed. At tens of megahertz a few centimetres of
+track is a transmission line, edges reflect off unterminated ends, and the clock skew
+between a master and a peripheral at opposite corners of a board eats into the setup window
+the mode diagram assumes.
+
+## What you are about to build
+
+The build, **Sizing an I²C pull-up**, is the second block above turned into a component
+choice. The 200 pF of bus capacitance is already on the canvas and is not yours to delete —
+it is the devices, the tracks and the cable. A 47 kΩ resistor is fitted, which is what "it
+needs a pull-up" gets you, and its edge is nowhere near the budget. Three checks measure
+the line you draw: the edge from 0.99 V to 2.31 V inside 1 µs, a settled level at the full
+3.3 V, and every pull-up at 1 kΩ or more. The arithmetic above gives a window of 967 Ω to
+5901 Ω at 200 pF, so the build's floor is the next stock value up, and 5.6 kΩ is the
+largest stock value under the ceiling.
+
+The numeric question, **How much of the second the bus is busy**, is the third block done
+by hand: four bytes, nine clock periods each, 200 reads a second on a 100 kHz bus. The
+answer is checked to one decimal place, and the difference between the right answer and the
+tempting one is entirely the acknowledgement.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Edges, addresses and the ninth bit",
                 "minutes": 10,
@@ -4219,6 +5167,274 @@ bits and the acknowledgement that follows them.
                 "Small microcontrollers have no floating-point unit, so a `float` multiply becomes a library call of tens or hundreds of cycles. Fixed point keeps the speed of integer arithmetic by agreeing where the binary point sits and never storing it.",
                 "In Q$f$ format a real number $x$ is held as the integer $X = \\text{round}(x \\cdot 2^{f})$. Adding two Q$f$ numbers is an ordinary integer add; multiplying them gives a Q$2f$ result, which must be shifted right by $f$ to come back.",
                 "Two things then have to be watched. The intermediate product needs twice the width of the operands, so a Q15 multiply must be done in 32 bits. And the shift throws away the bits below the point, which gives a fixed-point filter a **dead band**: it stops moving while it is still short of its target.",
+            ],
+            "read": [
+                {
+                    "title": "The reading that will not move",
+                    "minutes": 16,
+                    "body": r'''
+Put a bench supply on the input of a 12-bit ADC running from a 3.3 V reference. Set it to
+exactly 1.0000 V and log twenty conversions:
+
+```text
+1241 1241 1241 1241 1241 1241 1241 1241 1241 1241
+1241 1241 1241 1241 1241 1241 1241 1241 1241 1241
+```
+
+Now wind the supply up slowly and watch. Nothing happens. At 1.0002 V it still reads 1241;
+at 1.0004 V it still reads 1241; at 1.0006 V it still reads 1241. Somewhere past that it
+becomes 1242 and stops again.
+
+The converter is not averaging, and it is not broken. It is doing the only thing a
+converter can do, and the width of that flat step is the number the rest of this module is
+built on.
+
+## The code is a count of steps
+
+An $N$-bit converter compares its input against a reference and reports which of $2^N$
+codes the input falls into. The codes divide the reference into equal steps, so one step —
+one least significant bit — is
+
+$$q = \frac{V_{ref}}{2^{N}}$$
+
+and for 12 bits on 3.3 V that is $3.3/4096$. Every reading is a *count of those steps*, and
+between one count and the next there is nothing the converter can say.
+
+```python
+import math
+
+VREF, BITS = 3.3, 12
+q = VREF / (1 << BITS)
+print("one step of a 12-bit converter on %.1f V is %.3f uV" % (VREF, 1e6 * q))
+for mv in (999.5, 999.9, 1000.0, 1000.5, 1000.6, 1000.7):
+    code = math.floor((mv / 1000.0) / q)
+    print("%8.1f mV -> code %4d, standing for %9.5f V, low by %6.1f uV"
+          % (mv, code, code * q, 1e6 * (mv / 1000.0 - code * q)))
+```
+
+One step is **805.664 µV**, and the six rows are the bench experiment. 999.5 mV falls in
+code 1240. From 999.9 mV all the way to 1000.6 mV the answer is **1241** and does not
+budge, which is the flat step, and only at 1000.7 mV does it become 1242. The step is
+806 µV wide because that is what one step *is*.
+
+The last column is the error, and its shape is worth reading. This converter truncates: it
+reports the code *below* the input, so the input is somewhere in a band one step wide above
+what the code stands for, and the error runs from 0 up to $q$ and is always in the same
+direction. A converter that rounds instead is wrong by at most $q/2$ in either direction,
+which is where the familiar $\pm\frac{1}{2}$ LSB comes from — the same hardware with half a
+step of offset added, and worth one bit of accuracy for free. Which of the two you have is
+a line in the datasheet, and knowing it is the difference between a systematic 400 µV
+offset and none.
+
+No amount of averaging changes any of this. Averaging reduces *noise*; it does not make a
+step narrower, and against a perfectly steady input a truncating converter returns the same
+code forever, however many times you ask.
+
+## The converter looks at instants, not at intervals
+
+The second thing a converter does is sample. It looks at the input at one moment, holds
+that value, and converts it — so what it records is a sequence of instants, and several
+different waves fit the same instants exactly.
+
+Take a 6 kHz signal sampled at 10 kHz, and compare it against a 4 kHz one:
+
+```python
+import math
+
+FS, F1 = 10000.0, 6000.0
+F2 = FS - F1
+print("sampled at %.0f kHz, %.0f kHz and %.0f kHz land on the same instants:"
+      % (FS / 1e3, F1 / 1e3, F2 / 1e3))
+worst = 0.0
+for n in range(6):
+    t = n / FS
+    a = math.sin(2 * math.pi * F1 * t)
+    b = -math.sin(2 * math.pi * F2 * t)
+    worst = max(worst, abs(a - b))
+    print("  n = %d   6 kHz gives %+8.5f   inverted 4 kHz gives %+8.5f" % (n, a, b))
+print("largest disagreement across the six samples: %.1e" % worst)
+```
+
+Every pair agrees to **1.2e-15**, which is floating-point dust. The samples of a 6 kHz wave
+and of an inverted 4 kHz wave are the same numbers. The algebra behind that is one line:
+$\sin(2\pi(f_s - f)n/f_s) = \sin(2\pi n - 2\pi f n/f_s) = -\sin(2\pi f n/f_s)$, so a
+component at $f_s - f$ is indistinguishable from one at $f$ once you only have the samples.
+
+The consequence is the harsh one. Nothing downstream can undo it — not a longer window, not
+a better filter, not a cleverer algorithm — because there is no information left to
+separate the two. That is why the anti-alias filter is analogue and sits *in front of* the
+converter, and it is the same RC low-pass as the PWM filter in module 6, doing the same job
+in the other direction. This module's sandbox, **Sampling, and the frequency that comes
+back as something else**, is that experiment with sliders on it.
+
+## No floating-point unit, so agree where the point is
+
+Once a voltage is an integer, everything after it is arithmetic, and on a small part there
+is no hardware to do it in floating point. A `float` multiply becomes a library call of
+tens or hundreds of cycles, which inside a 10 kHz sample interrupt is a serious fraction of
+the machine.
+
+Fixed point keeps the speed of integer arithmetic by agreeing on a scale factor and never
+storing it. In Q$f$ format the real number $x$ is held as the integer
+
+$$X = \operatorname{round}\!\left(x \cdot 2^{f}\right)$$
+
+Adding two of them is an ordinary integer add, because both carry the same factor.
+Multiplying is where the format shows itself: $XY = xy \cdot 2^{2f}$, which is a Q$2f$
+number, and getting back to Q$f$ means dividing out one factor of $2^f$ — a right shift by
+$f$.
+
+```python
+import math
+
+
+def to_fixed(x, frac):
+    return math.floor(x * (1 << frac) + 0.5)
+
+
+def fx_mul(a, b, frac):
+    return (a * b) >> frac
+
+
+for x in (0.5, 0.25, 0.1, 1.0):
+    print("%.2f in Q15 is %6d" % (x, to_fixed(x, 15)))
+half, tenth = to_fixed(0.5, 15), to_fixed(0.1, 15)
+print("0.5 x 0.5 -> %d, which reads back as %.5f" % (fx_mul(half, half, 15),
+                                                     fx_mul(half, half, 15) / 32768.0))
+print("0.1 x 0.1 -> %d, against the ideal %d" % (fx_mul(tenth, tenth, 15), to_fixed(0.01, 15)))
+
+state, target, alpha = 0, 2048, 3277
+steps = 0
+while True:
+    move = (alpha * (target - state) + 16384) >> 15
+    if move == 0:
+        break
+    state += move
+    steps += 1
+print("the Q15 filter reaches %d after %d steps and stops %d counts short of %d"
+      % (state, steps, target - state, target))
+```
+
+The first four lines are the format. 0.5 is **16384**, 0.25 is 8192, 0.1 is **3277** —
+which is 3276.8 rounded, so the stored value is already 0.006% away from the number you
+asked for. And 1.0 maps to **32768**, which does not fit in a signed 16-bit integer: Q15
+holds the half-open range $[-1, 1)$, and 1.0 is not in it. That is the format, not a defect.
+
+Then the multiply. $16384 \times 16384 = 268435456$, shifted right by 15 gives **8192**,
+which reads back as 0.25 exactly. And $3277 \times 3277$ shifted right by 15 gives **327**
+where the ideal answer is **328** — one count low, because the shift discards the bits
+below the point rather than rounding them.
+
+## The dead band
+
+That one-count truncation is not a rounding footnote; it is a behaviour. The last lines run
+a first-order low-pass entirely in integers — the update the capstone asks for:
+
+```text
+state <- state + ((alpha * (sample - state) + 16384) >> 15)
+```
+
+with $\alpha = 3277$, which is 0.1 in Q15, and a `+ 16384` that adds half a step before the
+shift so the arithmetic rounds instead of always falling short. The filter climbs towards
+2048, and after **57 steps** it reaches **2044** and stops. Not slows: stops. Once the
+difference $d$ is small enough that $3277d + 16384 < 32768$ — that is, $d \leq 4$ — the
+shift produces zero, the state cannot move, and no number of further samples will change
+it.
+
+Every fixed-point loop has a dead band, and its width follows from the same arithmetic:
+roughly $2^{f-1}/\alpha$ counts. The fixes are to widen the state — keep the filter in Q30
+and read the top half out — or to accumulate the discarded remainder and feed it back in.
+Neither is free, and choosing between them is a design decision rather than a bug fix.
+
+## The mistake, and why it is tempting
+
+Dividing before multiplying.
+
+Converting a code to millivolts without floating point is
+
+```text
+mV = (code * vref_mv) >> bits
+```
+
+and the version people write instead divides first, to keep the intermediate small:
+
+```python
+code, vref_mv, bits = 1241, 3300, 12
+print("multiply then shift: (%d * %d) >> %d = %d mV"
+      % (code, vref_mv, bits, (code * vref_mv) >> bits))
+print("shift then multiply: (%d >> %d) * %d = %d mV"
+      % (code, bits, vref_mv, (code >> bits) * vref_mv))
+print("the float the hardware is imitating: %.2f mV" % (code * 3.3 / 4096.0 * 1000.0))
+print("the widest intermediate the first form needs: %d, which is %d bits"
+      % (code * vref_mv, (code * vref_mv).bit_length()))
+```
+
+Multiplying first gives **999 mV**, against the 999.83 mV the floating-point calculation
+would produce. Shifting first gives **0 mV** — the entire reading thrown away, because
+shifting 1241 right by 12 bits leaves nothing to multiply.
+
+What makes it tempting is that the instinct behind it is a good one. Integer overflow is a
+real hazard, "reduce before you multiply" is sound advice in plenty of places, and the
+person writing it is being careful rather than careless. The answer is not to divide
+earlier but to make the intermediate wider: the product here needs **22 bits**, which a
+32-bit `int` holds with room to spare, and a Q15 multiply needs 32 bits for the same
+reason. Precision in integer arithmetic lives in the intermediate, and every bit shifted
+away is gone for good.
+
+## Where these models stop holding
+
+The converter above is ideal, and a real one is not. Differential non-linearity means the
+steps are not all the same width and some codes may be missing entirely; integral
+non-linearity bends the whole transfer curve; and offset and gain errors shift and tilt it.
+A datasheet quoting 12 bits and ±2 LSB of INL is describing a converter with about ten
+honest bits.
+
+The reference is the other half of every number here. $q$ is $V_{ref}/2^N$, so the answer
+is only as accurate as the reference, and a part that uses its own 3.3 V supply as the
+reference measures voltages against a rail that moves with load and temperature. A ratio
+between two things measured on the same reference is far better behaved than either of them
+alone, which is why bridge and divider measurements are usually arranged as ratios.
+
+The sampling picture assumes the input is steady while the converter looks at it. It has to
+be held, and the sample-and-hold takes time to acquire through whatever source impedance
+you present it with — so the filter you put in front, sized in module 6 with resistors up
+to 100 kΩ, is also part of the converter's own timing. A source that is too high-impedance
+gives a reading that is low and depends on what was converted before it.
+
+Averaging $M$ samples reduces white noise by $\sqrt{M}$, which is half a bit for every
+doubling. It assumes the noise is uncorrelated between samples, which fails against
+interference at a frequency related to your sample rate, and it does nothing whatever about
+a systematic offset — averaging a thousand readings of a converter that is 3 mV low gives
+you a very precise 3 mV error.
+
+And Q15 arithmetic wraps rather than saturating. Add two Q15 values near the top of the
+range and the result appears at the bottom, which in a control loop is full positive
+becoming full negative in one sample. Saturating is what you do instead, and it is why the
+lab asks you to write it.
+
+## What you are about to build
+
+Three exercises follow the three halves of this reading.
+
+The sandbox, **Sampling, and the frequency that comes back as something else**, puts a
+signal frequency and a sample rate under two sliders, with the time picture above and the
+spectrum below. Take the signal past the sample rate and watch an amber alias appear at a
+frequency that was never there.
+
+The derivation, **From reference voltage to one bit of the answer**, is four steps: how
+many codes $N$ bits give, what one step is worth, the worst-case error of a converter that
+rounds, and what happens to the scale factor when two Q$f$ numbers meet. The last step is
+the shift, derived rather than asserted.
+
+The lab, **A converter and a Q15 multiply**, asks for `lsb`, `adc_code`, `code_to_volts`,
+`to_fixed`, `fx_mul` and `saturate`. Its tests are pointed at exactly the edges above: a
+truncating converter reading low by between zero and one step, an input above the reference
+clamping to 4095, `0.1 x 0.1` landing at 327 rather than 328, and a two's-complement range
+that is not symmetric — 16 bits run from −32768 to +32767, one more negative value than
+positive. Get those six right and the capstone is this arithmetic wrapped around a
+peripheral you cannot see inside.
+''',
+                },
             ],
             "sandbox": {
                 "title": "Sampling, and the frequency that comes back as something else",
