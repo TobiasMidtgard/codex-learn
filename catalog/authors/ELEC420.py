@@ -36,6 +36,302 @@ COURSE = {
     "modules": [
         # ------------------------------------------------------------ M1
         {
+            "read": [
+                {
+                    "title": "One quote that turns data into a command",
+                    "minutes": 12,
+                    "body": r'''
+A login form has two boxes. Someone types `alice` into the first and a password
+into the second, and the server, wanting to know whether that name exists, builds
+a database query by pasting the name into a sentence:
+
+```python
+username = "alice"
+sql = "SELECT name, role FROM users WHERE name = '" + username + "'"
+print(sql)
+```
+
+That prints `SELECT name, role FROM users WHERE name = 'alice'`. The two single
+quotes the server wrote are the fence: everything between them is a *string
+literal*, a piece of data the database compares against, and the word `alice`
+lives safely inside that fence. Now the same server, the same line, and a
+visitor who types `' OR '1'='1` into the name box:
+
+```python
+username = "' OR '1'='1"
+sql = "SELECT name, role FROM users WHERE name = '" + username + "'"
+print(sql)
+```
+
+The result is `SELECT name, role FROM users WHERE name = '' OR '1'='1'`. Read it
+as the database reads it. The opening quote the server wrote is closed
+immediately by the quote the visitor typed, making an empty string. Then comes
+`OR '1'='1'`, which the database parses not as data but as *more query* — a
+condition that is true for every row in the table. The fence did not hold,
+because the visitor supplied their own closing quote and everything after it
+crossed from the data side into the command side.
+
+That crossing is the whole of injection. There is a channel meant for data and a
+channel meant for control — the keywords, operators and structure that say what
+the query *does* — and a bug that lets bytes from the first channel be read as
+the second. It is the same defect whether the target is SQL, an HTML page, a
+shell command, or an LDAP filter. Learn to see the fence and to see what closes
+it, and you have seen every variant at once.
+
+## Watching the payload work, and then fail
+
+Set up a real table and run both the broken query and its fix against the
+identical payload.
+
+```python
+import sqlite3
+
+conn = sqlite3.connect(":memory:")
+conn.execute("CREATE TABLE users (name TEXT, role TEXT)")
+conn.executemany("INSERT INTO users VALUES (?, ?)",
+                 [("alice", "admin"), ("bob", "user"), ("carol", "user"), ("o'brien", "user")])
+
+payload = "' OR '1'='1"
+unsafe = "SELECT name FROM users WHERE name = '" + payload + "'"
+print([row[0] for row in conn.execute(unsafe)])
+print([row[0] for row in conn.execute("SELECT name FROM users WHERE name = ?", (payload,))])
+print([row[0] for row in conn.execute("SELECT name FROM users WHERE name = ?", ("o'brien",))])
+```
+
+The three printed lines are the entire lesson. The first is
+`['alice', 'bob', 'carol', "o'brien"]` — the whole table leaked, because the
+always-true condition matched every row. The second is `[]` — the *same bytes*,
+passed as a parameter with a `?` placeholder, matched nobody, because they were
+never parsed as query text. The third is `["o'brien"]` — a real customer whose
+name genuinely contains an apostrophe, found without trouble.
+
+The `?` is the fix, and it is worth being precise about why. With a placeholder,
+the database receives the query text and the value over two separate channels: it
+compiles `SELECT name FROM users WHERE name = ?` first, deciding the shape of the
+query while the value is still absent, and only then binds `' OR '1'='1` into the
+already-compiled statement as data. There is no step at which those bytes can
+become structure, because structure was fixed before they arrived. This is not
+escaping the quote — the database is not searching the string for dangerous
+characters. The value simply never visits the parser.
+
+That third line matters as much as the attack. Watch what the concatenated query
+does with the honest apostrophe:
+
+```python
+# raises sqlite3.OperationalError
+import sqlite3
+
+conn = sqlite3.connect(":memory:")
+conn.execute("CREATE TABLE users (name TEXT, role TEXT)")
+conn.execute("INSERT INTO users VALUES ('o''brien', 'user')")
+sql = "SELECT name FROM users WHERE name = '" + "o'brien" + "'"
+print(sql)
+conn.execute(sql)
+```
+
+The printed query is `SELECT name FROM users WHERE name = 'o'brien'`, and it
+raises a syntax error, because the apostrophe in `o'brien` closes the literal in
+exactly the way the attacker's quote did. The point is that the string-building
+approach is not "safe until someone attacks it." It is already broken for
+ordinary data. Every legitimate O'Brien and D'Angelo has been demonstrating the
+vulnerability, by accident, for as long as the code has run.
+
+## The same bug on a page
+
+Now the query is safe and the row is fetched. The application shows a comment the
+user wrote. If it pastes that comment straight into the page's HTML, the fence is
+back, and this time the control channel is the browser's HTML parser:
+
+```python
+ESCAPES = [("&", "&amp;"), ("<", "&lt;"), (">", "&gt;"), ('"', "&quot;"), ("'", "&#x27;")]
+
+
+def escape_html(text):
+    out = str(text)
+    for raw, entity in ESCAPES:
+        out = out.replace(raw, entity)
+    return out
+
+
+def escape_ampersand_last(text):
+    out = str(text)
+    for raw, entity in reversed(ESCAPES):
+        out = out.replace(raw, entity)
+    return out
+
+
+print(escape_html('<script>alert("xss")</script>'))
+print(escape_html("Tom & Jerry"))
+print(escape_ampersand_last("<b>"))
+```
+
+The first line prints
+`&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;`. Those `&lt;` and `&gt;`
+sequences are HTML *entities*: the browser renders them as the literal characters
+`<` and `>` on the page and never as the start of a tag. The script the attacker
+stored can no longer open an element, so it displays as text instead of running.
+This is stored cross-site scripting neutralised — stored because the payload
+lives in the database and fires for every later visitor, as against reflected
+XSS, which bounces a payload straight back off a single crafted request.
+
+The third printed line is the mistake, isolated. `escape_ampersand_last` runs the
+same five replacements in the wrong order, and on the input `<b>` it prints
+`&amp;lt;b&amp;gt;`. Encoding `<` produced `&lt;`, and then the later pass over
+`&` reached into that entity and turned its ampersand into `&amp;`, so the page
+now shows the literal text `&lt;b&gt;` instead of a bold marker. The rule that
+falls out of this is not arbitrary: because every entity you produce begins with
+`&`, the ampersand must be encoded *first*, before any pass that might create
+one. Encode it last and you double-encode everything you just made. This is the
+single mistake people reliably make with output encoding, and it is tempting
+precisely because processing the list top to bottom feels natural and the bug is
+invisible until a `<` and an `&` appear together.
+
+## Where the fence picture stops
+
+Two boundaries are worth marking. First, output encoding is context-specific.
+The five-character HTML-body encoding above is correct for text between tags, but
+text going into a URL, a JavaScript string, or a CSS value each has its own
+control characters and its own escaping, and using HTML entities in those places
+protects nothing. The rule is to encode for the sink the data lands in, not once
+at the source for all sinks at once. Second, parameters cannot carry *identifiers*
+— a table or column name cannot be a `?`, because the database must know the
+query's shape before binding values. When a name genuinely must be chosen at
+runtime, a placeholder has nothing to bind, and the only safe move is an
+allow-list: compare the requested name against a fixed set of permitted ones and
+refuse anything else. Escaping an identifier by hand is where the next injection
+lives.
+
+The lab, **Breaking and fixing a login lookup**, is this reading made executable.
+You will write the concatenating `build_lookup_sql` and watch `' OR '1'='1`
+return every row through it; write the parameterised `lookup_safe` and watch the
+same payload return nothing while `o'brien` works; and write `escape_html` and
+`render_comment` so a stored `<script>` tag arrives on the page as inert text and
+a stray quote in an author's name cannot pry open an HTML attribute.
+'''
+                }
+            ],
+            "quiz": {
+                "title": "Channels, fences, and what actually closes them",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "A login query is built as `\"... WHERE name = '\" + username + \"'\"` and someone submits `' OR '1'='1` as the username, returning every row. What did the payload actually exploit?",
+                        "opts": [
+                            "The visitor's quote closed the literal early, so the text after it was parsed as query structure rather than data",
+                            "The `OR` keyword binds more tightly than the surrounding `WHERE` clause, so it overrode the name comparison the query had originally intended",
+                            "The database compared the password channel to the name channel and let a blank password through",
+                            "SQLite treats `'1'='1'` as a stored procedure call that returns the full table on demand",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Right: the server wrote an opening quote, the visitor supplied the closing one, and everything past it — `OR '1'='1'` — crossed from the data channel into the control channel and was parsed as a condition.",
+                            r"Precedence decides how a parsed expression groups, but it explains nothing about why the attacker's text was parsed as an expression at all. The bug happened one step earlier, when a closing quote let data become structure.",
+                            r"There is one query and one channel here, for the name; the password is nowhere in this statement. The leak is not a comparison between fields, it is data reinterpreted as query text.",
+                            r"`'1'='1'` is an ordinary always-true comparison, not a procedure. Nothing is being called; a condition that every row satisfies is simply being appended to the WHERE clause.",
+                        ],
+                        "why": r'''
+The server's SQL string carries an opening quote that the attacker's leading
+quote closes. From that point the remaining bytes — `OR '1'='1'` — sit outside
+any literal, so the database reads them as query structure: a condition true for
+every row. Injection is exactly this crossing from the data channel to the
+control channel, and precedence, procedures and the password field are all beside
+the point.
+''',
+                    },
+                    {
+                        "q": "Rewriting the query with a `?` placeholder and passing the username as a parameter stops the attack. Why does the identical payload now match nothing?",
+                        "opts": [
+                            "The database strips quotes and other dangerous characters out of any value bound to a parameter",
+                            "The query's structure is compiled before the value is bound, so the value can never be parsed as query text",
+                            "Parameters are automatically HTML-entity-encoded, which neutralises the injected quote",
+                            "The placeholder limits the bound value to the column's declared maximum length, truncating the payload just before it reaches its `OR`",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"A tempting picture, but the database is not searching the value for anything. Nothing is stripped or altered — `o'brien` binds intact and matches. The value simply never reaches the parser.",
+                            r"Right: the statement is compiled with the value still absent, fixing the query's shape, and only then is the payload bound as data. There is no later step at which those bytes could become structure.",
+                            r"HTML entities belong to the page's HTML parser, a different sink entirely. A parameter binds raw bytes to a compiled statement; entity encoding never enters the database path.",
+                            r"Binding does no truncation; the whole value is compared as-is. The payload fails to match because it was never parsed as a condition, not because it was cut short.",
+                        ],
+                        "why": r'''
+With a placeholder the database compiles `... WHERE name = ?` while the value is
+absent, so the query's shape is decided before the payload exists to influence
+it. The value is then bound as pure data. It is not escaped, filtered or
+truncated — `o'brien` binds unharmed and matches — it simply never visits the
+parser, so `' OR '1'='1` is compared as a name and matches nobody.
+''',
+                    },
+                    {
+                        "q": "The safe query is written; a customer genuinely named `o'brien` logs in. What does this reveal about the concatenating version that was replaced?",
+                        "opts": [
+                            "The parameterised query will now reject `o'brien` too, because the apostrophe is a reserved character the placeholder is obliged to strip out",
+                            "The concatenating query was fine for real names and only failed on deliberately hostile input",
+                            "The concatenating query was already broken for ordinary data, crashing on any name containing an apostrophe",
+                            "Apostrophes in names must be stripped at signup so both query styles behave the same",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"The parameterised query binds `o'brien` as data and finds the row without trouble — that is the whole point of the placeholder. The apostrophe is only dangerous when pasted into query text.",
+                            r"This is the comforting story that keeps string-building alive, and it is false. The honest apostrophe closes the literal exactly as the attacker's quote did; the query was broken all along.",
+                            r"Right: `... name = 'o'brien'` has an unbalanced quote and raises a syntax error, so every real O'Brien was demonstrating the vulnerability by accident long before any attacker arrived.",
+                            r"Mangling real names to fit a broken query is fixing the wrong thing. The apostrophe is legitimate data; the defect is a query that cannot hold data, and the parameter already handles it.",
+                        ],
+                        "why": r'''
+`SELECT name FROM users WHERE name = 'o'brien'` has three single quotes, so the
+literal closes at the second and `brien'` is left as a syntax error. The
+apostrophe a real customer types does precisely what the attacker's quote did.
+The concatenating query was never "safe until attacked" — it was already broken
+for ordinary data, and the placeholder that stops the attack is the same thing
+that lets O'Brien log in.
+''',
+                    },
+                    {
+                        "q": "An HTML-body encoder replaces `&<>\"'` with entities. Running the replacements with `&` handled last turns `<b>` into `&amp;lt;b&amp;gt;`. What went wrong?",
+                        "opts": [
+                            "The `<` and `>` characters must be encoded before `&` or the browser closes the tag early",
+                            "The pass over `&` reached into the `&lt;` already produced and re-encoded its ampersand",
+                            "Five characters is too few; without encoding the space the entities run together",
+                            "Entities must be uppercase, so `&lt;` should have been written `&LT;`",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Order does matter, but the other way: `&` must come first, not last. Encoding `<` early is harmless; the damage is a later `&` pass mangling the entity that early pass created.",
+                            r"Right: encoding `<` yields `&lt;`, and because `&` is processed afterwards it finds that new ampersand and turns it into `&amp;`, so the page shows the literal text `&lt;` instead of a `<`.",
+                            r"Spacing has nothing to do with it; `&amp;lt;` is a correctly-formed but doubly-encoded entity. The defect is re-encoding, not entities colliding for want of a separator.",
+                            r"HTML entity names are case-sensitive and lowercase — `&lt;` is correct and `&LT;` would not render. Case is not what produced the doubled `&amp;`.",
+                        ],
+                        "why": r'''
+Every entity this encoder produces begins with `&`. Encode `<` first and you have
+`&lt;`; let a later pass over `&` run and it rewrites that ampersand to `&amp;`,
+double-encoding what you just made. The fix is to encode `&` before any pass that
+can create one, which is exactly why the ampersand goes first in the list.
+''',
+                    },
+                    {
+                        "q": "The five-character HTML-body encoding is applied to a value, but that value is then placed inside a `href` URL and, elsewhere, inside a `<script>` string. What is the flaw in encoding once at the source?",
+                        "opts": [
+                            "Encoding at the source is correct; the same entities are safe in every location a value can appear",
+                            "Each sink — HTML body, URL, JavaScript string — has its own control characters, so encoding must match the context the value lands in",
+                            "Source encoding at the point of storage is fine as long as the same value is also parameterised in every database query that later touches it",
+                            "The value should be encoded twice at the source so it survives being decoded once in transit",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"HTML entities protect an HTML body and nothing else. Dropped into a URL or a script string they neither escape the characters that matter there nor render correctly, so a single source pass is not universally safe.",
+                            r"Right: a URL, a JavaScript string and an HTML body each have distinct dangerous characters and distinct escaping, so the encoding has to be chosen for the sink the data reaches, not applied once for all of them.",
+                            r"Parameterisation defends the database channel; it says nothing about a value later written into a page's URL or script. The two are separate sinks needing separate handling.",
+                            r"Double-encoding at the source produces visibly wrong output and still uses the wrong scheme for a URL or a script. The answer is context-matched encoding, not more of the same encoding.",
+                        ],
+                        "why": r'''
+Output encoding is context-specific. The five-character scheme is right for text
+between tags, but a URL, a CSS value and a JavaScript string each have their own
+control characters and their own escaping. Encode for the sink the data lands in,
+at the moment it lands there — a single source-side pass protects the HTML body
+and leaves every other context exposed.
+''',
+                    },
+                ],
+            },
             "title": "Injection and output encoding",
             "summary": "Why concatenating data into a query or a page is the same bug twice.",
             "concepts": [
@@ -254,6 +550,328 @@ assert "&quot;" in _html, "The quote should survive as an entity, not vanish"
         },
         # ------------------------------------------------------------ M2
         {
+            "read": [
+                {
+                    "title": "Writing past the end of a buffer, byte by byte",
+                    "minutes": 13,
+                    "body": r'''
+A function in a C program has a local variable — say a 16-byte array to hold a
+name someone typed. When the program calls that function, it sets aside a small
+region of the stack for it, and the layout of that region is not arbitrary. The
+16 bytes for the array come first, at the lower addresses. Just above them sits
+the saved frame pointer, and just above *that* sits the saved return address:
+the location the CPU will jump back to when this function finishes. That return
+address is the interesting byte. If you can change it, you change where the
+program goes next.
+
+Nothing here needs real memory to understand. Model the frame as a `bytearray`,
+lowest address first, and put a known return address in the top four bytes.
+
+```python
+def to_word(value):
+    return bytes((value >> (8 * i)) & 0xFF for i in range(4))
+
+
+def from_word(raw):
+    return sum(raw[i] << (8 * i) for i in range(4))
+
+
+print(to_word(0xCAFEBABE).hex(" "))
+print(hex(from_word(bytes.fromhex("be ba fe ca"))))
+```
+
+The first line prints `be ba fe ca`, and the second prints `0xcafebabe`. That
+reversal is not a mistake. A 32-bit value on a little-endian machine is stored
+lowest byte first, so `0xCAFEBABE` — whose lowest byte is `0xBE` — lands in
+memory as `be ba fe ca`. This is why exploit write-ups show target addresses
+"backwards": they are showing the bytes in memory order, and `to_word` /
+`from_word` are the two directions of that convention. Get this pairing right and
+the rest follows; get it wrong and every address you write lands scrambled.
+
+## The copy that does not count
+
+Now the vulnerability. A copy routine like C's `strcpy` copies bytes from a
+source into the buffer until it hits a terminator. It never consults how big the
+destination is. If the source is longer than 16 bytes, the extra bytes do not
+stop at the edge of the buffer — they keep writing upward, into the saved frame
+pointer, and then into the saved return address. Here is that copy, and an input
+built to reach exactly the return-address slot.
+
+```python
+WORD = 4
+
+
+def to_word(value):
+    return bytes((value >> (8 * i)) & 0xFF for i in range(WORD))
+
+
+def from_word(raw):
+    return sum(raw[i] << (8 * i) for i in range(WORD))
+
+
+buffer_size = 16
+frame = bytearray(buffer_size + 2 * WORD)
+frame[20:24] = to_word(0x08048400)
+print(len(frame), "bytes; return address at offset", len(frame) - WORD)
+print("before:", hex(from_word(frame[20:24])))
+
+name = b"A" * 20 + to_word(0xCAFEBABE)
+for i, byte in enumerate(name):
+    frame[i] = byte
+print("after: ", hex(from_word(frame[20:24])))
+```
+
+It prints `24 bytes; return address at offset 20`, then `before: 0x8048400`, then
+`after:  0xcafebabe`. Trace the arithmetic, because every number in it is
+load-bearing. The frame is `16 + 8 = 24` bytes: sixteen for the buffer, four for
+the saved frame pointer, four for the return address. The return address
+therefore begins at offset 20 (`24 - 4`). The malicious input is 20 filler bytes
+— enough to fill the buffer *and* the saved frame pointer — followed by the
+four-byte little-endian encoding of the address you want. The copy walks from
+offset 0 with no check, so byte 20 of the input lands at offset 20 of the frame,
+directly on top of the saved return address, and the program will now "return" to
+`0xCAFEBABE`. That is a control-flow hijack, built out of nothing but a copy that
+forgot to count.
+
+The natural first version of that copy is the mistake this module is about: to
+copy the whole input and only afterwards notice you have run off the end. If the
+input is longer than the whole frame, the write at offset 24 is already out of
+bounds:
+
+```python
+# raises IndexError
+frame = bytearray(24)
+data = b"A" * 25
+for i, byte in enumerate(data):
+    frame[i] = byte
+```
+
+It raises `IndexError`. The tempting bug in the lab's `unsafe_strcpy` is to
+assign first and check second — to write `frame[i] = byte` and let the bytearray
+raise on its own. That works, but it raises only *after* the illegal write has
+been attempted, and it raises the interpreter's message rather than yours. The
+routine is supposed to model "no bounds check at all, until the process
+segfaults," so the check `if i >= len(frame): raise IndexError(...)` has to come
+*before* the write, so that every byte up to the very last legal one is stored
+and the fault is reported at the exact boundary. People reach for the
+after-the-fact version because it is shorter, and it hides where the frame
+actually ends.
+
+## Catching it two ways
+
+Defences split into detection and prevention, and it is worth being clear which
+is which. A stack canary is detection. Place a known four-byte value between the
+buffer and the saved registers; before the function returns, check it is still
+that value. A contiguous overflow that reaches the return address must have
+written through the canary slot to get there, so a corrupted canary is proof the
+frame was smashed — after the fact, but before the poisoned return address is
+used.
+
+```python
+WORD = 4
+CANARY = 0x5A6B7C8D
+
+
+def to_word(value):
+    return bytes((value >> (8 * i)) & 0xFF for i in range(WORD))
+
+
+def from_word(raw):
+    return sum(raw[i] << (8 * i) for i in range(WORD))
+
+
+frame = bytearray(16 + WORD + 2 * WORD)
+frame[16:20] = to_word(CANARY)
+frame[24:28] = to_word(0x08048400)
+
+payload = b"A" * 24 + to_word(0xCAFEBABE)
+frame[0:len(payload)] = payload
+print("return address:", hex(from_word(frame[24:28])))
+print("canary intact:", from_word(frame[16:20]) == CANARY)
+```
+
+It prints `return address: 0xcafebabe` and `canary intact: False`. The hijack
+still succeeded — the canary does not prevent the overwrite — but the corrupted
+canary means the program can detect the smash and abort before it ever executes
+the attacker's return address. Note that adding the canary changed the layout: the
+frame is now 28 bytes and the return address moved to offset 24, so the filler is
+24 bytes, not 20. The offset is not a constant to memorise; it is
+`len(frame) - WORD`, computed from whatever layout the frame actually has.
+
+Prevention is a copy that refuses to overrun in the first place. There are two
+honest versions, and they differ in what they do with data that will not fit.
+
+```python
+def safe_strncpy(frame, data, buffer_size):
+    n = min(len(data), buffer_size)
+    frame[0:n] = data[0:n]
+    return n
+
+
+def checked_copy(frame, data, buffer_size):
+    if len(data) > buffer_size:
+        raise BufferError(f"{len(data)} bytes into a {buffer_size}-byte buffer")
+    frame[0:len(data)] = data
+    return len(data)
+
+
+frame = bytearray(24)
+print(safe_strncpy(frame, b"A" * 40, 16), "bytes kept of 40")
+try:
+    checked_copy(frame, b"A" * 40, 16)
+except BufferError as err:
+    print("refused:", err)
+```
+
+It prints `16 bytes kept of 40` and `refused: 40 bytes into a 16-byte buffer`.
+`safe_strncpy` truncates: it keeps the first 16 bytes and silently drops the
+rest, which stops the overflow but loses data, and a truncated name or path can
+be its own bug. `checked_copy` refuses: it raises rather than store a partial
+value. Neither ever touches the return address, which is the whole point.
+
+## Where the model is only a model
+
+This is a faithful picture of a classic stack overflow and a deliberately small
+one. Real systems layer on defences this simulation does not draw: non-executable
+stacks (NX) mean a return address pointing into your input runs nothing, so modern
+exploits chain together existing code fragments instead; address-space layout
+randomisation (ASLR) means you do not know the address to jump to without first
+leaking it. And real canaries are random per run, so they cannot be guessed and
+written back — the fixed `CANARY` here is a constant only so the arithmetic stays
+legible. The mechanism you are modelling is real and still worth understanding;
+the ease of it here is a teaching convenience, not the state of the art.
+
+That mechanism is exactly what the lab, **Smashing a simulated stack frame**,
+asks you to build: `to_word` and `from_word`, a `StackFrame` whose
+`return_offset` is computed from its own layout, an `unsafe_strcpy` that faults at
+the boundary rather than after it, the two disciplined copies, and an
+`exploit_payload` that rewrites the saved return address on a plain frame and
+trips the canary on a protected one.
+'''
+                }
+            ],
+            "quiz": {
+                "title": "Frames, offsets, and the copy that forgot to count",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "A frame is `bytearray(buffer_size + 2 * WORD)` with `WORD = 4` and `buffer_size = 16`, and the saved return address is the top word. At what byte offset does that return address begin?",
+                        "opts": [
+                            "16 — it sits directly above the buffer, at the first byte past it",
+                            "20 — the frame is 24 bytes, and the last word starts at 24 minus 4",
+                            "24 — the return address occupies the four bytes ending the frame, so it starts there",
+                            "8 — the two saved words are 8 bytes, and the offset counts down from the top",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Offset 16 is where the saved frame pointer begins, not the return address. The return address is the *second* saved word, another four bytes higher up.",
+                            r"Right: the frame is `16 + 8 = 24` bytes and the last four hold the return address, so it begins at `24 - 4 = 20` — which is exactly `len(frame) - WORD`.",
+                            r"Offset 24 is the length of the frame, one past its final byte. Start writing there and you are already out of bounds; the four-byte return word *ends* at 24 and starts at 20.",
+                            r"There is no counting down; a bytearray is indexed from 0 upward. The saved frame pointer is at 16 and the return address at 20, both measured from the low end.",
+                        ],
+                        "why": r'''
+The frame is `16 + 2 * 4 = 24` bytes: sixteen of buffer, then the saved frame
+pointer, then the saved return address. The return address is the last word, so
+it begins at `len(frame) - WORD = 24 - 4 = 20`. Offset 16 is the frame pointer;
+offset 24 is one past the end. Computing the offset from the length is what keeps
+it correct when a canary later changes the layout.
+''',
+                    },
+                    {
+                        "q": "To make `unsafe_strcpy` raise exactly when a write would run off the end of the frame, where must the bounds check go?",
+                        "opts": [
+                            "After the assignment, catching the bytearray's own IndexError and re-raising it with a clearer message",
+                            "Before the assignment, so the byte at the boundary is never written and the fault names the exact edge",
+                            "Once at the start, comparing the whole input length against the frame before copying anything",
+                            "Nowhere — a bounds check would make it a safe copy, defeating the point of the routine",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Assigning first lets the illegal write be attempted before anything stops it, and it reports the interpreter's message rather than the frame's real edge. The routine models 'no check until the fault', which means the check precedes the write.",
+                            r"Right: checking `i >= len(frame)` before writing stores every legal byte up to the last one and faults precisely at the boundary, which is how a real overrun behaves — bytes land until the illegal address is reached.",
+                            r"A single up-front length check would refuse a partial copy, but the routine is meant to write as far as it legally can and only then fault — that is what makes it a model of an unchecked copy, not a guarded one.",
+                            r"The routine still needs to stop at the frame's physical end, or the simulation would let a Python bytearray raise on its own at an unpredictable spot. The check models the segfault boundary, not a safe-copy guard.",
+                        ],
+                        "why": r'''
+`unsafe_strcpy` models a copy with no destination-size check that nonetheless
+faults when the process runs off its memory. Checking `i >= len(frame)` before
+each write stores every legal byte and reports the fault at the exact boundary,
+with the routine's own message. Assigning first and catching the bytearray's
+IndexError attempts the illegal write before stopping it and hides where the frame
+truly ends.
+''',
+                    },
+                    {
+                        "q": "On a plain 24-byte frame the exploit payload is 20 filler bytes plus the target address. On an otherwise identical frame with a canary added, what changes?",
+                        "opts": [
+                            "Nothing changes — the filler is always exactly 20 bytes, because the buffer size itself did not change when the canary was added",
+                            "The filler grows to 24 bytes, because the canary word sits between the buffer and the saved return address",
+                            "The filler shrinks, because the canary occupies space the payload would otherwise need to fill",
+                            "The target address must be written twice, once before and once after the canary slot",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The buffer is still 16 bytes, but the payload fills everything up to the return address, and the canary added four bytes between them. Treating 20 as fixed writes the address into the frame pointer instead.",
+                            r"Right: the canary is a whole extra word below the saved registers, so the frame is 28 bytes and the return address moves to offset 24 — the filler is now `len(frame) - WORD = 24` bytes.",
+                            r"Adding a word makes the frame larger, not the payload smaller. The filler must cover the buffer, the canary and the saved frame pointer before the address, so it grows.",
+                            r"The address is written once, at the return-address slot. The canary is passed through as filler like everything below the target; it is not a value the attacker writes twice.",
+                        ],
+                        "why": r'''
+The filler is always `return_offset` bytes — `len(frame) - WORD` — not a
+memorised 20. Adding a canary inserts a four-byte word between the buffer and the
+saved registers, so the frame becomes 28 bytes and the return address moves to
+offset 24. The payload is then 24 filler bytes plus the target address, and those
+24 include the bytes that run through the canary slot.
+''',
+                    },
+                    {
+                        "q": "The canary-protected frame is overflowed by the exploit payload. `read_return_address()` returns the attacker's address and `canary_intact()` returns False. What does that pair of results mean the canary provides?",
+                        "opts": [
+                            "It prevented the overwrite, so the returned address is stale and the program is safe",
+                            "It detected the overwrite after the fact, so the program can abort before using the poisoned return address",
+                            "It corrected the overwrite, quietly restoring the frame's original saved return address the moment the corruption was first found",
+                            "It slowed the copy enough that the overflow stopped short of the return address",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The return address was overwritten — that is what `read_return_address()` returning the attacker's value shows. A canary never blocks the write; it is a tripwire, not a wall.",
+                            r"Right: a contiguous overflow reaching the return address must pass through the canary slot, so a changed canary is proof of a smash. The overwrite happened, but it can be caught before the bad address is ever executed.",
+                            r"Nothing restores the old address; `read_return_address()` still returns the attacker's. The canary reports corruption, it does not repair it.",
+                            r"Copy speed is irrelevant to a simulation, and the overflow plainly did reach the return address. The canary detects the reach; it does not shorten it.",
+                        ],
+                        "why": r'''
+A stack canary is detection, not prevention. The overwrite succeeds — the return
+address holds the attacker's value — but a contiguous overflow that reached it had
+to write through the canary slot, so a corrupted canary proves the frame was
+smashed. The program can check the canary before returning and abort, which stops
+the poisoned address from ever being used.
+''',
+                    },
+                    {
+                        "q": "Given 40 bytes of input and a 16-byte buffer, `safe_strncpy` keeps 16 and returns 16, while `checked_copy` raises BufferError. When is the truncating version the more dangerous choice?",
+                        "opts": [
+                            "Never — truncation always fails safe, so silently keeping just the first 16 bytes of the input is strictly better than ever raising",
+                            "When the dropped bytes carried meaning, so a silently shortened name or path becomes a different, wrong value",
+                            "When the buffer is larger than the input, because then truncation corrupts the trailing bytes",
+                            "When a canary is present, because truncation writes through the canary slot on its way",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Both stop the overflow, so both fail safe against memory corruption — but truncation trades that for a data bug. Silently keeping a prefix is not strictly better; it can produce a valid-looking wrong value.",
+                            r"Right: truncation stops the overrun but discards whatever did not fit, so a path or identifier can be silently shortened into a different, still-usable value — a correctness bug the raising version turns into a loud failure instead.",
+                            r"When the input is shorter than the buffer, nothing is truncated at all — `min(len(data), buffer_size)` copies the whole input and leaves the rest untouched. Truncation only bites when the input is longer.",
+                            r"Neither copy exceeds the buffer, so neither reaches the canary slot; that is exactly what makes them safe. Truncation's risk is lost data, not a tripped canary.",
+                        ],
+                        "why": r'''
+Both copies stop the overflow, so both are safe against memory corruption. The
+difference is what happens to the excess. `safe_strncpy` drops it silently, which
+can turn a long path or identifier into a shorter, valid-looking, wrong value — a
+correctness bug that surfaces far from the copy. `checked_copy` refuses instead,
+turning the same condition into an immediate, visible failure.
+''',
+                    },
+                ],
+            },
             "title": "Memory safety, simulated",
             "summary": "A stack frame as a bytearray, and what an unchecked copy does to it.",
             "concepts": [
@@ -519,6 +1137,335 @@ assert _clean.canary_intact() is True, "A bounds-respecting copy leaves the cana
         },
         # ------------------------------------------------------------ M3
         {
+            "read": [
+                {
+                    "title": "What a password is worth, in seconds",
+                    "minutes": 13,
+                    "body": r'''
+Someone has stolen your database. Not the passwords — you hashed those — but the
+hashes, and now they are working offline on their own hardware, with no login
+screen to slow them down and no one watching. The only question that matters is
+how long your policy makes them wait. That question has a number, and the number
+is smaller than intuition suggests.
+
+Start with the size of the problem. A password policy that allows lowercase
+letters and digits, six characters long, draws each character from an alphabet of
+`26 + 10 = 36` symbols. The number of distinct passwords is the alphabet size
+raised to the length: every one of the six positions independently chooses from 36
+options, so the count multiplies out as `36 * 36 * 36 * 36 * 36 * 36`, which is
+`36 ** 6`. That product is the *keyspace*, and its size is where all the security
+lives.
+
+```python
+import math
+
+alphabet = 26 + 10
+length = 6
+keyspace = alphabet ** length
+print(keyspace)
+print(round(length * math.log2(alphabet), 2), "bits")
+rate = 1e9
+print(keyspace / 2 / rate, "seconds on average")
+print(keyspace / 2 / (rate / 2 ** 12), "seconds with a work factor of 12")
+```
+
+It prints `2176782336`, then `31.02 bits`, then `1.088391168 seconds on average`,
+then `4458.050224128 seconds with a work factor of 12`. Walk through where each
+number comes from, because the whole cost model is in these four lines.
+
+## Entropy is the log of the keyspace
+
+The keyspace, 2,176,782,336, is about 2.2 billion. That is a large number written
+one way and an unremarkable one written another. The second way is *entropy in
+bits*: `length * log2(alphabet)`, which is `6 * log2(36) ≈ 31.02`. A password from
+this policy is worth about 31 bits, meaning the keyspace is roughly `2 ** 31`.
+Bits are the useful unit because they add: doubling the length adds another 31
+bits rather than multiplying a huge number, and comparing two policies is
+comparing two small numbers. Widen the alphabet and each character is worth more
+bits; lengthen the password and you get more characters at that rate. The reason
+length usually wins is that it is the exponent — every extra character multiplies
+the whole keyspace, while a bigger alphabet only raises the base.
+
+## Half the keyspace, and the rate
+
+Now the attacker. They try candidates one at a time. On average — over many
+different stolen passwords — they find each one after searching half the
+keyspace, not all of it, because the target is equally likely to be anywhere in
+the list and the expected position is the middle. So the work is
+`keyspace / 2` guesses. Divide by how many guesses per second their hardware
+manages, and you have seconds. At a billion guesses a second, that is
+`2176782336 / 2 / 1e9 ≈ 1.09` seconds. Roughly one second to crack a
+six-character lowercase-and-digits password. That is the number people find hard
+to believe, and it is why this policy is not a policy.
+
+The defence that changes it is the *work factor*, and it is the reason a password
+hash is not a plain SHA-256. A password hashing function like bcrypt or scrypt is
+deliberately slow, tunable by a work factor: raising it by one doubles the time to
+compute a single hash. If the attacker's raw hardware does a billion plain hashes
+a second, a work factor of 12 divides that by `2 ** 12 = 4096`, down to about
+244,000 password-guesses a second. The same crack now takes
+`2176782336 / 2 / (1e9 / 4096) ≈ 4458` seconds — from one second to about
+seventy-four minutes, from one line of the policy that costs the defender nothing
+to type. That is the lever the lab's `average_crack_seconds` exposes: the work
+factor is subtracted from the attacker's rate, `hashes_per_second / 2 ** work_factor`,
+and everything downstream scales with it.
+
+## The mistake: reading the average as a guarantee
+
+Here is the trap. "Seventy-four minutes on average" is not "safe for seventy-four
+minutes." The average is over a population of passwords; any single one can fall
+in the first second of searching if the attacker happens to try it early, and
+attackers do not search randomly — they try the common passwords first. The
+number is an order-of-magnitude estimate for planning, not a promise for any one
+account. It is tempting to quote it as a floor because it is a concrete figure and
+concrete figures feel like guarantees, but the honest reading is "this is roughly
+the scale of effort, halved and averaged." Treat a comfortable-looking average as
+protection for a specific user and you will be wrong about the user whose password
+was guessed third.
+
+## Online guessing is a different problem
+
+Everything above assumes an offline attack: the attacker has the hashes and their
+own hardware. An *online* attacker has neither — they must submit each guess
+through your login endpoint, which means you control the rate. Here entropy almost
+stops mattering. A million-to-one password is fine against ten guesses; a
+thousand-to-one password is fine too. What you need is to make the eleventh guess
+expensive, and the tool is exponential backoff.
+
+```python
+def delay_for(failures, base_delay=1.0, max_delay=300.0, threshold=3):
+    if failures < threshold:
+        return 0.0
+    return min(base_delay * 2 ** (failures - threshold), max_delay)
+
+
+print([delay_for(n) for n in range(1, 13)])
+print(sum(delay_for(n) for n in range(1, 101)) / 3600, "hours for 100 guesses")
+```
+
+It prints
+`[0.0, 0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 300.0]` and then
+about `7.56 hours for 100 guesses`. The first two failures are free, so a user who
+fat-fingers their password twice notices nothing. From the third failure the delay
+doubles each time — 1, 2, 4, 8 seconds — until it hits the cap of 300 seconds, so
+it grows without ever locking the account forever. A hundred guesses that would
+take a fraction of a second offline now take over seven hours, and a real attacker
+guessing thousands of accounts finds each one individually throttled. The cap
+matters: without it the delay would grow unbounded and a mistyped password could
+lock someone out for a day. And a success must reset the counter to zero, or the
+backoff from an attacker's failures would punish the legitimate user when they
+finally log in.
+
+## The second factor, RFC by RFC
+
+A password is one factor. A time-based one-time password (TOTP) — the six digits
+an authenticator app shows — is a second, and it is a small, exact construction
+rather than magic. HOTP (RFC 4226) turns a shared secret and a counter into a
+code: take HMAC-SHA1 of the counter, read one byte to pick an offset, extract four
+bytes there, mask off the top bit, and reduce modulo `10 ** digits`.
+
+```python
+import hashlib
+import hmac
+
+secret = b"12345678901234567890"
+counter = 0
+digest = hmac.new(secret, counter.to_bytes(8, "big"), hashlib.sha1).digest()
+print(digest.hex())
+offset = digest[19] & 0x0F
+print("offset", offset)
+chunk = int.from_bytes(digest[offset:offset + 4], "big") & 0x7FFFFFFF
+print(chunk)
+print(str(chunk % 10 ** 6).zfill(6))
+```
+
+For the RFC's own test secret and counter 0 this prints the digest, then
+`offset 0`, then `1284755224`, then `755224` — the first vector in the standard,
+reproduced exactly. The `& 0x7FFFFFFF` masks the top bit so the four-byte value is
+never negative regardless of platform; the `.zfill(6)` restores leading zeros that
+the modulo throws away, which is the mistake the code is written to avoid — a code
+of `081804` is not the integer `81804`, and dropping the zero fails verification
+for one code in ten.
+
+TOTP (RFC 6238) is HOTP with the counter set to the clock: `timestamp // step`,
+where the step is usually 30 seconds. Because the client's clock and yours drift,
+verification checks a small window of counters either side of now.
+
+```python
+import hashlib
+import hmac
+
+
+def hotp(secret, counter, digits=6):
+    digest = hmac.new(secret, counter.to_bytes(8, "big"), hashlib.sha1).digest()
+    offset = digest[19] & 0x0F
+    truncated = int.from_bytes(digest[offset:offset + 4], "big") & 0x7FFFFFFF
+    return str(truncated % 10 ** digits).zfill(digits)
+
+
+def verify_totp(secret, code, timestamp, step=30, digits=6, window=1):
+    counter = timestamp // step
+    for drift in range(-window, window + 1):
+        if counter + drift < 0:
+            continue
+        if hmac.compare_digest(hotp(secret, counter + drift, digits), str(code)):
+            return True
+    return False
+
+
+secret = b"12345678901234567890"
+print(59 // 30, hotp(secret, 59 // 30, 8))
+code = hotp(secret, 1111111109 // 30, 8)
+print(1111111109 // 30, code)
+for late in (0, 30, 60):
+    print(late, "seconds late:", verify_totp(secret, code, 1111111109 + late, digits=8))
+```
+
+It prints `1 94287082`, then `37037036 07081804`, then that the code verifies at 0
+and 30 seconds late but not at 60. With `window=1` a code from the previous or next
+30-second step still passes, absorbing about a minute of clock skew; two steps out,
+it fails. The comparison uses `hmac.compare_digest`, not `==`, so that a
+network attacker cannot learn the correct code digit by digit from how long the
+comparison takes — a timing side channel that string equality would leak.
+
+## Where this stops
+
+The window is the honest limit. Widen it and you tolerate more clock drift but you
+also give an attacker more valid codes to guess at once — a window of ten is ten
+times easier to brute-force. And none of this survives a stolen secret: TOTP
+proves possession of the shared key, so a phished code entered by the attacker
+within the window, or a secret leaked from your own store, defeats it entirely.
+The second factor raises the cost of impersonation; it does not make it
+impossible.
+
+The lab, **Cracking cost, backoff and TOTP**, is these three defences made
+measurable: `keyspace`, `entropy_bits` and `average_crack_seconds` for the cost
+model, `LoginThrottle` for the backoff, and `hotp` / `totp` / `verify_totp`
+checked against the RFC 4226 and RFC 6238 test vectors printed above.
+'''
+                }
+            ],
+            "quiz": {
+                "title": "Cost, backoff, and one-time codes",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A policy allows lowercase and digits, six characters. Its keyspace is `36 ** 6`. Why does `average_crack_seconds` divide that by two before dividing by the guess rate?",
+                        "opts": [
+                            "Half the passwords the policy could generate are rejected afterwards as too weak, so in practice only half of the whole keyspace is ever reachable",
+                            "The attacker finds a given password after searching half the space on average, since it is equally likely to sit anywhere",
+                            "Two guesses can be checked per hash, so the effective work is half the keyspace",
+                            "The factor of two accounts for the birthday bound, where collisions halve the search",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The policy defines the whole keyspace; every one of the `36 ** 6` strings it allows is a valid password. Nothing is pre-rejected, so the halving is not about reachability.",
+                            r"Right: the target is equally likely to be anywhere in the enumerated list, so its expected position is the middle — half the keyspace of guesses before a hit, on average.",
+                            r"One hash checks one candidate; there is no two-for-one. The factor of two comes from the *average* search position, not from the cost of a single guess.",
+                            r"Birthday collisions are about finding any two inputs that hash alike, which is not this attack. Here the attacker enumerates candidates for one known target, and the average hit is at the midpoint.",
+                        ],
+                        "why": r'''
+The attacker enumerates candidates against one known hash. Averaged over many
+targets, the sought password is equally likely to sit at any position in the list,
+so its expected position is the middle — half the keyspace of guesses. That is why
+the model uses `keyspace / 2`. It is a statement about the average search depth,
+not about the policy rejecting anything or a hash checking two candidates.
+''',
+                    },
+                    {
+                        "q": "The six-character lowercase-and-digits policy cracks in about a second at a billion hashes a second. Adding a bcrypt work factor of 12 raises that to about 74 minutes. Where in the model does the work factor act?",
+                        "opts": [
+                            "It multiplies the keyspace by 4096, so there are far more candidates to try",
+                            "It divides the attacker's guess rate by 4096, because each hash now costs 2**12 times as much to compute",
+                            "It adds a further 12 bits of entropy to every password the policy allows, which lengthens the effective offline search the attacker has to run",
+                            "It caps the attacker at 4096 guesses before the account locks",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The keyspace depends only on the alphabet and length, both unchanged. The work factor does not add candidates; it makes each candidate slower to test.",
+                            r"Right: a work factor of 12 makes one hash cost `2 ** 12 = 4096` times as much, so the effective rate is `hashes_per_second / 4096` and the same search takes 4096 times longer.",
+                            r"Entropy is a property of the policy — alphabet and length — and the work factor changes neither. It slows the attacker per guess rather than enlarging the space.",
+                            r"Account lockout is online-guessing backoff, a different defence entirely. An offline attacker has the hashes and no login screen; the work factor slows their hashing, it does not lock anything.",
+                        ],
+                        "why": r'''
+The work factor makes the password hash deliberately slow: raising it by one
+doubles the cost of computing a single hash, so a factor of 12 divides the
+attacker's effective rate by `2 ** 12 = 4096`. The keyspace and the password's
+entropy are untouched — the same number of candidates, each now 4096 times slower
+to test — which turns a one-second crack into about 74 minutes.
+''',
+                    },
+                    {
+                        "q": "With `base_delay=1`, `threshold=3`, `max_delay=300`, the delays for failures 1..12 are `[0, 0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 300]`. Why is the cap of 300 seconds a deliberate design choice rather than a limitation?",
+                        "opts": [
+                            "Without a cap the delay would keep doubling, so a mistyped password could lock a real user out for hours or days",
+                            "The cap is simply where the doubling sequence naturally stops on its own, since 300 is the largest power of two that still fits under an hour",
+                            "Beyond 300 seconds the exponential overflows the float, so the cap prevents a crash",
+                            "The cap resets the failure counter to zero, giving the user a fresh start",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Right: uncapped, the delay doubles without bound, so a legitimate user who kept failing — or an attacker's failures charged to their account — could face a lockout of hours. The cap keeps the throttle punishing but never permanent.",
+                            r"300 is not a power of two at all — the doubling passes through 256 and would reach 512 next. The cap is a chosen ceiling, not where the sequence naturally halts.",
+                            r"A float handles far larger exponentials than this without overflowing; `2 ** 40` is nothing to it. The cap is about human lockout time, not numeric limits.",
+                            r"The cap only bounds the delay's size; it does not touch the counter. Resetting the counter is what a *success* does, which is a separate mechanism.",
+                        ],
+                        "why": r'''
+The delay doubles from the threshold on, and without a ceiling it would grow
+unbounded — the twentieth failure would demand hours. Capping it at 300 seconds
+keeps every further attempt expensive for an attacker while ensuring a legitimate
+user who mistypes repeatedly is never locked out for longer than five minutes. The
+cap bounds the delay; a success, separately, resets the counter.
+''',
+                    },
+                    {
+                        "q": "`hotp` computes an integer, reduces it modulo `10 ** digits`, and then calls `.zfill(digits)` before returning a string. What breaks if the `.zfill` is omitted and the code is returned as the raw integer?",
+                        "opts": [
+                            "Nothing — a numeric code and its zero-padded string compare equal after conversion",
+                            "Codes that happen to begin with a zero lose it, so about one code in ten fails to match the authenticator's six digits",
+                            "The modulo would overflow without a string to hold the extra digit",
+                            "The HMAC digest would have to be recomputed from scratch, since returning the integer form rather than a string changes the dynamic-truncation offset byte",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"They do not compare equal as strings: `081804` and `81804` differ in length and leading character. The authenticator shows six characters, and a five-character integer will not match it.",
+                            r"Right: the modulo discards a leading zero — `081804` becomes the integer `81804` — so roughly one code in ten arrives a digit short and fails verification against the app's six-digit display.",
+                            r"The modulo `10 ** digits` guarantees the value fits in `digits` places; nothing overflows. The problem is presentation — a dropped leading zero — not size.",
+                            r"The offset byte comes from the digest and is fixed before truncation; the final formatting cannot reach back and change it. Only the displayed code is affected.",
+                        ],
+                        "why": r'''
+Reducing modulo `10 ** digits` yields a number that may have fewer than `digits`
+places when it starts with a zero — `081804` as an integer is `81804`. The
+authenticator app always shows the full width, so returning the bare integer makes
+roughly one code in ten a digit short and it fails to verify. `.zfill(digits)`
+restores the leading zeros, which is why HOTP values are strings.
+''',
+                    },
+                    {
+                        "q": "`verify_totp` accepts a code from the step before or after the current one, and compares with `hmac.compare_digest` instead of `==`. What does using `compare_digest` defend against?",
+                        "opts": [
+                            "A client clock that has drifted more than a single step out of sync, which the verification window would otherwise reject outright",
+                            "A timing side channel, where how long `==` takes to fail reveals the correct code one character at a time",
+                            "A replay of a previously used code within the same 30-second step",
+                            "An attacker submitting a code for a future counter beyond the window",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Clock drift is handled by the window of counters, not by the comparison function. `compare_digest` addresses how the two strings are compared, not which counters are tried.",
+                            r"Right: `==` on strings can return as soon as two characters differ, so its timing leaks how many leading characters matched. `compare_digest` takes constant time, denying an attacker that digit-by-digit oracle.",
+                            r"Replay within a step is a separate concern needing a used-code record; the comparison function does nothing about it. `compare_digest` is purely about not leaking timing.",
+                            r"Codes beyond the window are rejected by the range of counters checked, regardless of comparison. The constant-time compare defends the matching step against timing analysis.",
+                        ],
+                        "why": r'''
+String `==` can short-circuit on the first differing character, so the time it
+takes to fail depends on how many leading characters matched — an attacker who can
+measure that learns the correct code one character at a time. `hmac.compare_digest`
+runs in constant time regardless of where the strings differ, closing that side
+channel. The drift window and code reuse are handled elsewhere.
+''',
+                    },
+                ],
+            },
             "title": "Credentials: cost models and second factors",
             "summary": "What a password policy is worth, and what backoff and TOTP add to it.",
             "concepts": [
@@ -859,6 +1806,317 @@ assert verify_totp(_secret, "00000000", 1111111109, digits=8) is False, "A wrong
         },
         # ------------------------------------------------------------ M4
         {
+            "read": [
+                {
+                    "title": "From a wall of log lines to a number you can defend",
+                    "minutes": 13,
+                    "body": r'''
+A day of authentication events is sitting in a file. Somewhere in it are a
+brute-force attempt, an account logging in from two countries an hour apart, and a
+compromised host quietly phoning home on a timer. Everything else is people doing
+their jobs. Your task is not to read the file — no one reads the file — but to
+write detectors that pull those three signals out and then to say, with a number,
+how good your detectors are. That last part is what separates detection
+engineering from pattern-matching by vibe.
+
+A well-formed line looks like this:
+
+```text
+2026-05-04T08:00:00Z user=alice ip=10.0.0.10 country=NO action=login result=success bytes=512
+```
+
+A timestamp, then `key=value` fields. The first thing that goes wrong is the
+timestamp, and it goes wrong silently.
+
+## The timezone bug that does not raise
+
+Parse that stamp naively and Python hands you a `datetime` with no timezone
+attached, then quietly interprets it in whatever zone the machine running the code
+happens to be in.
+
+```python
+from datetime import datetime, timezone
+
+text = "2026-05-04T08:00:00Z"
+naive = datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ")
+aware = naive.replace(tzinfo=timezone.utc)
+print(naive.tzinfo, aware.tzinfo)
+print(int(aware.timestamp()))
+```
+
+It prints `None UTC` and then `1777881600`. The `Z` in the log means Zulu —
+UTC — but `strptime` discards it: `naive.tzinfo` is `None`. Call `.timestamp()` on
+that naive value and the answer shifts by your machine's offset from UTC, so the
+same log parsed in Oslo and in New York produces epoch seconds six hours apart, and
+every time-window detector downstream inherits the error without a single
+exception being raised. Attaching `timezone.utc` with `.replace` before taking the
+timestamp is the fix, and `parse_ts` in the lab exists to make that one line
+impossible to skip. A bug that raises is a bug you find; this one just makes your
+detectors quietly wrong.
+
+## Parse defensively or lose the pipeline
+
+The second thing that goes wrong is a malformed line, and the rule is firm: a bad
+line is dropped, never allowed to crash the run. A logging pipeline that dies on
+line 40,000 of 50,000 has thrown away the 10,000 lines it had not reached yet,
+including possibly the attack. So `parse_event` returns `None` for anything it
+cannot trust — a blank line, a token with no `=`, an empty key or value, or a line
+missing a required field — and `load_events` simply skips the `None`s.
+
+```python
+REQUIRED = ("user", "ip", "country", "action", "result")
+
+
+def parse_event(line):
+    parts = line.split()
+    if not parts:
+        return None
+    event = {"ts": parts[0]}
+    for token in parts[1:]:
+        key, sep, value = token.partition("=")
+        if not sep or not key or not value:
+            return None
+        event[key] = value
+    for field in REQUIRED:
+        if field not in event:
+            return None
+    return event
+
+
+print(parse_event("2026-05-04T08:00:00Z user=alice ip=10.0.0.10 country=NO action=login result=success"))
+print(parse_event("2026-05-04T08:00:00Z user=alice"))
+print(parse_event("2026-05-04T08:00:00Z user= ip=10.0.0.1 country=NO action=login result=ok"))
+print(parse_event(""))
+```
+
+The first line returns a full dict; the other three return `None` — one for
+missing fields, one for an empty value (`user=`), one for a blank line. The device
+that makes the empty-value case clean is `partition("=")`: it always returns three
+pieces, and an empty separator or empty key or value is a single rejection, no
+special-casing.
+
+## Three detectors, three shapes of signal
+
+Each attack has a shape, and the detector is that shape written down. **Brute
+force** is many failures in a short time. Sort each user's failure timestamps and
+slide a window of `threshold` failures across them: if the span from the first to
+the `threshold`-th is within `window` seconds, fire.
+
+```python
+stamps = [1000, 1008, 1016, 1024, 1032, 1040]
+threshold, window = 5, 60
+for i in range(len(stamps) - threshold + 1):
+    span = stamps[i + threshold - 1] - stamps[i]
+    print("start", i, "->", stamps[i], "to", stamps[i + threshold - 1], "spans", span, "s:", span <= window)
+```
+
+It prints two lines, each ending `spans 32 s: True`: six failures eight seconds
+apart contain five within any 32-second span, comfortably inside a 60-second
+window. The index arithmetic is the part people get wrong. To look at `threshold`
+consecutive failures starting at `i`, the last of them is at `i + threshold - 1`,
+so `i` runs to `len(stamps) - threshold` inclusive — hence
+`range(len(stamps) - threshold + 1)`. Off by one here and the last possible window
+is never checked, so an attack that finishes at the very end of the log is missed.
+
+**Impossible travel** is the same user succeeding from two different countries too
+close together to have travelled. Sort each user's successful logins and compare
+each consecutive pair: different country, gap under the minimum, fire.
+
+**Beaconing** is the subtle one, because its signal is not volume but *regularity*.
+Malware calling home every five minutes produces connections whose gaps are almost
+identical; a human produces ragged gaps. So the test is on the variance of the
+inter-arrival times, not their count.
+
+```python
+regular = [3000 + k * 300 for k in range(6)]
+noisy = [3000 + g for g in (0, 300, 1200, 1320, 1920, 1965)]
+for ip, stamps in (("10.0.0.99", regular), ("10.0.0.44", noisy)):
+    gaps = [b - a for a, b in zip(stamps, stamps[1:])]
+    print(ip, gaps, "range", max(gaps) - min(gaps))
+```
+
+It prints `10.0.0.99 [300, 300, 300, 300, 300] range 0` and
+`10.0.0.44 [300, 900, 120, 600, 45] range 855`. Both hosts made six connections;
+counting connections cannot tell them apart. The gap `range` — `max - min` — can:
+zero for the metronome, 855 for the human. The mistake here is to build the
+detector around how *much* traffic a host sends, when the tell of automation is how
+*evenly* it sends it.
+
+## The number that makes it honest
+
+A detector is a classifier, and a classifier makes two kinds of error. It can flag
+something innocent — a false positive — and it can miss something real — a false
+negative. One number hides both, so you report two.
+
+```python
+def precision_recall(flagged, actual):
+    flagged, actual = set(flagged), set(actual)
+    hits = len(flagged & actual)
+    precision = hits / len(flagged) if flagged else 0.0
+    recall = hits / len(actual) if actual else 0.0
+    return precision, recall
+
+
+print(precision_recall(["mallory", "eve", "bob"], {"mallory", "eve", "svc"}))
+print(precision_recall([], {"mallory"}))
+print(precision_recall(["alice", "bob", "carol", "mallory", "eve"], {"mallory", "eve"}))
+```
+
+It prints `(0.666..., 0.666...)`, then `(0.0, 0.0)`, then `(0.4, 1.0)`.
+*Precision* is the fraction of your flags that were right — of `mallory, eve, bob`,
+two were real, so `2/3`. *Recall* is the fraction of the real attacks you caught —
+of `mallory, eve, svc`, you named two, so `2/3` again. The two move in opposite
+directions as you tune. The last line is the extreme: flag everyone and recall is a
+perfect `1.0`, because you caught both real attacks — but precision collapses to
+`0.4`, because three of your five flags were innocent. A detector that flags
+everything catches every attack and is useless, and the recall number alone would
+call it perfect. That is exactly why both are reported, and why the empty cases
+return `0.0` rather than dividing by zero: flagging nothing, or having no ground
+truth, must score zero, not crash the report.
+
+## Where these detectors stop working
+
+Every one of these is a heuristic tuned to a threshold, and the threshold is an
+admission of where it breaks. Brute force at five-in-sixty misses an attacker who
+guesses four times a minute — *slow* brute force walks under it deliberately.
+Impossible travel assumes an IP maps to a country and that people do not use VPNs,
+so a legitimate traveller on a corporate VPN can trip it while a real attacker
+behind a local proxy does not. Beaconing on low gap-variance catches a naive timer
+and misses malware that jitters its callbacks on purpose — which is why modern
+implants do exactly that. These detectors raise the cost of the obvious attack;
+they do not close the door, and the precision/recall number is honest precisely
+because it measures that gap rather than hiding it.
+
+The lab, **Three detectors and their score**, builds this pipeline end to end:
+`parse_ts` with its timezone fix, `parse_event` and `load_events` with defensive
+dropping, `brute_force`, `impossible_travel` and `beaconing` over a synthetic day
+of events, and `precision_recall` scored against the labelled accounts — the same
+`(1.0, 1.0)` the account detectors reach on this particular log, and the number you
+would watch move as you tuned them on a real one.
+'''
+                }
+            ],
+            "quiz": {
+                "title": "Parsing, windows, and scoring a detector",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "`parse_ts` uses `datetime.strptime(text, \"%Y-%m-%dT%H:%M:%SZ\")` and then `.replace(tzinfo=timezone.utc)` before `.timestamp()`. What goes wrong if the `.replace` is left out?",
+                        "opts": [
+                            "`strptime` raises on the trailing `Z`, so the whole pipeline stops on the first line",
+                            "The datetime is treated as local time, so the epoch seconds shift by the machine's UTC offset with no error raised",
+                            "The timestamp is silently returned as a float instead of an int, which breaks the integer window comparisons every downstream detector relies on",
+                            "The `Z` is parsed as a literal, adding a spurious character that corrupts later fields",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"`strptime` matches the `Z` as a literal in the format string and parses cleanly — it just throws the zone information away. The failure is silent, not an exception.",
+                            r"Right: without a tzinfo the datetime is naive, and `.timestamp()` assumes local time, so the same `Z`-stamped log yields different epoch seconds in different zones — wrong, and with nothing raised to warn you.",
+                            r"Casting to `int` handles the float; the timezone bug is about *which instant* the value denotes, not its type. The shift happens whether or not you convert to int.",
+                            r"The `Z` is consumed by the format's literal `Z` and produces no extra character. The bug is the discarded zone, invisible until the numbers are compared across machines.",
+                        ],
+                        "why": r'''
+`strptime` matches the `Z` as a literal and returns a naive datetime — `tzinfo`
+is `None`. Calling `.timestamp()` on a naive value makes Python assume local time,
+so the epoch seconds shift by the machine's offset from UTC and the same log parsed
+in two zones disagrees. Nothing raises; the detectors just inherit a silent error.
+Attaching `timezone.utc` first fixes the instant the value denotes.
+''',
+                    },
+                    {
+                        "q": "`parse_event` returns `None` for a malformed line and `load_events` skips it, rather than raising. Why is dropping the right choice for a log pipeline?",
+                        "opts": [
+                            "Raising on a bad line stops the run, discarding every later line — including, possibly, the attack",
+                            "Malformed lines are always benign, so there is never anything worth reporting in them",
+                            "Returning None is measurably faster than raising an exception, and raw parsing speed is the priority when working through very large logs",
+                            "A dropped line is automatically re-queued for parsing once the run finishes",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Right: a pipeline that raises on line 40,000 never reaches line 50,000, throwing away the events it had not parsed yet. Dropping the one bad line preserves every good one, which is what a detector needs.",
+                            r"They are not always benign — a truncated or oddly-formatted line could itself be the interesting event — but that is an argument for logging drops, not for crashing. The reason to drop rather than raise is to keep the run alive.",
+                            r"Performance is real but beside the point; even if raising were free, stopping the run would still lose the unparsed remainder. Robustness, not speed, is why dropping wins.",
+                            r"Nothing re-queues a dropped line; it is skipped and gone. The value is that the surrounding good lines still get processed, not that the bad one comes back.",
+                        ],
+                        "why": r'''
+A logging pipeline that raises on a malformed line dies partway through and
+discards everything it had not yet parsed — potentially the attack itself.
+Returning `None` and skipping it keeps every well-formed event flowing. Malformed
+lines are not guaranteed benign, which is an argument for recording that a drop
+happened, not for letting one bad line take down the whole run.
+''',
+                    },
+                    {
+                        "q": "Brute force slides a window over a user's sorted failure times: `for i in range(len(stamps) - threshold + 1)`. Why the `+ 1`?",
+                        "opts": [
+                            "It reserves one extra iteration as a guard against an off-by-one in the timestamps",
+                            "The last valid start index is `len(stamps) - threshold`, and `range` is exclusive of its stop, so it needs the `+ 1` to include it",
+                            "It accounts for the window boundary itself counting as one additional failure",
+                            "Without it the loop would double-count the very first window against the second, so the trailing `+ 1` is there precisely to cancel that overlap out",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"There is no guard iteration; every index the loop visits is a real candidate window. The `+ 1` is arithmetic about `range`'s exclusive stop, not slack.",
+                            r"Right: a window of `threshold` failures starting at `i` ends at `i + threshold - 1`, so the largest legal `i` is `len(stamps) - threshold`, and because `range` stops one short you add one to include it.",
+                            r"The window boundary is a timestamp comparison, not an extra element in the list. The `+ 1` is about which start indices exist, not about counting an extra failure.",
+                            r"The loop visits each start index once; there is no double-counting to cancel. The `+ 1` exists so the final window, ending at the last failure, is actually examined.",
+                        ],
+                        "why": r'''
+A window of `threshold` consecutive failures starting at index `i` ends at
+`i + threshold - 1`, so the last start that fits is `len(stamps) - threshold`.
+`range(stop)` never yields `stop`, so without the `+ 1` that final window — the one
+ending on the last failure — is never checked, and an attack finishing at the end
+of the log is missed.
+''',
+                    },
+                    {
+                        "q": "Two hosts each made six `connect` events. One's gaps are `[300, 300, 300, 300, 300]`, the other's are `[300, 900, 120, 600, 45]`. Why does the beaconing detector test `max(gaps) - min(gaps)` rather than the number of connections?",
+                        "opts": [
+                            "Connection count is hard to compute, whereas the gap range is a single subtraction",
+                            "The tell of an automated beacon is regular timing, not volume, and both hosts sent the same number of connections",
+                            "The gap range is larger for the beacon, which is what flags it as suspicious",
+                            "Counting connections alone would also wrongly flag the busiest legitimate servers as beacons, so the raw volume is deliberately capped instead",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Counting is trivial either way; difficulty is not the issue. The reason to measure the gap range is that it captures the *regularity* that distinguishes a beacon, which a count cannot.",
+                            r"Right: both hosts made six connections, so volume cannot separate them — but a beacon's near-constant gaps give a range near zero, while the human's ragged gaps give a large one. Regularity is the signal.",
+                            r"It is the other way around: the beacon has the *small* range (0 here), the human the large one (855). The detector fires on low variance, so a small range is the suspicious case.",
+                            r"Volume is not the axis at all here; the beacon and the human sent identical counts. The detector keys on how evenly the connections are spaced, not on capping how many there are.",
+                        ],
+                        "why": r'''
+Both hosts sent six connections, so a count cannot tell them apart. Automation
+reveals itself in *regularity*: the beacon's gaps are all 300, giving a range of 0,
+while the human's gaps swing from 45 to 900, a range of 855. Testing
+`max(gaps) - min(gaps)` against a small jitter fires on the metronome and leaves the
+ragged human alone; volume never enters into it.
+''',
+                    },
+                    {
+                        "q": "A detector flags all five users; the two real attackers are among them. `precision_recall` returns `(0.4, 1.0)`. Why report both numbers instead of the recall alone?",
+                        "opts": [
+                            "Recall alone is enough; a recall of 1.0 means the detector is working perfectly",
+                            "Recall alone rewards flagging everything, which catches every attack while burying analysts in false positives — precision exposes that",
+                            "Precision and recall always rise and fall together in lockstep, so reporting both of them is really just a redundant consistency check on the arithmetic",
+                            "Precision measures speed and recall measures accuracy, so the two describe different runs",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"A recall of 1.0 here comes from flagging literally everyone, which is useless. Recall cannot see the three false positives dragging precision to 0.4, so it alone calls a worthless detector perfect.",
+                            r"Right: flag everything and recall is a perfect 1.0 because no attack is missed, but precision falls to 0.4 as three of five flags are innocent. Only precision reveals the cost of that strategy, so both are reported.",
+                            r"They move in *opposite* directions under tuning — widen the net and recall rises while precision falls. That trade-off is the whole reason one number cannot stand in for the other.",
+                            r"Both measure the same run's classification quality, not speed. Precision is the fraction of flags that were right; recall is the fraction of attacks caught. Neither is a timing measurement.",
+                        ],
+                        "why": r'''
+Flag every user and recall is a perfect `1.0` — no attack escapes — but precision
+is only `0.4`, because three of the five flags were innocent. Recall alone would
+crown that useless detector; precision is what exposes the flood of false
+positives. The two trade against each other as thresholds move, so reporting both
+is the only honest summary.
+''',
+                    },
+                ],
+            },
             "title": "Detection engineering",
             "summary": "Turning a log into baselines, detectors and a precision/recall number.",
             "concepts": [

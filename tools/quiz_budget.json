@@ -29,6 +29,7 @@
   "EE221": {"longest": 20, "shortest": 7, "whys": 0, "blanks": {"longest": 0, "shortest": 1, "markup": 0, "whys": 0}},
   "EE231": {"longest": 26, "shortest": 2, "whys": 0, "blanks": {"longest": 9, "shortest": 2, "markup": 8, "whys": 356}},
   "EE241": {"longest": 30, "shortest": 0, "whys": 0, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
+  "ELEC420": {"longest": 0, "shortest": 0, "whys": 80, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "ELEC430": {"longest": 0, "shortest": 0, "whys": 80, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "EMAG510": {"longest": 2, "shortest": 0, "whys": 0, "blanks": {"longest": 1, "shortest": 0, "markup": 0, "whys": 20}},
   "EMAG520": {"longest": 5, "shortest": 1, "whys": 0, "blanks": {"longest": 2, "shortest": 1, "markup": 0, "whys": 20}},
