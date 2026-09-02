@@ -50,6 +50,309 @@ COURSE = {
     "modules": [
         # ---- M1 -----------------------------------------------------------
         {
+            "read": [
+                {
+                    "title": "The square wave you drive with, and the sinusoid you get back",
+                    "minutes": 14,
+                    "body": r'''
+Put a differential probe on the midpoint of a 400 V half-bridge and a current probe on
+the wire leaving it. The tank is a 60 µH inductor in series with a 33 nF capacitor;
+behind it sit a transformer, a full-bridge rectifier and a capacitor holding 48 V across
+the load. Run the two gates in complementary halves at 113 kHz and put both traces on
+the screen at once.
+
+They do not look like they belong to the same circuit. The voltage is a square: pinned
+at 400 V for half a cycle, at 0 V for the other half, transitions a few tens of
+nanoseconds wide, nothing interesting in between. The current is a sinusoid. Not roughly
+a sinusoid — you can drop a cursor on the peak and find it within a per cent of where a
+sine of the same fundamental would put it, cycle after cycle.
+
+The same wire carries both, so nothing was filtered out on the way. Either the drive was
+nearly sinusoidal to begin with, or the tank did something to it. The first is easy to
+check, and it is false.
+
+## The drive is not remotely a sinusoid
+
+About its own average the midpoint alternates between $+V_{in}/2$ and $-V_{in}/2$, which
+here is $\pm 200$ V. A square wave of amplitude $A$ has the Fourier series
+
+$$\frac{4A}{\pi}\left(\sin\theta + \tfrac{1}{3}\sin 3\theta + \tfrac{1}{5}\sin 5\theta + \dots\right)$$
+
+and no even terms at all, because half a period later the waveform is exactly its own
+negative. The derive unit *What the first-harmonic approximation replaces the converter
+with* starts from this one series and applies it on both sides of the transformer.
+
+With $A = 200$ V the fundamental has a peak of $4A/\pi = 254.6$ V and an RMS of
+$\sqrt{2}V_{in}/\pi = 180.06$ V. The square's own RMS is the full 200 V, so the
+fundamental holds $(180.06/200)^2 = 0.811$ of the mean square, and that fraction is
+$8/\pi^2$ — the same constant that turns up later in $R_{ac} = 8n^2R_L/\pi^2$, and for
+the same reason: it is what is left when a square is replaced by its first harmonic.
+
+The other 19 per cent is not rounding. The third harmonic on its own has a peak of
+84.9 V. Whatever makes the current sinusoidal, it is not that the drive nearly was.
+
+## What the tank does with them
+
+The tank is linear, so take the harmonics one at a time and superpose. At the $k$th the
+series branch has impedance
+
+$$Z(k) = R_{ac} + j\left(k\omega_r L_r - \frac{1}{k\omega_r C_r}\right)
+       = R_{ac} + jZ_0\left(k - \frac{1}{k}\right)$$
+
+with $Z_0 = \sqrt{L_r/C_r}$. The bracket vanishes only at $k = 1$: there the inductive
+and capacitive reactances cancel exactly and the drive sees nothing but $R_{ac}$. At
+every other harmonic the bracket is not small — $k - 1/k$ is $8/3$ at the third and
+$4.8$ at the fifth — and it is multiplied by $Z_0$, which for a 60 µH and 33 nF tank is
+$42.64\ \Omega$.
+
+Give the converter a real load: 48 V at 13.5 A through a transformer with
+$n = V_{in}/(2V_o) = 4.167$, so $R_L = 3.556\ \Omega$ and $R_{ac} = 50.0\ \Omega$. The
+loaded quality factor is then $Q = Z_0/R_{ac} = 0.852$, and the rest is arithmetic.
+
+```python
+import math
+
+V_in = 400.0        # bus, volts
+V_out = 48.0        # output, volts
+L_r = 60e-6         # resonant inductor, henries
+C_r = 33e-9         # resonant capacitor, farads
+n = V_in / (2.0 * V_out)       # turns ratio that puts unity gain at resonance
+R_L = 3.5556                   # load resistance: 48 V at 13.5 A
+R_ac = 8.0 * n * n * R_L / math.pi ** 2
+
+f_r = 1.0 / (2.0 * math.pi * math.sqrt(L_r * C_r))
+Z_0 = math.sqrt(L_r / C_r)
+Q = Z_0 / R_ac
+print("f_r %.1f kHz   Z_0 %.2f ohm   n %.3f   R_ac %.1f ohm   Q %.3f"
+      % (f_r / 1e3, Z_0, n, R_ac, Q))
+
+V1 = 2.0 * V_in / math.pi       # peak of the driving fundamental, volts
+I1 = V1 / R_ac                  # at resonance the tank is nothing but R_ac
+harm = 0.0
+for k in (1, 3, 5, 7, 9, 11, 13):
+    Zk = math.hypot(R_ac, Z_0 * (k - 1.0 / k))
+    Ik = (V1 / k) / Zk
+    if k > 1:
+        harm += (Ik / I1) ** 2
+    print("h%-3d drive %6.1f V   |Z| %6.1f ohm   %5.3f A   %5.2f%% of h1"
+          % (k, V1 / k, Zk, Ik, 100.0 * Ik / I1))
+print("distortion: %.1f%% of the current, %.1f%% of the power"
+      % (100.0 * math.sqrt(harm), 100.0 * harm))
+print("delivering %.0f W at %.1f A dc" % (0.5 * V1 * I1, 2.0 * n * I1 / math.pi))
+```
+
+It prints a 113.1 kHz resonance, a 5.089 A fundamental, and a third harmonic of 0.683 A
+— 13.4 per cent of the fundamental. The fifth is 4.75 per cent, the seventh 2.41 per
+cent, and the sum in quadrature of everything above the first comes to 14.6 per cent of
+the fundamental current. The last line confirms the operating point is real: 648 W out
+at 13.5 A of dc output current, which is what a fundamental of 5.089 A peak delivers
+through a 4.167:1 transformer and a full-bridge rectifier.
+
+## Thirteen per cent of the current, two per cent of the power
+
+Fourteen per cent distortion is not nothing, and it is much more than the eye finds in
+that current trace. Look at the last line of the loop again, though: the harmonic
+*power* is 2.1 per cent, because power goes as the square of the current and
+$0.134^2 = 0.018$.
+
+That is the real justification for keeping only the fundamental, and it is worth stating
+in the form that survives scrutiny. The claim is not that the harmonics are absent — the
+tank passes $1/\sqrt{1 + Q^2(k - 1/k)^2}$, which at $Q = 0.852$ and $k = 3$ is $0.403$,
+so 40 per cent of the third harmonic gets through. The claim is that what does get
+through carries a couple of per cent of the power and averages to almost nothing at the
+rectifier, so a model that tracks power flow — which is what a gain curve is — is
+accurate to a few per cent while being wrong about the waveform by fifteen.
+
+## The mistake, and why it is tempting
+
+The usual story is that a resonant tank is a sharp filter, so the harmonics are rejected
+and only the fundamental survives. It is a satisfying picture and it is the wrong one.
+At the $Q$ a converter actually runs — $0.85$ here, $0.4$ at the capstone's full load —
+the tank is a mediocre filter. The capstone tank passes $0.63$ of what it is given at
+three times resonance. A tank sharp enough to genuinely reject the third harmonic would
+need a $Q$ of ten or more, which is $Z_0 = 10R_{ac}$ — and at resonance the current is
+$V_1/R_{ac}$, so the inductor and the capacitor would each stand $QV_1$, ten times the
+voltage appearing across the load. Every component in the tank has to be rated for it and
+the magnetics grow to match. Worse, $Q$ is set by the load rather than chosen: a tank at
+$Q = 10$ at full load sits at $Q = 1$ at a tenth of the load, so the selectivity you paid
+for evaporates at exactly the operating point where the harmonics are largest.
+
+The picture is tempting because it explains the trace on the screen, and because filter
+courses teach $Q$ as selectivity. In a converter $Q$ is a *load* variable — the sandbox
+*Reading a tank off a Bode plot* makes that concrete, since its damping slider
+$\zeta = 1/(2Q) = R_{ac}/(2Z_0)$ is nothing but the load resistance in disguise. The
+harmonics are attenuated somewhat and detuned a lot, and squaring 0.134 does the rest.
+
+## Where it stops holding
+
+The approximation degrades exactly where the tank stops detuning: at low $Q$, which is
+light load.
+
+```python
+import math
+
+for Q in (0.853, 0.4, 0.1):
+    third = (1.0 / 3.0) / math.sqrt(1.0 + (Q * (3.0 - 1.0 / 3.0)) ** 2)
+    print("Q = %.3f  ->  third harmonic %4.1f%% of the fundamental" % (Q, 100.0 * third))
+```
+
+At $Q = 0.853$ the third harmonic is 13.4 per cent of the fundamental, at $Q = 0.4$ it
+is 22.8 per cent, and at $Q = 0.1$ it is 32.2 per cent. Follow that limit to its end: as
+$Q \to 0$ the reactances stop mattering beside $R_{ac}$, every harmonic passes at its
+full drive amplitude, and the tank current becomes the square wave divided by $R_{ac}$.
+There is nothing sinusoidal left to approximate. This is the opposite of the intuition a
+filter course leaves you with, and it is the reason a converter that regulates well at
+full load can behave in ways the model did not predict when the load is removed.
+
+The second boundary is the one that catches designs. Well below resonance the rectifier
+stops conducting continuously: the tank current falls to zero for part of each half
+cycle, the diodes go out of conduction, and the assumption that the rectifier presents a
+square voltage in phase with the current — the assumption the whole $8n^2R_L/\pi^2$
+substitution rests on — is no longer true. First-harmonic analysis is at its best within
+roughly twenty per cent of resonance under moderate to heavy load, and it grows
+optimistic as you move below the gain peak or unload the converter. Predicted peak gains
+of an LLC are routinely 10 to 20 per cent above what a time-domain simulation gives, in
+the direction that costs you: the model promises boost you will not have. Every design in
+this course therefore carries margin on the boost budget, and the capstone specification
+never asks for more than $1.14$.
+
+## What you are about to build
+
+The derive unit turns the Fourier series above into $R_{ac} = 8n^2R_L/\pi^2$ and leaves
+the converter as three numbers. The build exercise *The tank the first-harmonic
+approximation leaves behind* then asks you to place a real $L_r$ and $C_r$ on the canvas
+for $f_r = 100$ kHz and $Q = 3$ into $R_{ac} = 12.57\ \Omega$ — note that $Q = 3$ is far
+more selective than the 0.85 traced above, which is why its checks can pin the gain at
+$1.2f_r$ to 0.673. The lab *Characterise a series-resonant tank* then writes the six
+functions the rest of the course calls, on this same 60 µH and 33 nF tank, and its last
+test sweeps $x$ from 0.3 to 3.0 to prove what the algebra already implies: the gain never
+exceeds one. That is the wall module 2 goes looking for a way around.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "One harmonic, and what happened to the rest",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "The bridge drives the tank with a third harmonic a third the size of the fundamental, yet the tank current looks sinusoidal on a scope. What is doing the work?",
+                        "opts": [
+                            "Away from resonance the two reactances stop cancelling, so the branch impedance grows",
+                            "The output capacitor shunts the harmonics away before they ever reach the resonant branch",
+                            "A square wave of exactly 50 per cent duty ratio carries no third harmonic at all",
+                            "The rectifier diodes commutate too slowly to follow anything above the fundamental",
+                        ],
+                        "a": 0,
+                        "why": r'''
+At the fundamental the inductive and capacitive reactances cancel and the drive sees only
+$R_{ac} = 50\ \Omega$; at the third the bracket $Z_0(k - 1/k)$ is $113.7\ \Omega$ and the
+magnitude climbs to $124\ \Omega$. A drive three times smaller into an impedance two and a
+half times larger is 13 per cent of the current, and squaring that is why the harmonic
+power is only 2 per cent. The output capacitor is on the far side of the rectifier and
+cannot reach the resonant branch. A 50 per cent square has no *even* harmonics, but its
+odd ones are exactly the $1/k$ series this module opens with. And diode commutation is
+fast enough to be modelled as instantaneous here — it is the tank impedance, not the
+rectifier, that shapes the current.
+''',
+                    },
+                    {
+                        "q": "Why does the tank see $8n^2R_L/\\pi^2$ rather than the $n^2R_L$ a transformer alone would give?",
+                        "opts": [
+                            "Matching the power a sinusoid delivers to what the dc load draws costs that factor",
+                            "The transformer's leakage inductance drops part of the voltage ahead of the rectifier bridge",
+                            "It is the attenuation the output capacitor gives at twice the switching frequency",
+                            "Two rectifier devices conduct at once, so their forward drops halve the resistance",
+                        ],
+                        "a": 0,
+                        "why": r'''
+The substitution is a power-equivalence, not a circuit identity. The rectifier presents a
+square voltage of $\pm V_o$ whose fundamental peaks at $4V_o/\pi$, while the sinusoidal
+current of peak $I_p$ averages to $2I_p/\pi$ through the diodes; the ratio of those two
+fundamentals is $8/\pi^2 \approx 0.811$ times $V_o/I_o$, and the $n^2$ is the ordinary
+referral on top. Leakage inductance is real but it belongs in $L_r$, not in the load
+term. The output capacitor changes the ripple, not the equivalent resistance. Forward
+drops are a loss term for module 4 and do not scale the resistance the tank sees.
+''',
+                    },
+                    {
+                        "q": "The first-harmonic approximation is at its worst at light load. What is the mechanism?",
+                        "opts": [
+                            "Light load is small $Q$, and a low-$Q$ tank barely detunes the harmonics at all",
+                            "Light load is large $Q$, and a sharper tank rings on harmonics it was never driven at",
+                            "Light load raises the switching frequency until every harmonic is above resonance",
+                            "Light load lets the diode forward drop dominate, so no tank current is defined",
+                        ],
+                        "a": 0,
+                        "why": r'''
+$Q = Z_0/R_{ac}$, and a lighter load is a *larger* $R_{ac}$, so $Q$ falls. The harmonic
+attenuation $1/\sqrt{1 + Q^2(k-1/k)^2}$ then tends to 1 for every $k$: at $Q = 0.1$ the
+third harmonic is already 32 per cent of the fundamental, and in the limit the tank
+current is the square wave over $R_{ac}$. Reading $Q$ as selectivity gets the direction
+exactly backwards, which is the tempting error here. Frequency does rise at light load in
+a real controller, but that is the loop responding, not the mechanism. And the diode drop
+matters to efficiency, not to whether the current is a sinusoid.
+''',
+                    },
+                    {
+                        "q": "The third harmonic reaches 13 per cent of the tank current. What share of the power does it carry?",
+                        "opts": [
+                            "Roughly 2 per cent, since dissipation follows the square of the current",
+                            "Roughly 13 per cent, the same share, because it meets the same $R_{ac}$",
+                            "Roughly 4 per cent, a third of the current share, in the ratio of harmonic numbers",
+                            "None whatever, because current at a harmonic frequency is purely reactive",
+                        ],
+                        "a": 0,
+                        "why": r'''
+$0.134^2 = 0.018$, and adding the fifth, seventh and the rest in quadrature brings the
+total above the fundamental to 2.1 per cent. That squaring is the whole reason a model
+that is 15 per cent wrong about the waveform is 2 per cent wrong about the power. Meeting
+the same $R_{ac}$ is true and is not the point: $P = \tfrac{1}{2}I^2R_{ac}$ still squares
+the current. Scaling the share by $1/k$ confuses the drive amplitude with the power it
+carries. And the harmonic current is emphatically not reactive — it flows through
+$R_{ac}$ and dissipates there, which is exactly why it can be counted this way.
+''',
+                    },
+                    {
+                        "q": "You have an LLC gain curve computed by first-harmonic analysis. Where should you trust it least?",
+                        "opts": [
+                            "At the peak, below resonance and lightly loaded, where the rectifier goes discontinuous",
+                            "Exactly at resonance, where the cancelling reactances make the expression degenerate",
+                            "Above resonance at full load, where the current lags the bridge voltage and the $Q$ is highest",
+                            "At high line, because the derivation assumed a fixed input voltage throughout",
+                        ],
+                        "a": 0,
+                        "why": r'''
+Below resonance the tank current can fall to zero before the half cycle ends, the diodes
+stop conducting continuously, and the equivalent resistance the whole substitution rests
+on no longer describes the rectifier. Predicted peak gains come out 10 to 20 per cent
+optimistic there, which is the direction that costs you a design. Resonance is where the
+model is at its best, not its worst — the reactances cancelling is what makes the gain
+exactly 1. Above resonance at full load is the well-behaved region the controller is
+steered into deliberately. And nothing in the derivation fixes $V_{in}$: it enters only
+as a scale factor on the drive.
+''',
+                    },
+                    {
+                        "q": "The build exercise asks for $f_r = 100$ kHz and $Q = 3$ into $R_{ac} = 12.57\\ \\Omega$. What do those two specifications pin down first?",
+                        "opts": [
+                            "$Z_0 = QR_{ac} = 37.7\\ \\Omega$, which $f_r$ then splits into $L_r$ and $C_r$",
+                            "$L_r$, which follows from the resonant frequency by itself once $Q$ is known",
+                            "$C_r$, since the capacitor sets the resonance and $Q$ merely trims the shape",
+                            "Neither: two specifications cannot fix two components without a third constraint",
+                        ],
+                        "a": 0,
+                        "why": r'''
+The two tank numbers are $\sqrt{L_rC_r} = 1/(2\pi f_r)$ and $\sqrt{L_r/C_r} = Z_0 = QR_{ac}$,
+which is $3 \times 12.57 = 37.7\ \Omega$. Multiply them for $L_r = 60\ \mu$H, divide for
+$C_r = 42.2$ nF. Neither component is fixed on its own by either specification: $f_r$
+constrains only the product and $Q$ only the ratio, which is why naming $L_r$ or $C_r$
+first has nothing to compute from. Two equations in two unknowns is exactly enough here,
+so no third constraint is wanted — what makes it work is that the equations are in the
+product and the ratio rather than in the components themselves.
+''',
+                    },
+                ],
+            },
             "title": "The tank, and the one harmonic that matters",
             "summary": "A square wave drives the bridge, but a selective tank only responds to its fundamental. That single approximation turns a switching circuit into a phasor problem.",
             "concepts": [
@@ -491,6 +794,228 @@ assert abs(_sym) < 1e-12, \
 
         # ---- M2 -----------------------------------------------------------
         {
+            "read": [
+                {
+                    "title": "The ceiling at unity, and the one inductor that breaks it",
+                    "minutes": 15,
+                    "body": r'''
+Take the series-resonant converter of module 1 and put it behind a mains rectifier and a
+bulk capacitor, which is where converters like it actually live. The specification says
+the output must hold through a 20 ms dropout — one missing mains cycle — and during that
+20 ms nothing is charging the bulk capacitor, so the 400 V bus decays. By the end of it
+the bridge is running from 350 V.
+
+Watch the output on a scope while the mains is interrupted. The bus falls, the controller
+sweeps the switching frequency down towards resonance looking for more gain, reaches
+resonance, and stops. The output has gone from 48 V to 42 V and it stays there until the
+mains returns. The loop is not broken and the controller is not misbehaving; it swept its
+lever to the end of its travel and the gain it wanted was not there.
+
+## The ceiling is structural, not a limit of the algebra
+
+The derive unit *The series-resonant gain, and inverting it* ends with
+$M = 1/\sqrt{1 + Q^2(x - 1/x)^2}$ and the observation that $M \le 1$. It is worth seeing
+why before the algebra, because the algebraic reason — the denominator is a root of one
+plus something non-negative — explains nothing you could have used at the whiteboard.
+
+The circuit reason is this. The tank is a series reactance $jZ_0(x - 1/x)$ feeding a
+resistor $R_{ac}$, and the output is taken across the resistor:
+
+$$M = \frac{R_{ac}}{\left|R_{ac} + jZ_0\left(x - \frac{1}{x}\right)\right|}$$
+
+The numerator is one of the two legs of a right triangle whose hypotenuse is the
+denominator. A leg is never longer than the hypotenuse. That is the whole ceiling, and it
+survives any amount of $Q$ or clever frequency control, because it is a statement about
+where the probe is: **across the resistor**.
+
+The sandbox *Reading a tank off a Bode plot* shows what is being given up. Its amber
+corner marker reads $K/(2\zeta) = Q$ — the resonant rise, a real voltage magnification of
+$Q$ at the resonant frequency. That rise exists in a series tank, but it appears across
+the inductor and across the capacitor, in equal and opposite amounts that cancel to
+nothing across the pair. A series-resonant converter puts its output where the rise is
+not.
+
+## Move the probe onto a reactance
+
+So take the output across a reactance instead. Put an inductance $L_m$ in parallel with
+$R_{ac}$ and probe that parallel combination. The divider is now
+
+$$M = \left|\frac{Z_p}{Z_p + Z_s}\right|, \qquad
+Z_s = jZ_0\left(x - \frac{1}{x}\right), \qquad
+Z_p = \frac{j\omega L_m R_{ac}}{R_{ac} + j\omega L_m}$$
+
+and the ceiling argument no longer applies, for a reason you can read straight off the
+expression. $Z_p$ has a positive imaginary part, because it is a lossy inductor. Below
+resonance $Z_s$ has a *negative* imaginary part. So in the sum $Z_p + Z_s$ the two
+imaginary parts subtract, the denominator can be smaller than the numerator, and $M$
+exceeds one. Boost in an LLC is not a resonance trick layered on top of the divider; it
+is one reactance partly cancelling another inside the denominator of the same divider
+that used to be bounded.
+
+In an offline supply $L_m$ costs nothing, because it is the transformer's own magnetising
+inductance. It was always there. What changes is that it stops being a parasitic to be
+minimised and becomes a component with a value in the specification — and, as module 3
+will show, a hard upper bound.
+
+Grinding the divider into normalised form gives, with $L_n = L_m/L_r$,
+
+$$M(x) = \frac{L_n x^2}{\sqrt{\left((L_n+1)x^2 - 1\right)^2 + \left(QL_nx(x^2-1)\right)^2}}$$
+
+which is the formula the lab *Draw the LLC gain family* asks you to write. It is worth
+one check against the circuit it came from rather than trusting the transcription.
+
+```python
+import math
+
+V_in, V_out, I_out = 400.0, 12.0, 20.0     # nominal bus, output, full load
+f_r, Ln, Q = 100e3, 5.0, 0.4               # the specification
+
+n = V_in / (2.0 * V_out)                   # unity gain at resonance sets this
+R_ac = 8.0 * n * n * (V_out / I_out) / math.pi ** 2
+Z_0 = Q * R_ac
+w_r = 2.0 * math.pi * f_r
+L_r, C_r = Z_0 / w_r, 1.0 / (Z_0 * w_r)
+L_m = Ln * L_r
+print("n = %.3f   R_ac = %.1f ohm   Z_0 = %.1f ohm" % (n, R_ac, Z_0))
+print("L_r = %.1f uH   C_r = %.2f nF   L_m = %.0f uH" % (L_r * 1e6, C_r * 1e9, L_m * 1e6))
+
+# The closed form, checked against the divider it came from.
+def from_components(x):
+    w = x * w_r
+    Z_s = 1j * w * L_r + 1.0 / (1j * w * C_r)
+    Z_m = 1j * w * L_m
+    Z_p = Z_m * R_ac / (Z_m + R_ac)
+    return abs(Z_p / (Z_p + Z_s))
+
+def closed_form(x, Ln=Ln, Q=Q):
+    a = (Ln + 1.0) * x * x - 1.0
+    b = Q * Ln * x * (x * x - 1.0)
+    return Ln * x * x / math.hypot(a, b)
+
+for x in (0.60, 0.85, 1.00, 1.20, 1.60):
+    print("x = %.2f   components %.6f   formula %.6f" % (x, from_components(x), closed_form(x)))
+```
+
+It prints $n = 16.667$, $R_{ac} = 135.1\ \Omega$, $Z_0 = 54.0\ \Omega$, and a tank of
+$L_r = 86.0\ \mu$H, $C_r = 29.45$ nF, $L_m = 430\ \mu$H. Those are the capstone's numbers,
+and the 430 µH is the same magnetising inductance the module 3 lab budgets its dead time
+around. The five comparison lines agree to all six printed digits — at $x = 0.60$ both
+give 1.293852, at $x = 1.20$ both give 0.933533 — so the normalised formula is the
+circuit, not a summary of it.
+
+## Why the crossing at $x = 1$ is the design anchor
+
+Look at the divider once more at $x = 1$. There $Z_s = jZ_0(1 - 1) = 0$: the series
+branch is a short. The divider is $Z_p/(Z_p + 0)$, which is 1, and nothing about $L_m$,
+$R_{ac}$ or the load appears anywhere in that argument. Every curve in the family passes
+through exactly unity at resonance, whatever the load.
+
+That single fixed point is what makes LLC design tractable. Put the nominal line at
+resonance, demand $M = 1$ there, and the turns ratio follows by inspection: a half-bridge
+presents $V_{in}/2$ to the tank and a full-bridge rectifier presents $V_o$ to the
+secondary, so $n = V_{in}/(2V_o) = 400/24 = 16.667$. The required gain at any other bus
+voltage is then $2nV_o/V_{in} = 400/V_{in}$.
+
+```python
+import math
+
+f_r, Ln = 100e3, 5.0
+V_out, n = 12.0, 16.6667
+
+def gain(x, Q):
+    a = (Ln + 1.0) * x * x - 1.0
+    b = Q * Ln * x * (x * x - 1.0)
+    return Ln * x * x / math.hypot(a, b)
+
+def peak(Q):
+    x0 = 1.001 / math.sqrt(1.0 + Ln)
+    xs = [x0 + i * (2.0 - x0) / 20000 for i in range(20001)]
+    xp = max(xs, key=lambda t: gain(t, Q))
+    return xp, gain(xp, Q)
+
+def operating_x(target, Q):
+    lo, hi = peak(Q)[0], 5.0
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if gain(mid, Q) > target else (lo, mid)
+    return 0.5 * (lo + hi)
+
+print("second resonance at %.1f kHz" % (f_r / math.sqrt(1.0 + Ln) / 1e3))
+for Q in (0.4, 0.8, 1.5):
+    xp, mp = peak(Q)
+    print("Q = %.1f   peak gain %.3f at %.1f kHz" % (Q, mp, xp * f_r / 1e3))
+for V in (350.0, 400.0, 420.0):
+    M = 2.0 * n * V_out / V
+    x = operating_x(M, 0.4)
+    print("bus %.0f V  needs M = %.3f  ->  %.1f kHz" % (V, M, x * f_r / 1e3))
+```
+
+The dropout that started this reading now has an answer. At 350 V the tank must deliver
+$M = 1.143$, and it does so at 74.8 kHz; at the 420 V top of the bus it needs 0.952 and
+runs at 113.6 kHz. The converter sweeps 74.8 kHz to 113.6 kHz and holds 12 V across the
+whole bus range, which the series-resonant version could not do at any frequency.
+
+## The mistake: spending the whole peak
+
+The same run prints a peak gain of 1.388 at 49.3 kHz for $Q = 0.4$. Against a requirement
+of 1.143 that reads like 21 per cent of headroom, and the tempting conclusion is that the
+design could be pushed — a wider line range, a smaller bulk capacitor, a longer dropout.
+
+Read the other two lines first. At $Q = 0.8$ the peak has fallen to 1.044, and at
+$Q = 1.5$ it is 1.010. The boost budget is not a property of the tank; it is a property of
+the tank *at a load*, and it collapses as the load gets heavier. A converter asked to
+ride out a dropout while also charging an output capacitor, restarting into a discharged
+load, or supplying a motor's inrush is at high $Q$ and low line simultaneously, and that
+is the corner where the peak has all but disappeared. This is why the low-line, full-load
+point is the one that sizes the tank, and why the capstone rubric checks the gain at all
+three line voltages rather than at nominal.
+
+There is a second reason not to spend the peak, and it is the one that costs hardware.
+The peak is the boundary of the inductive region. To its right the tank current lags the
+bridge voltage and module 3's zero-voltage switching works; to its left the tank is
+capacitive, the current leads, and the bridge turns on into a conducting body diode with
+its reverse recovery still in progress. Half-bridges do not usually survive that. A
+controller that chases gain by pushing frequency down does not stop at the peak — past it
+the gain *falls* as the frequency falls, so the loop sees too little output, pushes lower
+still, and drives itself into the capacitive region. Frequency control below the peak is
+positive feedback. The margin between 1.143 and 1.388 is not spare gain to be spent; it
+is the distance from a latch-up.
+
+## Where the curve stops being true
+
+Three boundaries, in the order they bite.
+
+Module 1's boundary applies to this whole family: first-harmonic analysis is optimistic
+below resonance, and the peak is the most optimistic point on the curve. A measured peak
+10 to 20 per cent under 1.388 is unremarkable, which eats most of the headroom the
+paragraph above told you not to spend anyway.
+
+At the other end, the family has a floor. As $x \to \infty$ the unloaded gain tends to
+$L_n/(1+L_n) = 0.833$, not to zero, so no amount of frequency can push the output below
+83 per cent of its resonant value when the load is light. On this 400 V design the
+highest bus needs 0.952, comfortably above the floor; on a design whose bus could reach
+480 V the requirement would be 0.833 exactly, and the converter would be unregulatable at
+no load. That is why light-load burst mode exists, and it is a specification decision
+made here, at the gain curve, not a firmware detail added later.
+
+Finally, $L_n$ is a ratio of two inductances, and $L_m$ is a gapped ferrite that drifts
+with temperature and falls as the core approaches saturation. A tank designed with no
+margin on $L_n$ is a tank whose peak moves in service.
+
+## What you are about to build
+
+The sandbox *How load reshapes a resonant curve* sweeps the damping across the family and
+gives you the three things to watch — the low-frequency end, the corner and the tail — and
+the warning that the load axis runs the opposite way in the series tank it draws. The
+derive unit inverts the series-resonant gain for $Q$, which is the same manoeuvre in an
+easier algebra. The lab *Draw the LLC gain family* then asks for five functions: the gain,
+the second resonance $1/\sqrt{1+L_n}$ at 40.8 kHz, the $Q \to 0$ envelope, the peak on a
+prescribed grid, and the bisection that turns a required gain into a frequency. That last
+one is exactly the calculation that produced 74.8 kHz above, and the capstone calls it at
+three line voltages without changing a line.
+''',
+                },
+            ],
             "title": "The gain curve, and why LLC exists",
             "summary": "A series-resonant tank can only buck, and it loses control at light load. Adding one inductor fixes both problems and creates a family of curves.",
             "concepts": [
@@ -886,6 +1411,335 @@ assert abs(_x09 - 1.3294898262328445) < 1e-9, f"expected x=1.329490 for M=0.9, g
 
         # ---- M3 -----------------------------------------------------------
         {
+            "read": [
+                {
+                    "title": "Two hundred nanocoulombs, and the window you have to move them in",
+                    "minutes": 15,
+                    "body": r'''
+Two boards on the bench, built from the same layout, the same 400 V bus, the same 430 µH
+magnetising inductance and the same 250 pF devices, both delivering 240 W at 100 kHz. The
+only difference is one line in the gate-driver configuration: one board has 300 ns of dead
+time between the two gates, the other has 100 ns.
+
+A power analyser reads 247.1 W into the first and 247.8 W into the second for the same
+240 W out. Seven hundred milliwatts, bought with nothing but a change of two hundred
+nanoseconds in gate timing. Put a differential probe on the drain of the device that is
+about to turn on and the reason is on the screen: on the 300 ns board the trace has
+reached zero and flattened before the gate rises, and on the 100 ns board the gate rises
+with about 170 V still standing on it.
+
+Seven hundred milliwatts is the mild version of this failure. Move the same converter's
+operating point a few kilohertz to the wrong side of its gain peak and the device turns on
+at the full 400 V, which costs 4.0 W. This reading is about both numbers: where they come
+from, and how to know before the board exists which one you are going to get.
+
+## The four watts
+
+Each MOSFET has an output capacitance $C_{oss}$ between drain and source, and while the
+device is off with the full rail across it, that capacitance holds
+
+$$E = \tfrac{1}{2}C_{oss}V_{in}^2 = \tfrac{1}{2}\times 250\ \text{pF}\times (400\ \text{V})^2 = 20\ \mu\text{J}$$
+
+When the gate goes high with 400 V still on the drain, the channel becomes a short across
+that capacitance. The stored energy has exactly one place to go: it is dissipated in the
+channel, in the few nanoseconds the drain takes to collapse. No inductance and no
+snubber changes this, because the loss is not in the switching *transition* — it is the
+capacitor's own energy, and shorting a charged capacitor dissipates all of it whatever
+the path.
+
+A half-bridge does that twice per switching cycle, once in each device, so the average
+power is $C_{oss}V_{in}^2f_s = 250\ \text{pF} \times 160{,}000 \times 100\ \text{kHz} =
+4.0$ W. That is the second of the two numbers from the opening. Note what it does *not*
+contain: the load. A hard-switched bridge burns those four watts delivering 240 W and
+burns the same four watts delivering 20 W, and the term grows linearly with frequency,
+which is why hard switching puts a ceiling on $f_s$ that no better silicon lifts.
+
+The first number follows from the same expression. If the node has been dragged part of
+the way down before the gate rises, only the voltage still standing on the drain gets
+dumped, so the loss falls as the square of what is left: $C_{oss}V_{rem}^2f_s$. At 167 V
+remaining that is 0.70 W, which is where the seven hundred milliwatts came from.
+
+## Turn it into a charge problem
+
+The alternative is to move the drain voltage to zero *before* the gate rises, using
+current from the tank rather than the channel. During the dead time neither device is
+conducting, and the bridge midpoint is free to be dragged by whatever current is flowing.
+
+Two capacitances sit on that node: the one in the device turning off, which must charge
+from 0 to $V_{in}$, and the one in the device about to turn on, which must discharge from
+$V_{in}$ to 0. Each costs $C_{oss}V_{in}$, so the transition needs
+
+$$Q = 2C_{oss}V_{in} = 2 \times 250\ \text{pF} \times 400\ \text{V} = 200\ \text{nC}$$
+
+The derive unit *Sizing the magnetising inductance for ZVS* walks this same budget, and
+the blanks exercise *The charge budget that ZVS really is* makes you assemble it line by
+line. It is worth being exact about which capacitance goes in here: anything else across
+the bridge midpoint adds to $Q$. A snubber capacitor fitted to slow the edge and quieten
+the board makes zero-voltage switching *harder*, not easier, because it enlarges the
+charge the tank has to move in the same window.
+
+## The current that has to move it
+
+At the instant one device stops conducting, what is flowing in the primary? At resonance
+the primary current is the load-carrying sinusoid plus the triangular magnetising
+current, and the sinusoid is in phase with the bridge voltage — so at the end of a half
+cycle it passes through zero. All that is left is the magnetising current, and it is at
+its peak exactly then. That is the coincidence the topology is built on: the current
+available for the transition is at a maximum at the moment the transition happens, and it
+does not shrink when the load is removed, because it never depended on the load.
+
+Across $L_m$ sits $V_{in}/2$ for each half period $T_s/2$, so the current ramps by
+$(V_{in}/2)(T_s/2)/L_m$ peak to peak, and the triangle is symmetric about zero:
+
+$$I_m = \frac{V_{in}T_s}{8L_m} = \frac{400}{8 \times 430\ \mu\text{H} \times 100\ \text{kHz}} = 1.163\ \text{A}$$
+
+Two hundred nanocoulombs at 1.163 A takes 172 ns. Three hundred nanoseconds of dead time
+is enough, with 74 per cent to spare. One hundred nanoseconds delivers 116 nC, which is
+58 per cent of the swing, so 167 V is still standing on the drain when the gate rises —
+and $C_{oss} \times 167^2 \times 100$ kHz is the 0.70 W the analyser saw.
+
+## The line voltages, and which one is binding
+
+Setting $I_mt_d = 2C_{oss}V_{in}$ and solving gives the module's headline result,
+$L_m \le t_dT_s/(16C_{oss})$ — 750 µH here — with $V_{in}$ cancelled out of both sides.
+It cancels because the charge to be moved and the current available to move it are both
+proportional to the rail. That is a genuinely useful invariance, and it is also the thing
+that most often gets over-read, so run the budget at the three line voltages of module 2
+with the switching frequency its bisection put alongside each one.
+
+```python
+import math
+
+C_oss = 250e-12       # F, one device
+L_m = 430e-6          # H, the tank of module 2
+t_d = 300e-9          # s, the dead time on the board
+
+# bus voltage and the switching frequency module 2's bisection puts with it
+points = [(350.0, 74.8e3), (400.0, 100.0e3), (420.0, 113.6e3)]
+for V_in, f_s in points:
+    Q_need = 2.0 * C_oss * V_in                  # both devices, full rail
+    I_m = V_in / (8.0 * L_m * f_s)               # peak of the triangle
+    t_need = Q_need / I_m
+    print("%.0f V at %5.1f kHz:  %5.1f nC needs %.4f A for %5.1f ns  "
+          "-> margin %.2f" % (V_in, f_s / 1e3, Q_need * 1e9, I_m, t_need * 1e9,
+                              t_d / t_need))
+
+# the second board: the same tank, the dead time cut to 100 ns
+I_m = 400.0 / (8.0 * L_m * 100e3)
+left = 400.0 - I_m * 100e-9 / (2.0 * C_oss)
+print("100 ns leaves %.0f V on the drain, costing %.2f W" % (left, C_oss * left ** 2 * 100e3))
+print("L_m limit at 100 kHz: %.0f uH" % (t_d / (16.0 * C_oss * 100e3) * 1e6))
+print("hard turn-on would cost %.1f W" % (C_oss * 400.0 ** 2 * 100e3))
+print("parasitic swing (40 nH): %.1f ns" % ((math.pi / 2) * math.sqrt(40e-9 * C_oss) * 1e9))
+```
+
+At 350 V the transition needs 128.7 ns and the margin is 2.33. At 400 V it needs 172.0 ns
+and the margin is 1.74. At 420 V it needs 195.4 ns and the margin has fallen to 1.54. The
+rail did cancel — but $T_s$ did not, and in a frequency-controlled converter $T_s$ moves
+with the line. High line runs fastest, the volt-second product across $L_m$ per half cycle
+is smallest there, and the magnetising current comes out at 1.075 A instead of 1.163 A
+while the charge to be moved has grown to 210 nC. Both terms move the wrong way at once.
+The invariance is real and it is about the *form* of the condition, not about the
+operating point: write $L_m \le t_dT_s/(16C_{oss})$ and you still have to ask which $T_s$.
+
+The block also reproduces the two boards from the opening — 167 V left on the drain at
+100 ns, costing 0.70 W — and the 750 µH ceiling on $L_m$ that the derivation gives at
+100 kHz. Its last line puts the transition in proportion. The parasitic loop — 40 nH of layout
+inductance with the same 250 pF — rings with a quarter period of 5.0 ns, which is what the
+sandbox *What a transition actually looks like* reports and draws. The charge budget needs
+172 ns, thirty-four times longer. The dead time in a resonant converter is not set by how
+fast the node *can* move; it is set by how little current there is to move it with.
+
+## The mistake, and why it is tempting
+
+The mistake is checking zero-voltage switching at nominal line and stopping. It is
+tempting for two good reasons and one bad one. The good reasons: nominal is where the
+tank was synthesised, where the gain is exactly 1 and where every other number in the
+design was computed. The bad one: the derivation *told you* the rail cancels, and it is
+an easy step from "the condition does not contain $V_{in}$" to "the condition does not
+depend on the operating point". A design verified only at 400 V has a margin of 1.74 on
+paper and 1.54 where it actually has to hold, and that difference is what a 20 per cent
+tolerance on $L_m$ and a hot core eat for lunch.
+
+The related mistake in the other direction is treating dead time as shoot-through
+protection to be minimised. In a hard-switched bridge that instinct is right and dead time
+is dead loss. Here it is a design variable with a floor set by the charge budget and a
+ceiling set by conduction: raising the 300 ns to 900 ns buys nothing at all, because the
+node reached zero at 172 ns and sat there, while nine hundred nanoseconds out of a ten
+microsecond period is nine per cent of the cycle spent transferring no power, and
+eventually the magnetising current — still ramping — begins to pull the midpoint back
+down again.
+
+## Where the model stops holding
+
+The weakest assumption is that $C_{oss}$ is a number. It is not; it is a strong function
+of drain voltage, and in a superjunction device it can fall by more than an order of
+magnitude between 25 V and 400 V. A datasheet quoting 1500 pF at 25 V and 90 pF at 400 V
+is describing the same part, and neither figure belongs in the charge budget. What belongs
+there is the charge itself: $Q_{oss}$ at the rail, integrated over the sweep, usually
+published directly or as a charge-equivalent capacitance $C_{o(tr)} = Q_{oss}/V_{in}$.
+Substituting the small-signal value at either end of the range gets the answer wrong by a
+factor, in the direction that depends on which end you picked.
+
+The second assumption is that the magnetising current is the only current, which is exact
+only at resonance. Above resonance the load current has not returned to zero when the
+transition starts and it adds to the available charge, so operation above $f_r$ has extra
+margin the model does not credit it with. Below resonance it can subtract.
+
+Third, and most consequential, the charge budget is a magnitude condition and says nothing
+about sign. Current flowing the wrong way through the node drives the midpoint *away* from
+the rail it should be heading for. The tank must be inductive — operating to the right of
+the gain peak from module 2 — so the current lags the bridge voltage and is still flowing
+in the direction of the previous half cycle when the devices open. A design that closes
+the charge budget with margin and sits below the peak hard-switches anyway, and does it
+into a conducting body diode, which is worse than hard-switching a discharged node.
+Zero-voltage switching is two conditions, and this module's arithmetic settles only one of
+them.
+
+Finally, the midpoint carries more than two $C_{oss}$: transformer interwinding
+capacitance and the reflected capacitance of the secondary rectifier are on that node too.
+They are usually a minor addition, and they are always an addition, never a subtraction.
+
+## What you are about to build
+
+The sandbox draws a single transition and reports the ring frequency and the quarter
+period, and stepping its dead time from 0 to 10 ns turns the trace from amber to green —
+that colour change is the entire economic case for the topology. The derive unit closes
+the algebra above, ending on the observation about $V_{in}$ that this reading then tests
+at three line voltages. The blanks exercise assembles the inequality from four fragments.
+The lab *Close the zero-voltage switching budget* then asks for six functions, including a
+`zvs_ok` that must compare *charges* rather than currents so the boundary case lands
+exactly on `True`, and it checks the 430 µH design against the 750 µH limit, a 900 µH tank
+that fails, and the same tank with 100 ns of dead time — the second board from the top of
+this reading.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "The charge, the current and the window",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "The condition $L_m \\le t_dT_s/(16C_{oss})$ contains no $V_{in}$ at all. Why not?",
+                        "opts": [
+                            "The charge to be moved and the current that moves it both scale with the rail",
+                            "The rail divides out only at resonance, where $L_m$ sees exactly half of it",
+                            "It was cancelled when the two device capacitances were summed into one $C_{oss}$",
+                            "It never entered: the magnetising current is fixed by the core, not by the input",
+                        ],
+                        "a": 0,
+                        "why": r'''
+The transition needs $2C_{oss}V_{in}$ of charge and the magnetising peak is
+$V_{in}T_s/(8L_m)$; set one against the other and $V_{in}$ appears on both sides. The
+clamping of $L_m$ to $V_{in}/2$ is what makes the current proportional to the rail, so it
+is part of the reason rather than a restriction on it — the cancellation is not something
+that happens only at resonance. Summing the two capacitances produced the factor of two in
+the charge and touched no voltage. And the magnetising current is emphatically set by the
+input: it is $V_{in}/2$ across $L_m$ for half a period, which is why it scales with the
+line at fixed frequency.
+''',
+                    },
+                    {
+                        "q": "A frequency-controlled LLC runs 74.8 kHz at 350 V and 113.6 kHz at 420 V. Which line voltage is the hard case for ZVS?",
+                        "opts": [
+                            "High line, where the period is shortest so the magnetising current is smallest",
+                            "Low line, where the smaller rail leaves less energy in the tank to move the node",
+                            "Nominal line, since the tank was synthesised there and the rest is a perturbation",
+                            "None: the rail cancels, so every operating point is exactly as hard",
+                        ],
+                        "a": 0,
+                        "why": r'''
+$I_m = V_{in}T_s/(8L_m)$, so the current follows the volt-second product per half cycle.
+At 420 V and 113.6 kHz that product is smaller than at 400 V and 100 kHz, and the charge
+required has grown to 210 nC, so the margin falls from 1.74 to 1.54. Low line is the
+easiest point, not the hardest — the current rises to 1.36 A while only 175 nC is needed.
+Nominal is where the design was done and is exactly why the check gets skipped. And the
+rail cancelling is a statement about the *form* of the inequality; $T_s$ survives it, and
+$T_s$ is what the controller moves.
+''',
+                    },
+                    {
+                        "q": "Which current actually swings the bridge midpoint during the dead time?",
+                        "opts": [
+                            "The magnetising current, which sits at its peak the moment the devices open",
+                            "The whole primary current, sinusoid and triangle together, since both flow there",
+                            "The output filter inductor current, reflected back through the transformer",
+                            "Reverse-recovery charge from the body diode as the device turns off",
+                        ],
+                        "a": 0,
+                        "why": r'''
+At resonance the load-carrying sinusoid is in phase with the bridge voltage, so it passes
+through zero exactly when the half cycle ends, and the triangle is at its peak there. What
+is left is $I_m$, and its independence from load is what makes ZVS hold at 20 W as well as
+at 240 W. Counting the sinusoid too would credit the transition with current that is not
+there at that instant, which is the error that makes a light-load failure look impossible
+on paper. An LLC has no output filter inductor — the secondary feeds a capacitor
+directly. And reverse recovery is a consequence of getting this wrong, not a source of
+charge to rely on.
+''',
+                    },
+                    {
+                        "q": "Your budget says the node needs 172 ns and the dead time is already 300 ns. What does raising it to 900 ns achieve?",
+                        "opts": [
+                            "Nothing for the transition, and it costs conduction time the cycle needed",
+                            "Proportionally more margin, since delivered charge grows with the time allowed",
+                            "A slower and softer edge, which lowers the interference the transition radiates",
+                            "Insurance against shoot-through when a hot driver turns off slowly",
+                        ],
+                        "a": 0,
+                        "why": r'''
+The drain reaches zero at 172 ns and stays there; the extra 728 ns changes nothing about
+the transition, which is what the sandbox shows when its dead-time slider passes the swing
+time and the trace stops responding. What it does change is the ledger: 900 ns out of a
+10 µs period is nine per cent of the cycle transferring no power, and the magnetising
+current keeps ramping and eventually drags the midpoint back. Delivered charge does grow
+with time, but only until the node arrives — after that there is nowhere left to put it.
+The edge shape is set by the current and the capacitance, not by how long you wait. And
+shoot-through protection is real but is measured in tens of nanoseconds, not hundreds.
+''',
+                    },
+                    {
+                        "q": "A datasheet gives $C_{oss}$ as 1500 pF at 25 V and 90 pF at 400 V. Which value belongs in the charge budget?",
+                        "opts": [
+                            "Neither: what the budget wants is $Q_{oss}$ at the rail, divided by the rail",
+                            "The 400 V value, because that is the voltage the device stands off when off",
+                            "The 25 V value, since most of the sweep happens down where the node is low",
+                            "The average of the two, because the node traverses the whole range between them",
+                        ],
+                        "a": 0,
+                        "why": r'''
+$C_{oss}$ is a small-signal slope at one bias, and the budget is about charge, so what is
+wanted is $Q_{oss} = \int C_{oss}\,dV$ across the rail — published directly on most
+datasheets, or as the charge-equivalent $C_{o(tr)} = Q_{oss}/V_{in}$. Taking the 400 V
+figure understates the charge badly, because the capacitance is enormous over the low-
+voltage part of the sweep. Taking the 25 V figure overstates it for the mirror-image
+reason, and while that error is at least in the safe direction it sizes $L_m$ far smaller
+than it needs to be and pays for it in circulating current. An average of two
+small-signal values is not an integral of anything.
+''',
+                    },
+                    {
+                        "q": "The charge budget closes with 50 per cent margin, yet the bridge still turns on hard. What is the likely cause?",
+                        "opts": [
+                            "The tank is below the gain peak, so the current leads and moves the node the wrong way",
+                            "The magnetising inductance came out under its design value, giving too much current",
+                            "The dead time exceeds the swing time, so the midpoint arrives before the gate rises",
+                            "The switching frequency is above resonance, where the tank current lags the bridge voltage",
+                        ],
+                        "a": 0,
+                        "why": r'''
+The budget is a magnitude condition and says nothing about sign. On the capacitive side of
+the gain peak the current leads the bridge voltage, so at the switching instant it is
+already flowing the other way and drives the midpoint away from the rail it should reach —
+and the turn-on then happens into a conducting body diode with recovery under way, which
+is worse than hard-switching a plain capacitance. Too *much* magnetising current only
+shortens the transition. A dead time longer than the swing needs is the intended
+condition, not a fault. And lagging current above resonance is precisely the region the
+controller is steered into.
+''',
+                    },
+                ],
+            },
             "title": "Zero-voltage switching and the dead-time condition",
             "summary": "The whole point of the topology is that the drain is already at zero when the gate goes high. That is not automatic; it is a charge budget you have to meet.",
             "concepts": [
@@ -1264,6 +2118,196 @@ assert abs(hard_switching_loss(250e-12, 800.0, 100e3) - 16.0) < 1e-12, \
 
         # ---- M4 -----------------------------------------------------------
         {
+            "read": [
+                {
+                    "title": "Seven watts, and not one of them where you expected",
+                    "minutes": 15,
+                    "body": r'''
+The converter is finished: 400 V in, 12 V out, 100 kHz, the 86 µH and 29.45 nF tank of
+module 2 with its 430 µH magnetising inductance, 300 ns of dead time, and zero-voltage
+switching confirmed on the bench at all three line voltages. Put a power analyser on both
+ends and load it to 20 A.
+
+It reads 247.13 W in and 240.00 W out. Seven and a bit watts of loss, 97.11 per cent.
+Now turn the load down to 4 A. The output is 48.00 W, a fifth of what it was, and the
+input reads 49.71 W. The loss has gone from 7.13 W to 1.71 W — a factor of 4.2, not a
+factor of five — and the efficiency has fallen to 96.56 per cent.
+
+Two questions come out of that pair of readings, and they have the same answer. Where are
+the seven watts, and why did they not scale with the load?
+
+## The four terms
+
+Build the budget from the parts rather than from a figure of merit. The lab *Build an
+honest loss budget* asks for exactly these functions, and this is the arithmetic it
+checks.
+
+**The primary carries two currents at once.** One is the load-carrying sinusoid, of peak
+$I_p = \pi P_{out}/V_{in} = 1.885$ A at full load, which follows from equating the output
+power to the product of the fundamental RMS voltage $\sqrt2 V_{in}/\pi$ and the
+fundamental RMS current at resonance. The other is the magnetising triangle of peak
+$I_m = 1.163$ A from module 3, which delivers nothing.
+
+Their RMS values do not add. Over a quarter period the triangle rises linearly,
+$i(t) = I_m t/T_4$, so its mean square is
+$\frac{1}{T_4}\int_0^{T_4}I_m^2 (t/T_4)^2\,dt = I_m^2/3$ and its RMS is $I_m/\sqrt3$,
+against $I_p/\sqrt2$ for the sinusoid. At resonance the load current is in phase with the
+bridge voltage while the magnetising current is the integral of a square wave in phase
+with it — so the triangle's harmonics are all a quarter cycle away from the sinusoid, and
+every cross term in the product integrates to zero. The mean squares add:
+
+$$I_{rms}^2 = \frac{I_p^2}{2} + \frac{I_m^2}{3} = 1.777 + 0.451 = 2.227\ \text{A}^2$$
+
+which is 1.492 A RMS. Both devices and the primary winding see it, so the loss is
+$(R_{ds} + R_w)I_{rms}^2 = 0.4 \times 2.227 = 0.891$ W.
+
+**The secondary pays for its own waveform.** The secondary current is a rectified
+sinusoid. Its average is what the load draws, $I_o = 2I_{pk}/\pi$, but its heating is set
+by its RMS, $I_{pk}/\sqrt2$. The ratio of the two is
+
+$$\frac{I_{rms}}{I_o} = \frac{I_{pk}/\sqrt2}{2I_{pk}/\pi} = \frac{\pi}{2\sqrt2} = 1.1107$$
+
+so the same average current dissipates $1.1107^2 = 1.234$ times what a rectangular
+waveform would. With two synchronous rectifiers of 5 mΩ in the path at all times,
+$2R_{sr}(1.1107 \times 20)^2 = 4.935$ W, against 4.000 W for a rectangle of the same
+average. Nine hundred milliwatts is the price of the sinusoidal shape.
+
+**The core does not care about the load.** Steinmetz gives
+$P = kf_s^{\alpha}B^{\beta}V_e$, and with the specification's ferrite — $k = 3.2$,
+$\alpha = 1.46$, $\beta = 2.75$ — at 100 kHz, 0.1 T and 11.5 cm³ that is 1.306 W. The
+flux swing is set by the volt-seconds the primary applies, not by the current the
+secondary draws, so this term is the same at 20 A and at 4 A.
+
+**The switching term is zero,** because module 3 closed the charge budget. Had it not,
+$C_{oss}V_{in}^2f_s$ would add 4.000 W.
+
+```python
+import math
+
+V_in, V_out = 400.0, 12.0
+R_ds, R_w, R_sr = 0.15, 0.25, 0.005
+I_m = 1.1627906976744187          # magnetising peak, fixed by the 430 uH tank
+form = math.pi / (2.0 * math.sqrt(2.0))
+
+for I_out in (20.0, 4.0):
+    P_out = V_out * I_out
+    I_p = math.pi * P_out / V_in                       # load-carrying peak
+    ms = I_p * I_p / 2.0 + I_m * I_m / 3.0             # mean square of the primary
+    terms = {
+        "primary": (R_ds + R_w) * ms,
+        "secondary": 2.0 * R_sr * (form * I_out) ** 2,
+        "core": 3.2 * 100e3 ** 1.46 * 0.1 ** 2.75 * 11.5e-6,
+        "switching": 0.0,
+    }
+    total = sum(terms.values())
+    print("%5.0f W out:  I_p %.3f A, primary rms %.3f A" % (P_out, I_p, math.sqrt(ms)))
+    for k, v in terms.items():
+        print("   %-10s %6.4f W  (%4.1f%% of the loss)" % (k, v, 100.0 * v / total))
+    print("   total %.4f W   eta %.4f   circulating share of primary %.1f%%"
+          % (total, P_out / (P_out + total), 100.0 * (I_m * I_m / 3.0) / ms))
+```
+
+## Where the seven watts actually are
+
+At full load the secondary is 4.935 W of 7.131 W — **69 per cent of the entire loss**. The
+core is 18.3 per cent, the primary conduction 12.5 per cent, and the term that the
+whole of module 3 was written to remove is nothing at all. Rectifying 20 A at 12 V costs
+five and a half times more than conducting 1.5 A at 400 V, which is the general shape of
+every low-voltage high-current supply: the loss is on the side with the current, and no
+amount of work on the primary moves it. If this design needs to reach 98 per cent, the
+lever is a third rectifier in parallel or a lower $R_{sr}$, not a better primary MOSFET.
+
+At a fifth of the load the ranking inverts. The secondary term falls by a factor of 25
+along with $I_o^2$, to 0.197 W, and the core term does not fall at all — it is 76 per cent
+of the light-load budget. Add the 0.144 W of gate drive that the capstone's fifth term
+counts, $2Q_gV_gf_s$, which is also constant, and roughly four fifths of the light-load
+loss is independent of the output. That is the mechanism behind the efficiency curve: not
+that anything got worse at light load, but that most of the budget never got better.
+
+The last column tells the primary's own version of the same story. The circulating share
+of the primary mean square is 20.2 per cent at full load and 86.4 per cent at 48 W, because
+$I_p$ shrinks with the output and $I_m$ does not.
+
+## What zero-voltage switching cost, in watts
+
+The magnetising current is bought deliberately, so it is fair to ask the price. Its share
+of the primary conduction loss is $(R_{ds}+R_w)I_m^2/3 = 0.180$ W. What it removes is
+$C_{oss}V_{in}^2f_s = 4.000$ W. A hundred and eighty milliwatts to avoid four watts is a
+return of better than twenty to one, and that ratio, not the efficiency figure, is the
+actual argument for the topology.
+
+It also settles the shape of the trade with module 3. Raising $L_m$ to its 750 µH ceiling
+would drop $I_m$ to 0.667 A and the circulating term to 0.059 W — a saving of 0.12 W out
+of 7.13, which moves the efficiency by five hundredths of a percentage point — while
+spending the whole of the margin that keeps the 4.000 W away. The trade is lopsided, which is why a
+design sits comfortably below the ceiling rather than against it. The instinct that a
+larger $L_m$ is the route to a more efficient converter comes from thinking about the
+circulating current as waste; the arithmetic says it is one of the cheapest things in the
+budget.
+
+## The mistake, and why it is tempting
+
+The mistake is designing to, and quoting, a single efficiency number at full load. It is
+tempting for the best of reasons: it is the point the specification names, the point the
+thermal design has to survive, the easiest point to measure accurately, and the number
+that goes on the datasheet. It is also the point at which this converter's loss budget is
+least representative of how it will spend its life. A supply in a desktop machine or a
+telecom shelf sits at 10 to 30 per cent load most of the time, which is why 80 PLUS and
+the ErP directive weight several load points rather than one, and why the sandbox *The
+loss the transition either does or does not cost* keeps returning to the fact that soft
+switching relocates loss into terms that do not scale.
+
+The second-order version of the same mistake is reading the drop from 97.11 to 96.56 per
+cent as a small number. In watts of *waste* it is a rise from 2.9 per cent of the output to
+3.4 per cent — and in a fanless enclosure the relevant quantity is neither, it is the
+1.71 W that has to leave the box while the airflow from a loaded fan is not there.
+
+## Where these numbers stop being true
+
+Every resistance in the budget was taken at room temperature from a datasheet typical.
+A silicon MOSFET's $R_{ds(on)}$ roughly doubles between 25 °C and 125 °C, so the 0.891 W
+primary term is closer to 1.6 W on a hot board, and the 4.935 W secondary term moves the
+same way. A budget built from 25 °C typicals is not conservative; it is wrong by nearly a
+factor of two on the two largest terms.
+
+The 0.25 Ω of primary winding resistance is a DC value. At 100 kHz skin and proximity
+effects raise the effective AC resistance of an ordinary solid-wire winding by a factor of
+two to five, which is why transformers at this frequency are wound with litz or with
+interleaved foil.
+
+The Steinmetz coefficients are a fit over a bounded range of frequency, flux and
+temperature, taken under sinusoidal excitation. An LLC transformer sees neither a sinusoid
+nor a fixed temperature, and extrapolating a fit is not a calculation. Treat 1.306 W as an
+estimate with a wide bar on it, and note that the exponent argument still holds where the
+fit does: with $B \propto 1/f_s$ at fixed volt-seconds, the density goes as
+$f_s^{\alpha-\beta}$, so doubling to 200 kHz with the flux halved gives 0.534 W — core
+loss falls as the frequency rises, which is the opposite of the usual intuition.
+
+The quadrature addition is exact at resonance and only approximate away from it: off
+resonance the load current acquires a phase and the cross term stops integrating to zero,
+so the primary RMS is slightly higher than the formula says at 74.8 kHz and at 113.6 kHz.
+
+Finally, the budget has four terms and a real converter has a dozen. Body-diode conduction
+during the dead time, synchronous-rectifier gate drive and its own dead-time conduction,
+output capacitor ESR, snubbers, the bias supply and the controller are all missing here,
+and together they are commonly another half to one watt in a supply this size. A
+four-term budget that lands on 97.11 per cent should be read as predicting something
+closer to 96.7, and the gap is not error — it is the terms nobody wrote down.
+
+## What you are about to build
+
+The derive unit *The price of circulating current* takes the triangle RMS, the quadrature
+sum and the Steinmetz exponent to the same conclusions this reading reaches numerically.
+The sandbox reads a single transition with the loss ledger in mind rather than the
+waveform, and its last note — that a 1 nH loop rings at 318 MHz — is the reminder that the
+loss lives at 100 kHz while the interference lives three decades above it. The quiz *Four
+honest terms* checks the two RMS constants and the quadrature rule, which are the pieces
+most often mixed up. And the lab asks for the six functions that produce the table above,
+ending with the light-load comparison whose whole point is the difference between the two
+efficiencies rather than either one of them.
+''',
+                },
+            ],
             "title": "Where the efficiency actually goes",
             "summary": "Zero-voltage switching does not delete loss, it relocates it. A budget with four honest terms tells you more than any single figure of merit.",
             "concepts": [
