@@ -19,6 +19,23 @@
  * operators an EE curriculum uses, matrices, and \text. Anything outside it is
  * shown as its own source in monospace rather than rendered wrongly — a reader can
  * always see what was written, and it is obvious that it was not understood.
+ *
+ * That fallback was firing on 1484 of the 59994 maths spans in the catalogue, spread
+ * over 50 courses, and not one of them was a mistake: \top, \{, \|, \binom, \ , the
+ * long arrows, the logic connectives — the notation a linear algebra, a control or a
+ * discrete maths unit is simply written in. `\|a\| = \sqrt{a_1^2 + \cdots}` reaching a
+ * learner as its own source is the renderer's defect, not the author's. So the subset
+ * below is wider: delimiters and their sizing prefixes, the script and double-struck
+ * alphabets, binomials, cases, the spacing commands.
+ *
+ * The rule for widening it: a command earns a place here only if MathML can say what
+ * it means, or can say something honestly close — and where it is close rather than
+ * exact (a \big( that does not size, a \boxed that draws no box) the comment at the
+ * case says so. Nothing is mapped to a symbol that would read as different mathematics.
+ *
+ * The fallback stays, and stays load-bearing: a typo is also a command outside the
+ * subset, and \frobnicate showing as \frobnicate is how a reader learns the source is
+ * wrong instead of reading a formula with a silent hole in it.
  */
 const MathML = (function () {
 
@@ -43,15 +60,105 @@ const MathML = (function () {
     angle: '∠', perp: '⊥', parallel: '∥', degree: '°', ldots: '…', dots: '…',
     cdots: '⋯', vdots: '⋮', ddots: '⋱', prime: '′', ell: 'ℓ', hbar: 'ℏ',
     Re: 'ℜ', Im: 'ℑ', circ: '∘', oplus: '⊕', otimes: '⊗', langle: '⟨', rangle: '⟩',
+    /* the long arrows. A derivation writes \Longrightarrow between two lines of algebra
+       and \Rightarrow inside one; they are different glyphs and the difference is the
+       author's, so both are here rather than one standing in for the other. */
+    Longrightarrow: '⟹', implies: '⟹', Longleftarrow: '⟸', impliedby: '⟸',
+    Longleftrightarrow: '⟺', iff: '⟺', longrightarrow: '⟶', longleftarrow: '⟵',
+    longleftrightarrow: '⟷', hookrightarrow: '↪', gets: '←',
+    /* logic, for the discrete maths and verification units */
+    land: '∧', wedge: '∧', lor: '∨', vee: '∨', lnot: '¬', neg: '¬',
+    models: '⊨', vDash: '⊨', vdash: '⊢', mid: '∣', nmid: '∤',
+    /* order and set relations */
+    prec: '≺', preceq: '⪯', succ: '≻', succeq: '⪰', lesssim: '≲', gtrsim: '≳',
+    supset: '⊃', supseteq: '⊇', subsetneq: '⊊', supsetneq: '⊋', setminus: '∖',
+    emptyset: '∅', varnothing: '∅', ni: '∋', cong: '≅', asymp: '≍', triangleq: '≜',
+    odot: '⊙', ominus: '⊖', bullet: '∙', sqcup: '⊔', sqcap: '⊓',
   };
 
   /* big operators take limits above and below in display mode */
   const BIG = { sum: '∑', prod: '∏', int: '∫', oint: '∮', iint: '∬', lim: 'lim',
-                bigcup: '⋃', bigcap: '⋂', max: 'max', min: 'min', sup: 'sup', inf: 'inf' };
+                bigcup: '⋃', bigcap: '⋂', max: 'max', min: 'min', sup: 'sup', inf: 'inf',
+                bigoplus: '⨁', bigotimes: '⨂', bigwedge: '⋀', bigvee: '⋁', bigsqcup: '⨆' };
 
   const FUNCS = ['sin', 'cos', 'tan', 'sec', 'csc', 'cot', 'sinh', 'cosh', 'tanh',
     'arcsin', 'arccos', 'arctan', 'log', 'ln', 'exp', 'det', 'dim', 'ker', 'deg',
-    'arg', 'gcd', 'mod', 'tr', 'rank', 'diag', 'sgn'];
+    'arg', 'gcd', 'mod', 'tr', 'rank', 'diag', 'sgn', 'Pr'];
+
+  /* Symbols TeX classes as Ord rather than as operators: they carry no operator
+     spacing, which is the whole point of the distinction here. \top is the common
+     one — it is nearly always a transpose, and A^⊤ with a thick space on each side
+     of the ⊤ is not what the author wrote. */
+  const ORD = {
+    top: '⊤', bot: '⊥', blacksquare: '■', square: '□', dagger: '†', ddagger: '‡',
+    aleph: 'ℵ', spadesuit: '♠', heartsuit: '♡', clubsuit: '♣', diamondsuit: '♦',
+    /* the characters LaTeX makes you escape because they mean something to LaTeX */
+    '%': '%', '&': '&', '#': '#', '$': '$', '_': '_',
+  };
+
+  /* Delimiters, keyed by the command that names one. Both a delimiter on its own
+     (\{3,5\}, \lceil n \rceil) and the token that follows \left, \right or a \big
+     prefix resolve through this table: before it, \left\langle put the *word*
+     "langle" on the screen, because the code printed whatever the token held. */
+  const DELIM = {
+    '{': '{', '}': '}', '|': '‖',
+    vert: '|', Vert: '‖', lvert: '|', rvert: '|', lVert: '‖', rVert: '‖',
+    langle: '⟨', rangle: '⟩', lceil: '⌈', rceil: '⌉', lfloor: '⌊', rfloor: '⌋',
+    backslash: '\\', uparrow: '↑', downarrow: '↓', updownarrow: '↕',
+  };
+
+  /* \big \Big \bigg \Bigg and their l/r/m forms, in the sizes KaTeX uses. TeX fixes
+     the delimiter's height; MathML says that with minsize/maxsize on a stretchy <mo>,
+     which a browser either honours or ignores — and ignoring it leaves an ordinary
+     unstretched delimiter, which is the character the author asked for either way. */
+  const SIZED = { big: '1.2em', Big: '1.8em', bigg: '2.4em', Bigg: '3em' };
+  const SIZED_RE = /^([bB]igg?)[lrm]?$/;
+
+  /* \not applied to a relation. Only the relations that have a single negated
+     codepoint are here: composing U+0338 onto an arbitrary glyph is a lottery in a
+     fallback font, and a negation that renders as its unnegated relation is the one
+     failure mode this file must never have. Anything else falls back. */
+  const NEGATED = {
+    '=': '≠', '<': '≮', '>': '≯', equiv: '≢', in: '∉', ni: '∌', subset: '⊄',
+    subseteq: '⊈', supset: '⊅', supseteq: '⊉', exists: '∄', sim: '≁', approx: '≉',
+    le: '≰', leq: '≰', ge: '≱', geq: '≱', mid: '∤', parallel: '∦', prec: '⊀', succ: '⊁',
+  };
+
+  /* Unicode's Mathematical Alphanumeric Symbols, reached by codepoint arithmetic.
+     MathML Core kept only mathvariant="normal" — script, double-struck, bold and
+     sans-serif were dropped from the attribute and are ignored by the browsers this
+     app runs in — so a \mathcal{C} that is to look like one has to *be* U+1D49E. The
+     style rides in the character and no font has to be shipped to get it.
+     The holes are the letters Unicode had already encoded as letterlike symbols years
+     before this block (ℬ, ℝ, ℯ …); the codepoints they left empty are unassigned, and
+     arithmetic that ignores them draws a box. */
+  const ALPHABET = {
+    script: { A: 0x1D49C, a: 0x1D4B6, hole: { B: 'ℬ', E: 'ℰ', F: 'ℱ', H: 'ℋ', I: 'ℐ',
+                                              L: 'ℒ', M: 'ℳ', R: 'ℛ', e: 'ℯ', g: 'ℊ', o: 'ℴ' } },
+    double: { A: 0x1D538, a: 0x1D552, zero: 0x1D7D8,
+              hole: { C: 'ℂ', H: 'ℍ', N: 'ℕ', P: 'ℙ', Q: 'ℚ', R: 'ℝ', Z: 'ℤ' } },
+    bold: { A: 0x1D400, a: 0x1D41A, zero: 0x1D7CE, hole: {} },
+    italic: { A: 0x1D434, a: 0x1D44E, hole: { h: 'ℎ' } },
+    sans: { A: 0x1D5A0, a: 0x1D5BA, zero: 0x1D7E2, hole: {} },
+    mono: { A: 0x1D670, a: 0x1D68A, zero: 0x1D7F6, hole: {} },
+  };
+  /* which alphabet each font command asks for; \mathrm and \operatorname ask for none */
+  const ALPHA_OF = { mathcal: 'script', mathscr: 'script', mathbb: 'double',
+    mathbf: 'bold', mathit: 'italic', mathsf: 'sans', mathtt: 'mono', texttt: 'mono' };
+
+  function alphabet(txt, style) {
+    const tbl = ALPHABET[style];
+    let out = '';
+    for (let k = 0; k < txt.length; k++) {
+      const ch = txt.charAt(k);
+      if (typeof tbl.hole[ch] === 'string') { out += tbl.hole[ch]; continue; }
+      if (ch >= 'A' && ch <= 'Z') out += String.fromCodePoint(tbl.A + ch.charCodeAt(0) - 65);
+      else if (ch >= 'a' && ch <= 'z') out += String.fromCodePoint(tbl.a + ch.charCodeAt(0) - 97);
+      else if (tbl.zero && ch >= '0' && ch <= '9') out += String.fromCodePoint(tbl.zero + ch.charCodeAt(0) - 48);
+      else out += ch;             /* punctuation, and digits in the blocks that have none */
+    }
+    return out;
+  }
 
   const ACCENT = { hat: '^', bar: '‾', vec: '→', dot: '˙', ddot: '¨',
                    tilde: '~', widehat: '^', overline: '‾' };
@@ -59,33 +166,42 @@ const MathML = (function () {
   const MATRIX_FENCE = {
     bmatrix: ['[', ']'], pmatrix: ['(', ')'], vmatrix: ['|', '|'],
     Bmatrix: ['{', '}'], Vmatrix: '‖‖'.split(''), matrix: ['', ''],
+    /* cases is a matrix with one fence and no closing one — a piecewise definition is
+       the shape half the algorithms in the CS courses are stated in */
+    cases: ['{', ''],
   };
 
   function esc2(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  /* ---- tokens ---- */
+  /* ---- tokens ----
+     Whitespace is dropped, because in mathematics it means nothing — except inside
+     \text{...}, where it is the space between two words. `\text{net source}` was
+     reaching the screen as "netsource". So a token records whether whitespace stood
+     in front of it, and the one place that needs the spaces back can put them back. */
   function tokenize(src) {
     const out = [];
     let i = 0;
+    let gap = false;
+    const push = function (tok) { if (gap) tok.ws = true; gap = false; out.push(tok); };
     while (i < src.length) {
       const c = src[i];
-      if (/\s/.test(c)) { i++; continue; }
+      if (/\s/.test(c)) { gap = true; i++; continue; }
       if (c === '\\') {
         const m = /^\\([A-Za-z]+|.)/.exec(src.slice(i));
         if (!m) { i++; continue; }
-        out.push({ t: 'cmd', v: m[1] });
+        push({ t: 'cmd', v: m[1] });
         i += m[0].length;
         continue;
       }
       if (c === '{' || c === '}' || c === '^' || c === '_' || c === '&') {
-        out.push({ t: c }); i++; continue;
+        push({ t: c }); i++; continue;
       }
       const num = /^\d+(?:\.\d+)?/.exec(src.slice(i));
-      if (num) { out.push({ t: 'num', v: num[0] }); i += num[0].length; continue; }
-      if (/[A-Za-z]/.test(c)) { out.push({ t: 'id', v: c }); i++; continue; }
-      out.push({ t: 'op', v: c }); i++;
+      if (num) { push({ t: 'num', v: num[0] }); i += num[0].length; continue; }
+      if (/[A-Za-z]/.test(c)) { push({ t: 'id', v: c }); i++; continue; }
+      push({ t: 'op', v: c }); i++;
     }
     return out;
   }
@@ -106,16 +222,38 @@ const MathML = (function () {
         if (toks[i] && toks[i].t === '}') i++; else return fail();
         return '<mrow>' + rows + '</mrow>';
       }
+      /* An unbraced argument is ONE token in LaTeX, and one digit is one token:
+         \tfrac12 is a half. The tokenizer reads 12 as a single number, so a digit is
+         taken off the front here and the rest left for the next argument. Without it
+         \tfrac12 built an <mfrac> holding one child — and an mfrac with one child is
+         not drawn small or wrong, it is not drawn AT ALL. 43 spans were invisible.
+         Nothing else is affected: the catalogue has no unbraced multi-digit script. */
+      if (i < toks.length && toks[i].t === 'num' && /^\d\d+$/.test(toks[i].v)) {
+        const first = toks[i].v.charAt(0);
+        toks[i] = { t: 'num', v: toks[i].v.slice(1) };
+        return '<mn>' + first + '</mn>';
+      }
       return atom();
     }
+
+    /* An argument slot that must yield exactly one element. mfrac, mroot, msub and the
+       rest are fixed-arity, and an argument that comes back empty — \frac{a} at the end
+       of a truncated span, x^ with nothing after it — silently builds markup a browser
+       draws as nothing. An empty <mrow> keeps the count right and leaves a visible hole
+       where the missing argument is. */
+    function arg() { return group() || '<mrow></mrow>'; }
 
     function scripts(base) {
       let sub = null, sup = null;
       for (;;) {
-        if (toks[i] && toks[i].t === '_' && sub === null) { i++; sub = group(); continue; }
-        if (toks[i] && toks[i].t === '^' && sup === null) { i++; sup = group(); continue; }
+        if (toks[i] && toks[i].t === '_' && sub === null) { i++; sub = arg(); continue; }
+        if (toks[i] && toks[i].t === '^' && sup === null) { i++; sup = arg(); continue; }
         break;
       }
+      /* `mm$^2$` and `$_{10}$` are how a unit gets written in running prose: a script
+         with nothing under it. LaTeX allows that, and msub/msup take exactly two
+         children, so the base is an empty <mrow> rather than a parse failure. */
+      if ((sub !== null || sup !== null) && !base) base = '<mrow></mrow>';
       if (sub !== null && sup !== null) return '<msubsup>' + base + sub + sup + '</msubsup>';
       if (sub !== null) return '<msub>' + base + sub + '</msub>';
       if (sup !== null) return '<msup>' + base + sup + '</msup>';
@@ -129,8 +267,8 @@ const MathML = (function () {
                           : '<mo largeop="true">' + glyph + '</mo>';
       let under = null, over = null;
       for (;;) {
-        if (toks[i] && toks[i].t === '_' && under === null) { i++; under = group(); continue; }
-        if (toks[i] && toks[i].t === '^' && over === null) { i++; over = group(); continue; }
+        if (toks[i] && toks[i].t === '_' && under === null) { i++; under = arg(); continue; }
+        if (toks[i] && toks[i].t === '^' && over === null) { i++; over = arg(); continue; }
         break;
       }
       /* integrals keep their limits beside the sign; sums and lim stack them */
@@ -146,6 +284,43 @@ const MathML = (function () {
         return stack ? '<mover>' + base + over + '</mover>' : '<msup>' + base + over + '</msup>';
       }
       return base;
+    }
+
+    /* The one token a \left, \right, \middle or a \big… prefix names as its delimiter.
+       Returns '' for the null delimiter \left. and null for anything that is not a
+       delimiter at all, which the caller turns into the raw-source fallback. */
+    function delimAfter() {
+      const t = toks[i];
+      if (!t) return null;
+      if (t.t === 'cmd' && typeof DELIM[t.v] === 'string') { i++; return DELIM[t.v]; }
+      if (t.t === 'op' && '()[]|/<>.'.indexOf(t.v) !== -1) { i++; return t.v === '.' ? '' : t.v; }
+      return null;
+    }
+
+    /* The argument of \text and the font commands, as characters rather than as
+       mathematics. A brace group, or a single token: `\mathsf T` and `\mathbf x`
+       without braces are ordinary LaTeX and were falling back. */
+    function textArg() {
+      if (!toks[i]) return null;
+      if (toks[i].t !== '{') {
+        const t = toks[i++];
+        return t.v !== undefined ? String(t.v) : null;
+      }
+      i++;
+      let txt = '';
+      let depth = 1;
+      while (i < toks.length) {
+        const t = toks[i];
+        if (t.t === '{') depth++;
+        /* the gap before the closing brace counts too: `\sum R \text{ round mesh } k`
+           is three things with spaces between them, and \text carries two of them */
+        if (t.t === '}') { depth--; if (!depth) { if (t.ws) txt += ' '; break; } }
+        if (t.ws) txt += ' ';                /* the word gap the tokenizer dropped */
+        txt += (t.v !== undefined ? t.v : (t.t === '^' || t.t === '_' ? t.t : ' '));
+        i++;
+      }
+      if (toks[i]) i++;
+      return txt;
     }
 
     function matrix(env) {
@@ -173,12 +348,18 @@ const MathML = (function () {
       }
       cells.push(cell);
       rows.push(cells);
-      const body = '<mtable>' + rows.map(function (r) {
-        return '<mtr>' + r.map(function (c) { return '<mtd>' + (c || '') + '</mtd>'; }).join('') + '</mtr>';
-      }).join('') + '</mtable>';
-      if (!fence[0]) return body;
-      return '<mrow><mo stretchy="true">' + esc2(fence[0]) + '</mo>' + body +
-             '<mo stretchy="true">' + esc2(fence[1]) + '</mo></mrow>';
+      /* columnalign is not in MathML Core and Chromium ignores it; it is written for
+         the engines that do read it, because a cases block reads wrong centred. */
+      const body = '<mtable' + (env === 'cases' ? ' columnalign="left"' : '') + '>' +
+        rows.map(function (r) {
+          return '<mtr>' + r.map(function (c) { return '<mtd>' + (c || '') + '</mtd>'; }).join('') + '</mtr>';
+        }).join('') + '</mtable>';
+      if (!fence[0] && !fence[1]) return body;
+      /* cases has an opening brace and no closing one, so each fence is written only
+         if the environment has one — an empty <mo> is a delimiter slot with nothing
+         in it, and browsers give it operator spacing anyway */
+      return '<mrow>' + (fence[0] ? '<mo stretchy="true">' + esc2(fence[0]) + '</mo>' : '') + body +
+             (fence[1] ? '<mo stretchy="true">' + esc2(fence[1]) + '</mo>' : '') + '</mrow>';
     }
 
     function command(name) {
@@ -186,13 +367,24 @@ const MathML = (function () {
       if (OPS[name]) return '<mo>' + esc2(OPS[name]) + '</mo>';
       if (BIG[name]) return bigOp(name);
       if (FUNCS.indexOf(name) !== -1) return '<mi mathvariant="normal">' + name + '</mi>';
+      if (typeof ORD[name] === 'string') return '<mi>' + esc2(ORD[name]) + '</mi>';
+      /* a delimiter written on its own rather than after \left: not stretchy, the same
+         as the literal ( and [ that atom() draws */
+      if (typeof DELIM[name] === 'string') return '<mo stretchy="false">' + esc2(DELIM[name]) + '</mo>';
       if (ACCENT[name]) {
-        const a = group();
+        const a = arg();
         return '<mover accent="true">' + a + '<mo>' + esc2(ACCENT[name]) + '</mo></mover>';
+      }
+      const sized = SIZED_RE.exec(name);
+      if (sized && SIZED[sized[1]]) {
+        const d = delimAfter();
+        if (d === null) return fail();
+        return d ? '<mo stretchy="true" minsize="' + SIZED[sized[1]] + '" maxsize="' +
+          SIZED[sized[1]] + '">' + esc2(d) + '</mo>' : '';
       }
       switch (name) {
         case 'frac': case 'dfrac': case 'tfrac': {
-          const a = group(), b = group();
+          const a = arg(), b = arg();
           return '<mfrac>' + a + b + '</mfrac>';
         }
         case 'sqrt': {
@@ -201,35 +393,28 @@ const MathML = (function () {
             let idx = '';
             while (toks[i] && !(toks[i].t === 'op' && toks[i].v === ']')) idx += atomWithScripts();
             if (toks[i]) i++;
-            return '<mroot>' + group() + '<mrow>' + idx + '</mrow></mroot>';
+            return '<mroot>' + arg() + '<mrow>' + idx + '</mrow></mroot>';
           }
-          return '<msqrt>' + group() + '</msqrt>';
+          return '<msqrt>' + arg() + '</msqrt>';
         }
-        case 'text': case 'mathrm': case 'mathbf': case 'mathit': case 'mathsf': case 'operatorname': {
-          if (!toks[i] || toks[i].t !== '{') return fail();
-          i++;
-          let txt = '';
-          let depth = 1;
-          while (i < toks.length) {
-            const t = toks[i];
-            if (t.t === '{') depth++;
-            if (t.t === '}') { depth--; if (!depth) break; }
-            txt += (t.v !== undefined ? t.v : (t.t === '^' || t.t === '_' ? t.t : ' '));
-            i++;
+        case 'text': case 'textrm': case 'texttt':
+        case 'mathrm': case 'mathbf': case 'mathit': case 'mathsf': case 'mathtt':
+        case 'mathcal': case 'mathscr': case 'mathbb': case 'operatorname': {
+          const raw = textArg();
+          if (raw === null) return fail();
+          /* The variant is carried by the characters, not by an attribute: see
+             ALPHABET. \mathrm and \operatorname want no variant at all, only the
+             upright that mathvariant="normal" asks for. */
+          const txt = ALPHA_OF[name] ? alphabet(raw, ALPHA_OF[name]) : raw;
+          if (name === 'text' || name === 'textrm' || name === 'texttt') {
+            return '<mtext>' + esc2(txt) + '</mtext>';
           }
-          if (toks[i]) i++;
-          const variant = name === 'mathbf' ? ' mathvariant="bold"'
-            : name === 'mathit' ? ' mathvariant="italic"'
-            : name === 'mathsf' ? ' mathvariant="sans-serif"' : '';
-          if (name === 'text') return '<mtext>' + esc2(txt) + '</mtext>';
-          return '<mi mathvariant="normal"' + variant.replace(' mathvariant="normal"', '') + '>' + esc2(txt) + '</mi>';
+          return '<mi mathvariant="normal">' + esc2(txt) + '</mi>';
         }
-        case 'left': case 'right': {
-          const t = toks[i];
-          if (!t) return fail();
-          i++;
-          const ch = t.v === '.' ? '' : (t.v || '');
-          return ch ? '<mo stretchy="true">' + esc2(ch) + '</mo>' : '';
+        case 'left': case 'right': case 'middle': {
+          const d = delimAfter();
+          if (d === null) return fail();
+          return d ? '<mo stretchy="true">' + esc2(d) + '</mo>' : '';
         }
         case 'begin': {
           if (!toks[i] || toks[i].t !== '{') return fail();
@@ -240,11 +425,70 @@ const MathML = (function () {
           if (!MATRIX_FENCE[env]) return fail();
           return matrix(env);
         }
+        case 'binom': case 'dbinom': case 'tbinom': {
+          const a = arg(), b = arg();
+          /* a two-row stack in parentheses. linethickness="0" is a fraction with no
+             bar, which is exactly what a binomial coefficient is, and it is one of the
+             mfrac attributes MathML Core kept. */
+          return '<mrow><mo stretchy="true">(</mo><mfrac linethickness="0">' + a + b +
+                 '</mfrac><mo stretchy="true">)</mo></mrow>';
+        }
+        case 'underbrace': case 'overbrace': {
+          const under = name === 'underbrace';
+          const braced = arg();
+          const open = under ? '<munder>' : '<mover>';
+          const close = under ? '</munder>' : '</mover>';
+          let out = open + braced + '<mo stretchy="true">' + (under ? '⏟' : '⏞') + '</mo>' + close;
+          /* the label LaTeX writes as a script on the brace belongs under (over) it,
+             so it is taken here rather than left for scripts() to hang beside it */
+          if (toks[i] && toks[i].t === (under ? '_' : '^')) { i++; out = open + out + arg() + close; }
+          return out;
+        }
+        case 'bmod': return '<mo>mod</mo>';
+        case 'pmod': {
+          /* the parenthesised form, with the gap TeX opens in front of it */
+          return '<mrow><mspace width="0.8em"/><mo stretchy="false">(</mo><mtext>mod</mtext>' +
+                 '<mspace width="0.22em"/>' + group() + '<mo stretchy="false">)</mo></mrow>';
+        }
+        case 'not': {
+          const t = toks[i];
+          const key = t && (t.t === 'cmd' || t.t === 'op') ? t.v : null;
+          if (key === null || typeof NEGATED[key] !== 'string') return fail();
+          i++;
+          return '<mo>' + esc2(NEGATED[key]) + '</mo>';
+        }
+        case 'boldsymbol': case 'bm': {
+          /* mathvariant="bold" is not MathML Core and Chromium ignores it, and this
+             file emits no CSS of its own; so the symbol is right and the weight is
+             carried only by the engines that still read the attribute. Losing the
+             bold on a vector is a loss of emphasis — rendering \boldsymbol{\tau} as
+             raw source loses the τ. */
+          return '<mstyle mathvariant="bold">' + group() + '</mstyle>';
+        }
+        case 'boxed': {
+          /* MathML Core has no box: <menclose> did not survive into it and there is no
+             element that draws a frame. The formula is drawn, the frame is not. */
+          return group();
+        }
+        case 'mathrel': case 'mathbin': case 'mathop': case 'mathord': case 'mathpunct':
+          /* these only reclassify their argument for TeX's spacing rules, which MathML
+             takes from the operator dictionary instead; the argument is what matters */
+          return group();
+        case 'displaystyle': case 'textstyle': case 'scriptstyle': case 'scriptscriptstyle':
+          /* a style switch with no operand. Display or inline is settled by the caller
+             of render() — the $$…$$ against $…$ distinction — so there is nothing to
+             switch here and dropping it is exact rather than approximate. */
+          return '';
         case 'quad': return '<mspace width="1em"/>';
         case 'qquad': return '<mspace width="2em"/>';
         case ',': return '<mspace width="0.17em"/>';
         case ';': return '<mspace width="0.28em"/>';
+        case ':': return '<mspace width="0.22em"/>';
         case '!': return '<mspace width="-0.17em"/>';
+        /* backslash-space: TeX's control space, an ordinary interword gap. It is the
+           single most common command in the catalogue that used to fall back — it is
+           how "8\ \mathrm{ms}" keeps its number away from its unit. */
+        case ' ': return '<mspace width="0.33em"/>';
         case '\\': return '';
         default: return fail();
       }
@@ -267,7 +511,12 @@ const MathML = (function () {
       return fail();
     }
 
-    function atomWithScripts() { return scripts(atom()); }
+    function atomWithScripts() {
+      /* a script standing on its own — `mm$^2$`, `$_{10}$`, `$^\circ$` — is a script
+         with an empty base rather than a syntax error; scripts() supplies the base */
+      if (toks[i] && (toks[i].t === '^' || toks[i].t === '_')) return scripts('');
+      return scripts(atom());
+    }
 
     function list(stop) {
       let out = '';
