@@ -837,8 +837,28 @@ function langOf(lang) {
              keywordDoc: MCU_KW_DOC, typeWords: MCU_TYPE_SET,
              lits: MCU_LIT, id: /[A-Za-z_]\w*/ };
   }
+  /* The C family, TypeScript and the rest: no runtime in the browser, so no model of
+     what a name holds — the menu offers the language's own words, the builtins the
+     highlighter knows, and whatever the buffer already says. The word lists live with
+     the highlighter (Highlight.CLIKE in engine.js) so the two cannot drift. */
+  if (typeof Highlight !== 'undefined' && Highlight.CLIKE) {
+    const norm = Highlight.normLang(lang);
+    const t = Highlight.CLIKE[norm];
+    if (t) {
+      const typeSet = {};
+      t.types.forEach(function (w) { typeSet[w] = true; });
+      return { types: {}, modules: {}, snippets: [], lits: [],
+               globals: t.bi.filter(function (w) { return /^[A-Za-z_]\w*$/.test(w); })
+                 .map(function (w) { return fn(w, w + '()', 'A ' + (CLIKE_LABEL[norm] || norm) + ' builtin.', ''); }),
+               keywords: t.ctl.concat(t.decl, t.op, t.types, t.consts).filter(function (w) { return /^[\w$]+$/.test(w); }),
+               typeWords: typeSet, id: /[A-Za-z_$][\w$]*/ };
+    }
+    if (norm === 'ts') return langOf('js');
+  }
   return null;
 }
+const CLIKE_LABEL = { c: 'C', cpp: 'C++', csharp: 'C#', java: 'Java', kotlin: 'Kotlin', swift: 'Swift',
+  go: 'Go', rust: 'Rust', glsl: 'GLSL', verilog: 'Verilog' };
 
 /* the declared return type of a call like `foo(...)` or `obj.method(...)` */
 function returnTypeOf(L, expr, table) {

@@ -62,8 +62,17 @@ python -X utf8 tools/verify_derivations.py             # every derivation step, 
 node tools/verify_circuits.mjs                         # every build exercise's reference satisfies its own checks
 node tools/verify_tune.mjs                             # every tune target reachable and not already met
 node tools/verify_numeric.mjs                          # every circuit answer against the MNA solver
+python -X utf8 tools/verify_reads.py catalog/<ID>.json # every fenced Python example in a reading runs standalone
+node tools/verify_lazy.mjs                             # the catalog index and per-course hydration agree with the content
+node tools/verify_minify.mjs                           # the shipped scripts have the source's tokens, minus comments
 node build.mjs                                         # duplicate ids, size budgets, registry guards, staleness
 ```
+
+`verify_reads.py` is ratcheted against `tools/reads_budget.json` the way the quiz gate
+is: the courses written before it existed (CS101, EE131) carry a budget of examples
+that do not run standalone, and a course with no entry is held to zero — which is
+every new reading. A REPL transcript (`>>> ` lines) is fine; a fragment that is not
+meant to run goes in a ```` ```text ```` fence.
 
 **Baseline first.** Capture the gate numbers *before* editing. A number that moves is a
 regression in existing content, not a new feature. At the time of writing: 80 circuit

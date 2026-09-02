@@ -13,12 +13,24 @@ function dedent(s) {
 function debounce(fn, ms) { let t = null; return function () { const a = arguments; clearTimeout(t); t = setTimeout(() => fn.apply(null, a), ms); }; }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
+/* The file's suffix is its language. The first four have a runtime in the browser;
+   the rest are read, written and highlighted — a reference implementation in C or
+   Java beside the Python that runs — and Run says so. */
+const EXT_LANG = {
+  py: 'python', pyw: 'python',
+  js: 'js', mjs: 'js', cjs: 'js', jsx: 'js',
+  ts: 'ts', tsx: 'ts',
+  css: 'css', html: 'html', htm: 'html',
+  c: 'c', h: 'c',
+  cpp: 'cpp', cc: 'cpp', cxx: 'cpp', hpp: 'cpp', hh: 'cpp', ino: 'cpp',
+  cs: 'csharp', java: 'java', kt: 'kotlin', kts: 'kotlin', swift: 'swift',
+  go: 'go', rs: 'rust',
+  sql: 'sql', v: 'verilog', sv: 'verilog', glsl: 'glsl', vert: 'glsl', frag: 'glsl',
+  s: 'asm', asm: 'asm', json: 'json', md: 'md', sh: 'bash', bash: 'bash',
+};
 function langOfFile(name) {
-  if (/\.py$/.test(name)) return 'python';
-  if (/\.js$/.test(name)) return 'js';
-  if (/\.css$/.test(name)) return 'css';
-  if (/\.html?$/.test(name)) return 'html';
-  return 'text';
+  const m = /\.([A-Za-z0-9]+)$/.exec(String(name || ''));
+  return (m && EXT_LANG[m[1].toLowerCase()]) || 'text';
 }
 
 /* ---------- content bundle ---------- */
@@ -252,6 +264,200 @@ const Highlight = (function () {
     [/[,.;:]/, 'punc'],
   ]);
 
+  /* ------------------------------------------------------------ the C family
+   *
+   * C, C++, C#, Java, Kotlin, Swift, Go, Rust, GLSL and Verilog share a shape — slash
+   * comments, double-quoted strings, braces, a type before a name — and differ in
+   * their word lists. One tokenizer, built per language from its words, so a reference
+   * implementation in the course material and a file in the playground get the same
+   * colours the Python beside them does. TypeScript is JavaScript with types and
+   * takes the JavaScript tokenizer with a few words added. */
+  const CLIKE = {
+    c: {
+      ctl: ['if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default', 'break', 'continue', 'return', 'goto'],
+      decl: ['struct', 'typedef', 'enum', 'union', 'static', 'extern', 'const', 'volatile', 'inline', 'register', 'auto'],
+      op: ['sizeof'],
+      types: ['void', 'int', 'char', 'short', 'long', 'float', 'double', 'unsigned', 'signed', 'bool', 'size_t', 'ssize_t', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t', 'int8_t', 'int16_t', 'int32_t', 'int64_t', 'FILE'],
+      consts: ['NULL', 'true', 'false', 'EOF'],
+      bi: ['printf', 'scanf', 'malloc', 'calloc', 'realloc', 'free', 'memcpy', 'memset', 'strlen', 'strcmp', 'strcpy', 'fopen', 'fclose', 'fprintf', 'fgets', 'puts', 'putchar', 'getchar', 'exit', 'assert', 'main'],
+    },
+    cpp: {
+      ctl: ['if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default', 'break', 'continue', 'return', 'goto', 'try', 'catch', 'throw', 'co_await', 'co_return', 'co_yield'],
+      decl: ['class', 'struct', 'typedef', 'enum', 'union', 'namespace', 'using', 'template', 'typename', 'public', 'private', 'protected', 'virtual', 'override', 'final', 'static', 'extern', 'const', 'constexpr', 'consteval', 'volatile', 'inline', 'friend', 'explicit', 'mutable', 'operator', 'export', 'module', 'import', 'concept', 'requires'],
+      op: ['sizeof', 'new', 'delete', 'static_cast', 'dynamic_cast', 'reinterpret_cast', 'const_cast', 'typeid', 'noexcept', 'decltype'],
+      types: ['void', 'int', 'char', 'short', 'long', 'float', 'double', 'unsigned', 'signed', 'bool', 'auto', 'size_t', 'wchar_t', 'char8_t', 'char16_t', 'char32_t', 'string', 'vector', 'map', 'unordered_map', 'set', 'unordered_set', 'pair', 'tuple', 'array', 'deque', 'list', 'queue', 'stack', 'priority_queue', 'optional', 'variant', 'unique_ptr', 'shared_ptr', 'weak_ptr', 'span', 'string_view', 'iostream', 'ostream', 'istream'],
+      consts: ['nullptr', 'NULL', 'true', 'false'],
+      bi: ['std', 'cout', 'cin', 'cerr', 'endl', 'printf', 'malloc', 'free', 'move', 'forward', 'swap', 'sort', 'begin', 'end', 'size', 'push_back', 'emplace_back', 'make_unique', 'make_shared', 'main'],
+    },
+    csharp: {
+      ctl: ['if', 'else', 'for', 'foreach', 'while', 'do', 'switch', 'case', 'default', 'break', 'continue', 'return', 'goto', 'try', 'catch', 'finally', 'throw', 'yield', 'await', 'lock', 'when'],
+      decl: ['using', 'namespace', 'class', 'struct', 'record', 'interface', 'enum', 'delegate', 'event', 'public', 'private', 'protected', 'internal', 'static', 'readonly', 'const', 'abstract', 'sealed', 'virtual', 'override', 'partial', 'async', 'extern', 'volatile', 'unsafe', 'fixed', 'get', 'set', 'init', 'value', 'where', 'params', 'ref', 'out', 'in', 'operator', 'implicit', 'explicit', 'var', 'dynamic'],
+      op: ['new', 'is', 'as', 'typeof', 'sizeof', 'nameof', 'checked', 'unchecked', 'stackalloc', 'default'],
+      types: ['void', 'int', 'long', 'short', 'byte', 'sbyte', 'uint', 'ulong', 'ushort', 'float', 'double', 'decimal', 'bool', 'char', 'string', 'object', 'nint', 'nuint', 'List', 'Dictionary', 'HashSet', 'Queue', 'Stack', 'IEnumerable', 'IList', 'Task', 'Span', 'Console', 'Math', 'String'],
+      consts: ['null', 'true', 'false'],
+      bi: ['Console', 'WriteLine', 'Write', 'ReadLine', 'ToString', 'Length', 'Count', 'Add', 'Select', 'Where', 'OrderBy', 'ToList', 'Main'],
+    },
+    java: {
+      ctl: ['if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default', 'break', 'continue', 'return', 'try', 'catch', 'finally', 'throw', 'throws', 'yield', 'assert', 'synchronized'],
+      decl: ['package', 'import', 'class', 'interface', 'enum', 'record', 'extends', 'implements', 'public', 'private', 'protected', 'static', 'final', 'abstract', 'native', 'strictfp', 'transient', 'volatile', 'sealed', 'permits', 'var', 'default'],
+      op: ['new', 'instanceof'],
+      types: ['void', 'int', 'long', 'short', 'byte', 'float', 'double', 'boolean', 'char', 'String', 'Integer', 'Long', 'Double', 'Boolean', 'Character', 'Object', 'List', 'ArrayList', 'LinkedList', 'Map', 'HashMap', 'TreeMap', 'Set', 'HashSet', 'Queue', 'Deque', 'ArrayDeque', 'Optional', 'Stream', 'Math', 'System', 'Scanner', 'StringBuilder', 'Exception', 'RuntimeException'],
+      consts: ['null', 'true', 'false'],
+      bi: ['System', 'out', 'println', 'print', 'printf', 'length', 'size', 'get', 'put', 'add', 'equals', 'hashCode', 'toString', 'main'],
+    },
+    kotlin: {
+      ctl: ['if', 'else', 'for', 'while', 'do', 'when', 'break', 'continue', 'return', 'try', 'catch', 'finally', 'throw'],
+      decl: ['package', 'import', 'class', 'interface', 'object', 'enum', 'data', 'sealed', 'fun', 'val', 'var', 'const', 'lateinit', 'override', 'open', 'abstract', 'private', 'public', 'protected', 'internal', 'companion', 'init', 'constructor', 'suspend', 'inline', 'typealias', 'operator', 'infix', 'by', 'get', 'set', 'where'],
+      op: ['is', 'as', 'in', '!in', '!is'],
+      types: ['Int', 'Long', 'Short', 'Byte', 'Float', 'Double', 'Boolean', 'Char', 'String', 'Unit', 'Any', 'Nothing', 'List', 'MutableList', 'Map', 'MutableMap', 'Set', 'Array', 'IntArray', 'Pair'],
+      consts: ['null', 'true', 'false'],
+      bi: ['println', 'print', 'listOf', 'mutableListOf', 'mapOf', 'setOf', 'arrayOf', 'require', 'check', 'main'],
+    },
+    swift: {
+      ctl: ['if', 'else', 'for', 'while', 'repeat', 'switch', 'case', 'default', 'break', 'continue', 'return', 'guard', 'defer', 'do', 'try', 'catch', 'throw', 'throws', 'rethrows', 'fallthrough', 'where', 'async', 'await'],
+      decl: ['import', 'class', 'struct', 'enum', 'protocol', 'extension', 'func', 'let', 'var', 'init', 'deinit', 'static', 'final', 'override', 'mutating', 'public', 'private', 'fileprivate', 'internal', 'open', 'subscript', 'typealias', 'associatedtype', 'inout', 'lazy', 'weak', 'unowned', 'some', 'any', 'actor'],
+      op: ['is', 'as', 'in'],
+      types: ['Int', 'UInt', 'Int64', 'Float', 'Double', 'Bool', 'String', 'Character', 'Array', 'Dictionary', 'Set', 'Optional', 'Void', 'Any', 'Error', 'Result'],
+      consts: ['nil', 'true', 'false', 'self', 'Self', 'super'],
+      bi: ['print', 'map', 'filter', 'reduce', 'count', 'append', 'precondition', 'assert'],
+    },
+    go: {
+      ctl: ['if', 'else', 'for', 'range', 'switch', 'case', 'default', 'break', 'continue', 'return', 'go', 'defer', 'select', 'fallthrough', 'goto'],
+      decl: ['package', 'import', 'func', 'var', 'const', 'type', 'struct', 'interface', 'map', 'chan'],
+      op: [],
+      types: ['int', 'int8', 'int16', 'int32', 'int64', 'uint', 'uint8', 'uint16', 'uint32', 'uint64', 'uintptr', 'float32', 'float64', 'complex64', 'complex128', 'byte', 'rune', 'string', 'bool', 'error', 'any'],
+      consts: ['nil', 'true', 'false', 'iota'],
+      bi: ['make', 'new', 'len', 'cap', 'append', 'copy', 'delete', 'panic', 'recover', 'print', 'println', 'close', 'fmt', 'Println', 'Printf', 'Sprintf', 'Errorf', 'main'],
+    },
+    rust: {
+      ctl: ['if', 'else', 'for', 'while', 'loop', 'match', 'break', 'continue', 'return', 'yield', 'async', 'await'],
+      decl: ['fn', 'let', 'mut', 'const', 'static', 'struct', 'enum', 'impl', 'trait', 'type', 'pub', 'use', 'mod', 'crate', 'extern', 'unsafe', 'where', 'dyn', 'move', 'ref', 'macro_rules', 'union'],
+      op: ['as', 'in'],
+      types: ['i8', 'i16', 'i32', 'i64', 'i128', 'isize', 'u8', 'u16', 'u32', 'u64', 'u128', 'usize', 'f32', 'f64', 'bool', 'char', 'str', 'String', 'Vec', 'Option', 'Result', 'Box', 'Rc', 'Arc', 'HashMap', 'HashSet', 'BTreeMap', 'Cell', 'RefCell', 'Mutex', 'Self'],
+      consts: ['true', 'false', 'None', 'Some', 'Ok', 'Err'],
+      bi: ['println', 'print', 'eprintln', 'format', 'vec', 'panic', 'assert', 'assert_eq', 'unwrap', 'expect', 'iter', 'map', 'collect', 'push', 'len', 'main'],
+    },
+    glsl: {
+      ctl: ['if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default', 'break', 'continue', 'return', 'discard'],
+      decl: ['struct', 'const', 'uniform', 'in', 'out', 'inout', 'attribute', 'varying', 'layout', 'precision', 'highp', 'mediump', 'lowp', 'flat', 'smooth', 'buffer', 'shared'],
+      op: [],
+      types: ['void', 'bool', 'int', 'uint', 'float', 'double', 'vec2', 'vec3', 'vec4', 'ivec2', 'ivec3', 'ivec4', 'bvec2', 'bvec3', 'bvec4', 'mat2', 'mat3', 'mat4', 'sampler2D', 'samplerCube'],
+      consts: ['true', 'false', 'gl_Position', 'gl_FragColor', 'gl_FragCoord'],
+      bi: ['texture', 'texture2D', 'normalize', 'dot', 'cross', 'length', 'distance', 'reflect', 'refract', 'mix', 'clamp', 'smoothstep', 'step', 'pow', 'sqrt', 'abs', 'min', 'max', 'sin', 'cos', 'main'],
+    },
+    verilog: {
+      ctl: ['if', 'else', 'case', 'casex', 'casez', 'endcase', 'for', 'while', 'repeat', 'forever', 'begin', 'end', 'always', 'always_ff', 'always_comb', 'initial', 'posedge', 'negedge', 'generate', 'endgenerate', 'assign', 'deassign', 'default', 'wait', 'fork', 'join'],
+      decl: ['module', 'endmodule', 'input', 'output', 'inout', 'parameter', 'localparam', 'function', 'endfunction', 'task', 'endtask', 'genvar', 'signed', 'unsigned', 'timescale', 'include', 'define'],
+      op: [],
+      types: ['wire', 'reg', 'logic', 'integer', 'real', 'bit', 'byte', 'int', 'shortint', 'longint', 'time'],
+      consts: ['1\'b0', '1\'b1'],
+      bi: ['$display', '$monitor', '$finish', '$time', '$clog2', '$random', '$dumpfile', '$dumpvars', '$write', '$strobe'],
+    },
+  };
+
+  function clikeDef(m) {
+    const mm = m.match(/^(\S+)(\s+)([A-Za-z_]\w*)([\s\S]*)$/);
+    if (!mm) return span('kw-decl', m);
+    const isType = /^(?:class|struct|enum|interface|trait|impl|record|protocol|module|namespace|union|object)$/.test(mm[1]);
+    return span('kw-decl', mm[1]) + esc(mm[2]) + span(isType ? 'type-def' : 'fn-def', mm[3]) +
+      (mm[4] ? jsParams(mm[4]) : '');
+  }
+  function clike(t) {
+    const rules = [
+      [/\/\/[^\n]*|\/\*[\s\S]*?\*\//, 'cm'],
+      /* preprocessor lines, attributes and annotations: #include, #[derive(...)], @Override */
+      [/^[ \t]*#\s*[A-Za-z_]\w*[^\n]*|#\[[^\]\n]*\]|@[A-Za-z_][\w.]*/, 'dec'],
+      [/`[^`\n]*`|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n]){1,2}'/, function (m) { return strBody(m); }],
+      [/\b(?:class|struct|enum|interface|trait|impl|record|protocol|module|namespace|union|object|fn|func|def|task)\s+[A-Za-z_]\w*(?:\s*(?:<[^>\n]*>)?\s*\([^)]*\))?/, clikeDef],
+      [words(t.consts.filter(function (w) { return /^[\w$]+$/.test(w); })), 'const'],
+      [words(t.ctl), 'kw-ctl'],
+      [words(t.decl), 'kw-decl'],
+    ];
+    if (t.op.length) rules.push([words(t.op.filter(function (w) { return /^[\w$]+$/.test(w); })), 'kw-op']);
+    rules.push(
+      [words(t.types), 'type'],
+      [/\b(?:this|self|super|base)\b/, 'self'],
+      [/\b\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?[fFlLuUdD]*\b|\b0[xXbBoO][\da-fA-F_]+\b|\d+'[bBhHdDoO][\da-fA-FxXzZ_]+/, 'num'],
+      [/(?:\.|::|->)\s*[A-Za-z_]\w*(?=\s*[(<])/, function (m) { const i = m.search(/[A-Za-z_]/); return span('punc', m.slice(0, i)) + span('method', m.slice(i)); }],
+      [/(?:\.|::|->)\s*[A-Za-z_]\w*/, function (m) { const i = m.search(/[A-Za-z_]/); return span('punc', m.slice(0, i)) + span('prop', m.slice(i)); }],
+      [/\b[A-Za-z_]\w*(?=\s*(?::=|=)[^=>])/, function (m) { return span(/^[A-Z_0-9]+$/.test(m) ? 'const' : 'var-def', m); }],
+      [words(t.bi.map(function (w) { return w.replace(/\$/g, '\\$'); })), 'bi'],
+      [/\$[A-Za-z_]\w*/, 'bi'],
+      [/\b[A-Z][A-Z_0-9]{1,}\b/, 'const'],
+      [/\b[A-Z]\w*\b/, 'type'],
+      [/\b[A-Za-z_]\w*!?(?=\s*\()/, 'fn'],
+      [/->|=>|::|\+\+|--|<<=|>>=|[-+*/%=<>!&|^~?]+/, 'op'],
+      [/[()[\]{}]/, 'bracket'],
+      [/[,.;:]/, 'punc'],
+    );
+    return makeTokenizer(rules);
+  }
+  const clikeTok = {};
+  Object.keys(CLIKE).forEach(function (k) { clikeTok[k] = clike(CLIKE[k]); });
+
+  /* TypeScript: JavaScript, plus its type words */
+  const TS_WORDS = ['interface', 'type', 'enum', 'namespace', 'declare', 'abstract', 'implements', 'readonly', 'private', 'public', 'protected', 'keyof', 'infer', 'satisfies', 'is', 'never', 'unknown', 'any', 'string', 'number', 'boolean', 'void'];
+  const ts = makeTokenizer([
+    [/\/\/[^\n]*|\/\*[\s\S]*?\*\//, 'cm'],
+    [/`(?:\\.|[^`\\])*`/, function (m) { return interp(m, '$', function (c) { return js(c); }); }],
+    [/"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/, function (m) { return strBody(m); }],
+    [/\b(?:function|class|interface|type|enum)\s+[A-Za-z_$][\w$]*\s*(?:\([^)]*\))?/, jsDef],
+    [words(JS_CONST), 'const'],
+    [words(JS_CTL), 'kw-ctl'],
+    [words(JS_DECL.concat(TS_WORDS)), 'kw-decl'],
+    [words(JS_OPW), 'kw-op'],
+    [/\bthis\b|\bsuper\b/, 'self'],
+    [/\b\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?n?\b|\b0[xX][\da-fA-F]+\b/, 'num'],
+    [/\.\s*[A-Za-z_$][\w$]*(?=\s*\()/, function (m) { return span('punc', '.') + span('method', m.slice(1)); }],
+    [/\.\s*[A-Za-z_$][\w$]*/, function (m) { return span('punc', '.') + span('prop', m.slice(1)); }],
+    [/\b[A-Za-z_$][\w$]*(?=\s*=>)/, 'param'],
+    [/\b[A-Za-z_$][\w$]*(?=\s*=[^=>])/, function (m) { return span(/^[A-Z_0-9]+$/.test(m) ? 'const' : 'var-def', m); }],
+    [words(JS_BI_WORDS), 'bi'],
+    [/\b[A-Z][A-Z_0-9]{1,}\b/, 'const'],
+    [/\b[A-Z][\w$]*\b/, 'type'],
+    [/\b[A-Za-z_$][\w$]*(?=\s*\()/, 'fn'],
+    [/=>|\.{3}|\?\.|\?\?|[-+*/%=<>!&|^~?]+/, 'op'],
+    [/[()[\]{}]/, 'bracket'],
+    [/[,.;:]/, 'punc'],
+  ]);
+
+  /* ------------------------------------------------------------ sql, shell, assembly */
+  const SQL_KW = ['select', 'from', 'where', 'insert', 'into', 'values', 'update', 'set', 'delete', 'create', 'table', 'drop', 'alter', 'add', 'column', 'primary', 'key', 'foreign', 'references', 'not', 'null', 'unique', 'check', 'default', 'index', 'view', 'join', 'inner', 'left', 'right', 'outer', 'cross', 'on', 'using', 'group', 'by', 'having', 'order', 'asc', 'desc', 'limit', 'offset', 'union', 'all', 'distinct', 'as', 'and', 'or', 'in', 'is', 'like', 'between', 'exists', 'case', 'when', 'then', 'else', 'end', 'begin', 'commit', 'rollback', 'transaction', 'with', 'recursive', 'explain', 'query', 'plan', 'integer', 'int', 'text', 'real', 'blob', 'varchar', 'char', 'boolean', 'date', 'timestamp', 'numeric', 'decimal', 'autoincrement', 'if', 'cascade', 'constraint', 'returning', 'over', 'partition', 'window', 'row_number', 'rank'];
+  const sql = makeTokenizer([
+    [/--[^\n]*|\/\*[\s\S]*?\*\//, 'cm'],
+    [/'(?:''|[^'\n])*'/, 'str'],
+    [/"(?:""|[^"\n])*"/, 'attr-val'],
+    [new RegExp('\\b(?:' + SQL_KW.join('|') + ')\\b', 'i'), function (m) { return span(/^(?:select|from|where|join|inner|left|right|outer|cross|on|group|by|having|order|limit|offset|union|with|case|when|then|else|end)$/i.test(m) ? 'kw-ctl' : 'kw-decl', m); }],
+    [/\b(?:count|sum|avg|min|max|coalesce|length|substr|upper|lower|round|abs|date|strftime|printf|ifnull|nullif|cast|group_concat|total|random)(?=\s*\()/i, 'bi'],
+    [/\b\d+(?:\.\d+)?\b/, 'num'],
+    [/\b[A-Za-z_]\w*(?=\s*\()/, 'fn'],
+    [/<>|!=|<=|>=|\|\||[-+*/%=<>]/, 'op'],
+    [/[()]/, 'bracket'],
+    [/[,.;]/, 'punc'],
+  ]);
+  const bash = makeTokenizer([
+    [/#[^\n]*/, 'cm'],
+    [/"(?:\\.|[^"\\])*"|'[^']*'/, 'str'],
+    [/\$\{[^}]*\}|\$[A-Za-z_]\w*|\$[0-9@#?*!$-]/, 'css-var'],
+    [/\b(?:if|then|else|elif|fi|for|while|until|do|done|case|esac|in|function|return|exit|break|continue|select|time)\b/, 'kw-ctl'],
+    [/\b(?:local|export|readonly|declare|set|unset|shift|source|alias)\b/, 'kw-decl'],
+    [/\b(?:echo|printf|cd|ls|cat|grep|sed|awk|find|xargs|sort|uniq|head|tail|wc|cut|tr|mkdir|rm|cp|mv|touch|chmod|chown|git|node|python|python3|pip|npm|make|curl|wget|tar|ssh|scp|docker|kubectl|test|read|sleep|true|false)\b/, 'bi'],
+    [/\b\d+\b/, 'num'],
+    [/\|\||&&|[|&;<>]+|[-+*/=]/, 'op'],
+    [/[()[\]{}]/, 'bracket'],
+  ]);
+  const asm = makeTokenizer([
+    [/;[^\n]*|#[^\n]*|\/\/[^\n]*/, 'cm'],
+    [/"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/, 'str'],
+    [/^[ \t]*\.[A-Za-z_]\w*/, 'dec'],
+    [/^[ \t]*[A-Za-z_.$][\w.$]*:/, 'fn-def'],
+    [/\b(?:[re]?[abcd]x|[abcd][lh]|[re]?[sd]i|[re]?[sb]p|r\d+[dwb]?|x\d+|w\d+|sp|lr|pc|fp|ra|zero|a[0-7]|t[0-6]|s[0-9]|s1[01]|gp|tp|xmm\d+)\b/, 'self'],
+    [/^[ \t]*[A-Za-z_]\w*(?=\s|$)/, 'kw-ctl'],
+    [/\b0[xX][\da-fA-F]+\b|\b\d+\b|#-?\d+/, 'num'],
+    [/[\[\]()]/, 'bracket'],
+    [/[,+\-*]/, 'punc'],
+  ]);
+
   /* ------------------------------------------------------------ css */
   const css = makeTokenizer([
     [/\/\*[\s\S]*?\*\//, 'cm'],
@@ -302,24 +508,46 @@ const Highlight = (function () {
     return out + htmlPart(code.slice(last));
   }
 
+  const ALIAS = {
+    javascript: 'js', jsx: 'js', mjs: 'js', cjs: 'js', node: 'js',
+    typescript: 'ts', tsx: 'ts',
+    py: 'python', python3: 'python', py3: 'python',
+    'c++': 'cpp', cc: 'cpp', cxx: 'cpp', hpp: 'cpp', arduino: 'cpp', ino: 'cpp',
+    'c#': 'csharp', cs: 'csharp', 'c-sharp': 'csharp',
+    kt: 'kotlin', golang: 'go', rs: 'rust',
+    sh: 'bash', shell: 'bash', zsh: 'bash', console: 'bash',
+    sqlite: 'sql', postgresql: 'sql', postgres: 'sql', mysql: 'sql',
+    systemverilog: 'verilog', sv: 'verilog', v: 'verilog',
+    s: 'asm', assembly: 'asm', nasm: 'asm', riscv: 'asm', 'risc-v': 'asm', x86: 'asm', arm: 'asm', mips: 'asm',
+    htm: 'html', vue: 'html', svelte: 'html',
+  };
   function normLang(lang) {
-    lang = String(lang || '').toLowerCase();
-    if (lang === 'javascript' || lang === 'jsx' || lang === 'mjs') return 'js';
-    if (lang === 'py' || lang === 'python3') return 'python';
-    return lang;
+    lang = String(lang || '').toLowerCase().trim();
+    return ALIAS[lang] || lang;
   }
   function render(code, lang) {
     lang = normLang(lang);
     try {
       if (lang === 'python') return python(code);
-      if (lang === 'js') return js(code);
+      if (lang === 'js' || lang === 'json') return js(code);
+      if (lang === 'ts') return ts(code);
       if (lang === 'css') return css(code);
       if (lang === 'html') return html(code);
       if (lang === 'mcu') return mcu(code);
+      if (lang === 'sql') return sql(code);
+      if (lang === 'bash') return bash(code);
+      if (lang === 'asm') return asm(code);
+      if (clikeTok[lang]) return clikeTok[lang](code);
     } catch (e) { /* fall through to plain text */ }
     return esc(code);
   }
-  return { render: render, normLang: normLang };
+  /* the languages a fenced block or a file can be highlighted in */
+  function known(lang) {
+    lang = normLang(lang);
+    return lang === 'python' || lang === 'js' || lang === 'json' || lang === 'ts' || lang === 'css' ||
+      lang === 'html' || lang === 'mcu' || lang === 'sql' || lang === 'bash' || lang === 'asm' || !!clikeTok[lang];
+  }
+  return { render: render, normLang: normLang, known: known, CLIKE: CLIKE };
 })();
 
 /* ---------- markdown ---------- */
@@ -486,7 +714,15 @@ function createEditor(root, opts) {
   let lang = opts.lang || 'python';
   let lineCount = -1;
 
-  function unit() { return lang === 'python' ? '    ' : '  '; }
+  /* four spaces where the language's own style guide says four; two for the
+     web languages, which is what every example in the material uses */
+  const FOUR = { python: 1, c: 1, cpp: 1, csharp: 1, java: 1, kotlin: 1, swift: 1, go: 1, rust: 1, sql: 1, verilog: 1, glsl: 1 };
+  function unit() { return FOUR[lang] ? '    ' : '  '; }
+  /* the line-comment marker Ctrl+/ toggles, per language; a language with none
+     (HTML, CSS, Markdown) keeps the key for the browser */
+  const LINE_COMMENT = { python: '# ', bash: '# ', sql: '-- ', asm: '; ',
+    js: '// ', ts: '// ', c: '// ', cpp: '// ', csharp: '// ', java: '// ', kotlin: '// ',
+    swift: '// ', go: '// ', rust: '// ', glsl: '// ', verilog: '// ', mcu: '// ', json: '// ' };
   function refresh() {
     hl.innerHTML = Highlight.render(ta.value, lang) + '\n';
     const n = ta.value.split('\n').length;
@@ -530,16 +766,18 @@ function createEditor(root, opts) {
     if (mod && (e.key === 's' || e.key === 'S')) { e.preventDefault(); if (opts.onSave) opts.onSave(); return; }
     if (ta.readOnly) return;
     if (mod && e.key === '/') {
-      if (lang !== 'python' && lang !== 'js') return;
+      const prefix = LINE_COMMENT[lang];
+      if (!prefix) return;
       e.preventDefault();
-      const prefix = lang === 'python' ? '# ' : '// ';
+      const marker = prefix.trim();
+      const unRe = new RegExp('^(\\s*)' + escapeReg(marker) + '\\s?');
       const ls = v.lastIndexOf('\n', s - 1) + 1;
       let le = v.indexOf('\n', en); if (le === -1) le = v.length;
       const block = v.slice(ls, le).split('\n');
-      const allOn = block.every(l => !l.trim() || l.trimStart().startsWith(prefix.trim()));
+      const allOn = block.every(l => !l.trim() || l.trimStart().startsWith(marker));
       const outB = block.map(function (l) {
         if (!l.trim()) return l;
-        if (allOn) return l.replace(lang === 'python' ? /^(\s*)#\s?/ : /^(\s*)\/\/\s?/, '$1');
+        if (allOn) return l.replace(unRe, '$1');
         return l.replace(/^(\s*)/, '$1' + prefix);
       }).join('\n');
       editRange(ls, le, outB);

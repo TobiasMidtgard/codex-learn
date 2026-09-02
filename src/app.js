@@ -4725,28 +4725,52 @@ function renderCode(main, l) {
 }
 
 /* ---------- playground ---------- */
-/* the modes whose body is a code editor; anything else renders its own view */
-const PLAY_CODE_MODES = { python: 1, js: 1, web: 1 };
+/* Two modes: one code workspace, and the schematic editor. The workspace used to be
+   three — Python, JavaScript and Web page, each with its own file set — which meant
+   a learner writing a Python helper for a web experiment had two windows and a
+   mode switch between them. One file list now, and the file's suffix decides its
+   language, its highlighting and which runtime Run hands it to. */
+const PLAY_CODE_MODES = { code: 1 };
 const PLAY_DEFAULTS = {
-  python: { main: 'main.py', files: { 'main.py': '# Scratchpad — anything goes.\nfor i in range(1, 6):\n    print("*" * i)\n' } },
-  js: { main: 'script.js', files: { 'script.js': '// Scratchpad — console.log away.\nconst names = ["Ada", "Linus", "Grace"];\nfor (const n of names) console.log("Hei, " + n + "!");\n' } },
-  web: { main: 'index.html', files: {
+  code: { files: {
+    'main.py': '# Scratchpad — anything goes.\nfor i in range(1, 6):\n    print("*" * i)\n',
+    'script.js': '// Scratchpad — console.log away.\nconst names = ["Ada", "Linus", "Grace"];\nfor (const n of names) console.log("Hei, " + n + "!");\n',
     'index.html': '<!doctype html>\n<html>\n<head>\n  <meta charset="utf-8">\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>Playground</h1>\n  <p>Edit index.html, style.css and app.js — then Run.</p>\n  <button id="go">Click me</button>\n  <scr' + 'ipt src="app.js"><\\/scr' + 'ipt>\n</body>\n</html>\n',
     'style.css': 'body { font-family: system-ui, sans-serif; padding: 24px; background: #f5f6f8; }\nh1 { color: #f26a1b; }\nbutton { padding: 8px 14px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; }\n',
     'app.js': 'let clicks = 0;\ndocument.querySelector("#go").addEventListener("click", () => {\n  clicks += 1;\n  document.querySelector("#go").textContent = "Clicked " + clicks + "x";\n});\n',
   } },
-  /* the schematic lives as JSON in the same per-mode file slot the code modes use,
+  /* the schematic lives as JSON in the same per-mode file slot the code mode uses,
      so it is saved, synced and reset by exactly the same machinery */
   circuit: { main: 'circuit.json', files: { 'circuit.json': '' } },
 };
+/* the languages Run can hand to something; everything else is edited and kept */
+const LANG_LABEL = { python: 'Python', js: 'JavaScript', ts: 'TypeScript', html: 'HTML', css: 'CSS',
+  c: 'C', cpp: 'C++', csharp: 'C#', java: 'Java', go: 'Go', rust: 'Rust', kotlin: 'Kotlin',
+  swift: 'Swift', sql: 'SQL', verilog: 'Verilog', glsl: 'GLSL', asm: 'assembly', json: 'JSON',
+  md: 'Markdown', bash: 'shell', text: 'Text' };
+const SLASH_COMMENT_LANGS = { js: 1, ts: 1, c: 1, cpp: 1, csharp: 1, java: 1, go: 1, rust: 1,
+  kotlin: 1, swift: 1, glsl: 1, verilog: 1, json: 0 };
 function playState() {
-  if (!P.playground) P.playground = { mode: 'python', files: {} };
+  if (!P.playground || typeof P.playground !== 'object') P.playground = { mode: 'code', files: {} };
   const st = P.playground;
-  /* every mode PLAY_DEFAULTS declares, not a list that has to be remembered twice:
-     a mode missing from here gets no file slot, and its edits fail silently */
-  for (const mode of Object.keys(PLAY_DEFAULTS)) {
-    if (!st.files[mode]) st.files[mode] = Object.assign({}, PLAY_DEFAULTS[mode].files);
+  if (!st.files || typeof st.files !== 'object' || Array.isArray(st.files)) st.files = {};
+  const plain = function (v) { return v && typeof v === 'object' && !Array.isArray(v) ? v : null; };
+  /* A workspace saved by the three-mode playground is carried over once: every file
+     from every mode into the one list, first writer wins on a clashing name, and the
+     old slots dropped so nothing is stored twice. */
+  if (!plain(st.files.code)) {
+    const merged = {};
+    ['python', 'js', 'web'].forEach(function (m) {
+      const f = plain(st.files[m]);
+      if (!f) return;
+      Object.keys(f).forEach(function (n) { if (merged[n] === undefined && typeof f[n] === 'string') merged[n] = f[n]; });
+    });
+    st.files.code = Object.keys(merged).length ? merged : Object.assign({}, PLAY_DEFAULTS.code.files);
   }
+  ['python', 'js', 'web'].forEach(function (m) { delete st.files[m]; });
+  if (!Object.keys(st.files.code).length) Object.assign(st.files.code, PLAY_DEFAULTS.code.files);
+  if (!plain(st.files.circuit)) st.files.circuit = Object.assign({}, PLAY_DEFAULTS.circuit.files);
+  if (st.mode !== 'circuit') st.mode = 'code';
   return st;
 }
 /* ---------- inline example runner ----------
@@ -4906,18 +4930,17 @@ function runSnippet(s, box, btn) {
 
 function openInPlayground(code, lang) {
   const st = playState();
-  const mode = lang === 'python' ? 'python' : (lang === 'html' ? 'web' : 'js');
-  st.mode = mode;
+  st.mode = 'code';
   /* a transcript's prompts and answers are not code; the editor gets the statements */
-  if (mode === 'python') st.files.python['main.py'] = pyTranscript(code).code + '\n';
-  else if (mode === 'js') st.files.js['script.js'] = code + '\n';
-  else {
+  if (lang === 'python') { st.files.code['main.py'] = pyTranscript(code).code + '\n'; st.active = 'main.py'; }
+  else if (lang === 'html') {
     let doc = code;
     if (!/<html|<!doctype/i.test(doc)) {
       doc = '<!doctype html>\n<html>\n<head><meta charset="utf-8"></head>\n<body>\n' + doc + '\n</body>\n</html>';
     }
-    st.files.web = { 'index.html': doc + '\n' };
-  }
+    st.files.code['index.html'] = doc + '\n';
+    st.active = 'index.html';
+  } else { st.files.code['script.js'] = code + '\n'; st.active = 'script.js'; }
   saveSoon();
   /* carry the origin so the Playground can offer a one-click way back */
   go({ view: 'play', from: (route && route.view !== 'play') ? route : null });
@@ -4937,8 +4960,7 @@ function renderCircuitPlayground(main, st) {
     '<div class="play">' +
       '<div class="play-head"><h1>Playground</h1>' +
         '<div class="seg" id="seg">' +
-          '<button data-m="python">Python</button><button data-m="js">JavaScript</button>' +
-          '<button data-m="web">Web page</button><button data-m="circuit" class="active">Circuit</button>' +
+          '<button data-m="code">Code</button><button data-m="circuit" class="active">Circuit</button>' +
         '</div>' +
         '<span class="hint">Draw a circuit and solve it \u2014 saved automatically.</span>' +
         (route.from ? '<span class="sp"></span><button class="btn dark sm" id="play-back">\u2190 Back to ' +
@@ -4977,20 +4999,19 @@ function renderCircuitPlayground(main, st) {
 
 function renderPlayground(main) {
   const st = playState();
-  let mode = st.mode || 'python';
-  if (mode === 'circuit') { renderCircuitPlayground(main, st); return; }
-  let names = Object.keys(st.files[mode]);
-  let active = 0;
+  if (st.mode === 'circuit') { renderCircuitPlayground(main, st); return; }
+  const files = st.files.code;
+  let names = Object.keys(files);
+  let active = Math.max(0, names.indexOf(st.active || ''));
   let running = false;
 
   main.innerHTML =
   '<div class="play">' +
     '<div class="play-head"><h1>Playground</h1>' +
       '<div class="seg" id="seg">' +
-        '<button data-m="python">Python</button><button data-m="js">JavaScript</button>' +
-        '<button data-m="web">Web page</button><button data-m="circuit">Circuit</button>' +
+        '<button data-m="code" class="active">Code</button><button data-m="circuit">Circuit</button>' +
       '</div>' +
-      '<span class="hint">A scratchpad — saved automatically, no checks.</span>' +
+      '<span class="hint">One workspace — the file’s suffix decides its language. Saved automatically, no checks.</span>' +
       (route.from ? '<span class="sp"></span><button class="btn dark sm" id="play-back">← Back to ' +
         esc(screenMeta(route.from).title) + '</button>' : '') +
     '</div>' +
@@ -4998,8 +5019,9 @@ function renderPlayground(main) {
       '<div class="wb-bar">' +
         '<div class="ftabs" id="p-ftabs"></div>' +
         '<div class="wb-actions">' +
-          '<span class="newfile" id="newfile" hidden><input id="nf-input" placeholder="new-file.py" aria-label="New file name"><button class="btn dark sm" id="nf-add">Add</button></span>' +
+          '<span class="newfile" id="newfile" hidden><input id="nf-input" placeholder="name.py · .js · .html · .cpp · .java …" aria-label="New file name"><button class="btn dark sm" id="nf-add">Add</button></span>' +
           '<button class="btn dark sm" id="p-newfile-btn">+ File</button>' +
+          '<button class="btn dark sm" id="p-delfile-btn" title="Delete the open file">Delete file</button>' +
           '<span class="rt-status" id="p-rt" hidden><i></i><span id="p-rt-label">python</span></span>' +
           '<button class="btn dark sm" id="p-reset">Reset</button>' +
           '<button class="btn run" id="p-run">▶ Run</button>' +
@@ -5011,7 +5033,7 @@ function renderPlayground(main) {
         '<div class="ptabs">' +
           '<button class="ptab active" data-pt="console">Console</button>' +
           '<button class="ptab" data-pt="preview" id="p-prev-tab" hidden>Preview</button>' +
-          '<span class="spacer"></span><span class="note">Ctrl+Enter runs</span>' +
+          '<span class="spacer"></span><span class="note">Ctrl+Enter runs the open file</span>' +
         '</div>' +
         '<div class="pbody">' +
           '<div class="console" id="p-console"><span class="empty">Press Run — output appears here.</span></div>' +
@@ -5025,12 +5047,15 @@ function renderPlayground(main) {
   if (backBtn) backBtn.addEventListener('click', function () { go(route.from); });
 
   const ed = createEditor($('#p-ed'), {
-    lang: 'python',
+    lang: langOfFile(names[active] || 'main.py'),
     onRun: doRun,
     onSave: function () { saveNow(); toast('Saved'); },
-    onChange: function (v) { st.files[mode][names[active]] = v; saveSoon(); },
+    onChange: function (v) { files[names[active]] = v; saveSoon(); },
     acExtra: function () {
-      return names.map(function (n, i) { return i === active ? '' : st.files[mode][n]; }).join('\n');
+      /* names from the other files of the same language, so a helper module's
+         functions complete in main */
+      const lang = langOfFile(names[active]);
+      return names.map(function (n, i) { return (i !== active && langOfFile(n) === lang) ? files[n] : ''; }).join('\n');
     },
   });
 
@@ -5054,38 +5079,56 @@ function renderPlayground(main) {
   }
   $all('.ptab', main).forEach(function (b) { b.addEventListener('click', function () { setPtab(b.dataset.pt); }); });
 
+  /* What Run does for the open file. Python, JavaScript and a web page have a runtime
+     in the browser; a stylesheet runs as part of the page that links it; everything
+     else — C, C++, C#, Java, Go, Rust and the rest — is written, highlighted and kept,
+     and Run says plainly that there is nothing here to run it on. */
+  function runPlan(name) {
+    const lang = langOfFile(name);
+    if (lang === 'python') return { kind: 'python', main: name };
+    if (lang === 'js') return { kind: 'js', main: name };
+    if (lang === 'html') return { kind: 'web', main: name };
+    if (lang === 'css') {
+      const page = names.find(function (n) { return langOfFile(n) === 'html'; });
+      return page ? { kind: 'web', main: page } : { kind: 'none', why: 'A stylesheet runs as part of a page. Add an index.html that links it, open that, and press Run.' };
+    }
+    const label = LANG_LABEL[lang] || lang;
+    return { kind: 'none', why: 'There is no ' + label + ' runtime in this browser, so ' + name +
+      ' is kept, highlighted and saved but cannot be run here. Python, JavaScript and HTML files run.' };
+  }
+
   function renderFtabs() {
     $('#p-ftabs').innerHTML = names.map(function (n, i) {
-      return '<button class="ftab' + (i === active ? ' active' : '') + '" data-fi="' + i + '">' + esc(n) + '</button>';
+      return '<button class="ftab' + (i === active ? ' active' : '') + '" data-fi="' + i + '" title="' + esc(LANG_LABEL[langOfFile(n)] || 'Text') + '">' + esc(n) + '</button>';
     }).join('');
     $all('#p-ftabs .ftab', main).forEach(function (b) {
       b.addEventListener('click', function () { setActive(+b.dataset.fi); });
     });
   }
   function setActive(i) {
-    active = i;
-    ed.setLang(langOfFile(names[i]));
-    ed.setValue(st.files[mode][names[i]]);
+    active = Math.max(0, Math.min(i, names.length - 1));
+    const name = names[active];
+    st.active = name;
+    const lang = langOfFile(name);
+    ed.setLang(lang);
+    ed.setValue(files[name]);
     renderFtabs();
-  }
-  function setMode(m) {
-    /* Not every mode is a text editor. Switching in place worked while all three
-       were, but the circuit mode needs a different view entirely — without this it
-       loaded circuit.json into the code editor and the schematic "disappeared". */
-    if (!PLAY_CODE_MODES[m]) { st.mode = m; saveSoon(); go({ view: 'play' }); return; }
-    mode = m;
-    st.mode = m;
-    names = Object.keys(st.files[m]);
-    active = 0;
-    $all('#seg button', main).forEach(function (b) { b.classList.toggle('active', b.dataset.m === m); });
-    $('#p-prev-tab').hidden = m !== 'web';
-    $('#p-rt').hidden = m !== 'python';
-    $('#p-newfile-btn').hidden = m === 'js';
-    setPtab('console');
-    setActive(0);
+    const plan = runPlan(name);
+    $('#p-prev-tab').hidden = plan.kind !== 'web';
+    $('#p-rt').hidden = plan.kind !== 'python';
+    $('#p-delfile-btn').disabled = names.length <= 1;
+    const rb = $('#p-run');
+    rb.textContent = plan.kind === 'none' ? '▶ Run' : '▶ Run ' + name;
+    rb.title = plan.kind === 'none' ? plan.why : 'Run ' + name + ' (Ctrl+Enter)';
+    if (plan.kind !== 'web' && !$('#p-preview').hidden) setPtab('console');
     saveSoon();
   }
-  $all('#seg button', main).forEach(function (b) { b.addEventListener('click', function () { setMode(b.dataset.m); }); });
+  $all('#seg button', main).forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (b.dataset.m === st.mode) return;
+      st.mode = b.dataset.m; saveSoon(); go({ view: 'play' });
+    });
+  });
 
   $('#p-newfile-btn').addEventListener('click', function () {
     const nf = $('#newfile');
@@ -5094,25 +5137,34 @@ function renderPlayground(main) {
   });
   function addFile() {
     const name = $('#nf-input').value.trim();
-    const okExt = mode === 'python' ? /^[\w.-]+\.py$/ : /^[\w.-]+\.(css|js|html)$/;
-    if (!okExt.test(name)) { toast(mode === 'python' ? 'Name it like helpers.py' : 'Use .css, .js or .html'); return; }
-    if (st.files[mode][name] !== undefined) { toast('That file already exists'); return; }
-    st.files[mode][name] = mode === 'python' ? '# ' + name + '\n' : '';
-    names = Object.keys(st.files[mode]);
+    if (!/^[\w.-]+\.[A-Za-z0-9]+$/.test(name) || name.indexOf('..') >= 0) { toast('Name it like helpers.py, app.js or Main.java'); return; }
+    if (files[name] !== undefined) { toast('That file already exists'); return; }
+    const lang = langOfFile(name);
+    files[name] = lang === 'python' ? '# ' + name + '\n'
+      : SLASH_COMMENT_LANGS[lang] ? '// ' + name + '\n'
+      : lang === 'sql' ? '-- ' + name + '\n' : '';
+    names = Object.keys(files);
     $('#nf-input').value = '';
     $('#newfile').hidden = true;
     setActive(names.indexOf(name));
-    saveSoon();
   }
   $('#nf-add').addEventListener('click', addFile);
   $('#nf-input').addEventListener('keydown', function (e) { if (e.key === 'Enter') addFile(); });
+  $('#p-delfile-btn').addEventListener('click', function () {
+    if (names.length <= 1) { toast('The workspace keeps at least one file'); return; }
+    const name = names[active];
+    delete files[name];
+    names = Object.keys(files);
+    toast('Deleted ' + name);
+    setActive(Math.min(active, names.length - 1));
+  });
 
   $('#p-reset').addEventListener('click', function () {
-    st.files[mode] = Object.assign({}, PLAY_DEFAULTS[mode].files);
-    names = Object.keys(st.files[mode]);
+    Object.keys(files).forEach(function (n) { delete files[n]; });
+    Object.assign(files, PLAY_DEFAULTS.code.files);
+    names = Object.keys(files);
     setActive(0);
     clearConsole();
-    saveSoon();
   });
 
   (function () {
@@ -5137,24 +5189,31 @@ function renderPlayground(main) {
   const runBtn = $('#p-run');
   async function doRun() {
     if (running) return;
+    const name = names[active];
+    const plan = runPlan(name);
+    clearConsole();
+    setPtab('console');
+    if (plan.kind === 'none') { logLine('sys', plan.why); return; }
     running = true;
     runBtn.disabled = true;
     runBtn.textContent = '… Running';
-    clearConsole();
-    const runFiles = names.map(function (n) { return { name: n, content: st.files[mode][n] }; });
-    function done() { running = false; runBtn.disabled = false; runBtn.textContent = '▶ Run'; }
+    /* the runner gets the files of the language it runs: every .py module for
+       Python, every page asset for the frame */
+    const wanted = plan.kind === 'python' ? { python: 1 } : { html: 1, css: 1, js: 1 };
+    const runFiles = names.filter(function (n) { return wanted[langOfFile(n)]; })
+      .map(function (n) { return { name: n, content: files[n] }; });
+    function done() { running = false; runBtn.disabled = false; setActive(active); }
     try {
-      if (mode === 'python') {
-        setPtab('console');
+      if (plan.kind === 'python') {
         if (PyRunner.getStatus() !== 'ready') logLine('sys', 'Fetching the Python runtime (~10 MB) — only the first run waits for this…');
-        await PyRunner.run({ files: runFiles, main: 'main.py', tests: [], onConsole: logLine });
+        await PyRunner.run({ files: runFiles, main: plan.main, tests: [], onConsole: logLine });
         done();
       } else {
-        if (mode === 'web') setPtab('preview'); else setPtab('console');
+        if (plan.kind === 'web') setPtab('preview');
         WebRunner.run({
-          kind: mode === 'web' ? 'web' : 'js',
+          kind: plan.kind,
           files: runFiles,
-          main: PLAY_DEFAULTS[mode].main,
+          main: plan.main,
           tests: [],
           mount: $('#p-preview'),
           onConsole: logLine,
@@ -5170,7 +5229,7 @@ function renderPlayground(main) {
   }
   runBtn.addEventListener('click', doRun);
 
-  setMode(mode);
+  setActive(active);
 }
 
 /* ---------- boot ---------- */

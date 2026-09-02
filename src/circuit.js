@@ -2623,8 +2623,10 @@ function createCircuit(root, opts) {
             'two bipolars, M and Shift+M the two MOSFETs, O op-amp, B breadboard, ' +
             'U microcontroller. Shift+R rotates, Shift+G groups, Shift+U ungroups, ' +
             'Delete removes the selected parts and wires, and Escape lets go and then ' +
-            'closes a block. Plus and minus zoom, 0 fits the drawing. Tab leaves the ' +
-            'canvas.</p>' +
+            'closes a block. With a pointer, dragging on empty canvas selects everything ' +
+            'inside the band, wires included; hold Shift to leave the wires out and add ' +
+            'to what is already selected. Plus and minus zoom, 0 fits the drawing. Tab ' +
+            'leaves the canvas.</p>' +
           /* Every action on this canvas changes a picture and nothing else. This is
              where it is said in words. */
           '<p class="ckt-vh" data-say role="status" aria-live="polite"></p>' +
@@ -2840,11 +2842,20 @@ function createCircuit(root, opts) {
       });
       cur.wires.forEach(function (wr) { if (on(wr.a) && on(wr.b)) wires.add(wr); });
     });
+    /* A selected wire travels with the selection. Its identity is its endpoints, so
+       the selection set is re-keyed after the move or it would forget the wires it
+       had just carried. */
+    const carried = [];
+    cur.wires.forEach(function (wr) {
+      const k = wireKey(wr);
+      if (selWires.has(k)) { selWires.delete(k); carried.push(wr); wires.add(wr); }
+    });
     parts.forEach(function (q) { q.x += dx; q.y += dy; });
     wires.forEach(function (wr) {
       wr.a = [wr.a[0] + dx, wr.a[1] + dy];
       wr.b = [wr.b[0] + dx, wr.b[1] + dy];
     });
+    carried.forEach(function (wr) { selWires.add(wireKey(wr)); });
   }
 
   /* A body's footprint, in cells. A block's is the ground it was standing on when it
@@ -3922,8 +3933,10 @@ function createCircuit(root, opts) {
       syncExpanded();
     }
     if (selIds.size > 1) {
-      partPanel.innerHTML = '<h4>' + selIds.size + ' parts selected</h4>' +
-        '<p class="ckt-hint">Drag to move them together. R rotates, Delete removes. ' +
+      partPanel.innerHTML = '<h4>' + selIds.size + ' parts' +
+        (selWires.size ? ' and ' + selWires.size + (selWires.size === 1 ? ' wire' : ' wires') : '') + ' selected</h4>' +
+        '<p class="ckt-hint">Drag to move them together' +
+        (selWires.size ? ', wires included' : '') + '. R rotates, Delete removes. ' +
         'G folds them into one block, whose pins are worked out from which nets cross ' +
         'the edge of the selection; U opens any block among them back out. ' +
         'Click an empty cell to deselect.</p>';
@@ -3937,7 +3950,7 @@ function createCircuit(root, opts) {
          and the two are kept short enough to stay in step. */
       partPanel.innerHTML = '<h4>Component</h4><p class="ckt-hint">' +
         (tool === 'wire' ? 'Click a pin, then click where the wire should end.'
-          : tool === 'select' ? 'Click a component to select it.'
+          : tool === 'select' ? 'Click a component to select it, or drag on empty canvas to select everything the band surrounds, wires included; Shift leaves the wires out.'
           : 'Click the grid to place a ' + PART_KINDS[tool].name.toLowerCase() + '.') +
         ' Or tab to the canvas and use the arrow keys: Enter does what a click does, ' +
         'Shift with an arrow moves what is selected, and Escape lets go.</p>';
@@ -5663,7 +5676,7 @@ function createCircuit(root, opts) {
          ever adjusting the selection. */
       down = hit
         ? { sx: sp[0], sy: sp[1], grid: pt, mode: 'maybe-move', hit: hit.id, shift: e.shiftKey }
-        : { sx: sp[0], sy: sp[1], grid: pt, mode: 'maybe-marquee' };
+        : { sx: sp[0], sy: sp[1], grid: pt, mode: 'maybe-marquee', shift: e.shiftKey };
       paintPart();
       paint();
       return;
@@ -5720,6 +5733,18 @@ function createCircuit(root, opts) {
         const wy2 = bodyOf(p) ? gy(p.y + bodyH(p)) : wy;
         if (wx >= x0 && wx2 <= x1 && wy >= y0 && wy2 <= y1) selIds.add(p.id);
       });
+      /* A wire is caught when both its ends are inside, so a band drawn round a
+         sub-circuit picks the whole sub-circuit up and it moves as one — a band that
+         took the parts and left the wires would put the parts down somewhere the
+         wires no longer reach. Hold Shift to leave the wires out (Shift also adds to
+         the selection rather than replacing it, as it does for a click). */
+      if (!(down && down.shift)) {
+        cur.wires.forEach(function (w) {
+          const ax = gx(w.a[0]), ay = gy(w.a[1]), bx = gx(w.b[0]), by = gy(w.b[1]);
+          if (Math.min(ax, bx) >= x0 && Math.max(ax, bx) <= x1 &&
+              Math.min(ay, by) >= y0 && Math.max(ay, by) <= y1) selWires.add(wireKey(w));
+        });
+      }
       marquee = null;
       paintPart();
       paint();

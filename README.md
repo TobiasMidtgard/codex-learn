@@ -51,9 +51,22 @@ Then open <http://localhost:4173>. That serves the app **and** the account API.
 
 Rebuilding writes the app in two shapes. `build/codewright.html` has everything
 inlined — one file, no requests, the one to open from disk. `build/index.html` plus
-`build/programs/*.json` is the same app with the degree catalog split into one fetched
-payload per programme, which is what a browser gets: the catalog is seven eighths of
-the bytes, and inlined it means nothing on the page runs until all of it has parsed.
+`build/programs/*.json` and `build/lib/*.js` is the same app split for a browser:
+
+- the shell is the scripts and styles with their comments and indentation stripped
+  (`tools/minify.mjs`; the source files keep every comment), about 720 KB;
+- at boot it fetches one **catalog index** (`programs/catalog.<hash>.json`, ~390 KB)
+  holding every course as a skeleton — titles, minutes and counts — and indexes the
+  whole degree from that;
+- a course's own payload (`programs/<programme>.<ID>.<hash>.json`) is fetched the
+  first time a lesson in it opens, and fills the same lesson objects in;
+- the circuit editor and the sketch interpreter (`lib/circuit.<hash>.js`) are fetched
+  the first time a screen that draws a schematic opens.
+
+Before this the shell fetched all 62 course payloads, 13 MB, before the study plan
+could paint. `node build.mjs --preview` writes `build/` only and lets an un-emitted
+author file through with a note, for looking at the app while a course is being
+written; `--check` validates and writes nothing.
 
 `docs/` holds a copy of the split shape and is what Pages publishes. The payload
 filenames carry a hash of their contents, so they change whenever a course does —
@@ -97,6 +110,11 @@ server/
 tools/
   emit.py            author module -> validated JSON
   verify_labs.py     executes every lab against real CPython
+  verify_reads.py    runs every fenced Python example of every reading standalone
+  skeleton.mjs       a course reduced to titles and counts, for the catalog index
+  minify.mjs         strips comments and indentation from what ships
+  verify_lazy.mjs    the index and per-course hydration, driven end to end
+  verify_minify.mjs  the stripper changes nothing but comments
   test_api.mjs       end-to-end exercise of the account API
   serve.mjs          static server, no accounts
 build.mjs            assembles everything into build/ and docs/

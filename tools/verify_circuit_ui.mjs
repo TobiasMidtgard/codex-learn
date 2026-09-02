@@ -373,6 +373,74 @@ section('dispose', () => {
 });
 
 /* ---------------------------------------------------------------- 8. the read-only diagram */
+/* ---------------------------------------------------------------- the rubber band
+ *
+ * A band drawn on empty canvas used to pick up the parts inside it and leave every
+ * wire behind, so a sub-circuit dragged as a group arrived without its connections.
+ * Now a wire whose two ends are inside the band is selected with the parts, the
+ * whole thing moves as one, and Shift leaves the wires out. Driven with a pointer
+ * because a band is the one gesture the keyboard has no spelling for. The screen
+ * position of cell (x, y) is ((x - 1) * 26, (y - 1) * 26): GRID is 26 and the origin
+ * is cell (2, 2), which the editor draws one cell in from the corner. */
+section('band', () => {
+  const at = (x, y) => [(x - 1) * 26, (y - 1) * 26];
+  const model = () => ({
+    parts: [{ id: 'p0', kind: 'R', x: 3, y: 3, rot: 0, value: 1000 },
+            { id: 'p1', kind: 'R', x: 7, y: 3, rot: 0, value: 2200 }],
+    wires: [{ a: [3, 5], b: [7, 5] }],
+  });
+  const band = (m, from, to, shift) => {
+    const a = at(from[0], from[1]), b = at(to[0], to[1]);
+    m.cv.dispatchEvent({ type: 'pointerdown', button: 0, clientX: a[0], clientY: a[1], pointerId: 1, target: m.cv, shiftKey: !!shift });
+    m.cv.dispatchEvent({ type: 'pointermove', clientX: (a[0] + b[0]) / 2, clientY: (a[1] + b[1]) / 2, pointerId: 1, target: m.cv, shiftKey: !!shift });
+    m.cv.dispatchEvent({ type: 'pointermove', clientX: b[0], clientY: b[1], pointerId: 1, target: m.cv, shiftKey: !!shift });
+    m.cv.dispatchEvent({ type: 'pointerup', button: 0, clientX: b[0], clientY: b[1], pointerId: 1, target: m.cv, shiftKey: !!shift });
+    drives += 4;
+  };
+  const panel = (m) => (m.root.querySelector('[data-panel="part"] h4') || { textContent: '' }).textContent;
+
+  const m = mount({ model: model() });
+  m.tool('select');
+  m.cv.focus();
+  band(m, [1, 1], [10, 7]);
+  if (!/2 parts and 1 wire selected/.test(panel(m))) {
+    note('band', 'a band round two parts and the wire between them reported "' + panel(m) + '"');
+  }
+  /* Shift+arrow is the drag gesture without a pointer: the wire must come too */
+  m.key(m.cv, 'ArrowRight', { shiftKey: true }); drives++;
+  const w = m.model().wires[0], ps = m.model().parts;
+  if (!(ps[0].x === 4 && ps[1].x === 8)) note('band', 'the parts did not move one cell right: ' + ps.map((p) => p.x).join(','));
+  if (!(w.a[0] === 4 && w.b[0] === 8 && w.a[1] === 5 && w.b[1] === 5)) {
+    note('band', 'the selected wire stayed behind when the selection moved: ' + JSON.stringify(w));
+  }
+  /* and it is still selected afterwards, under its new endpoints */
+  if (!/1 wire selected/.test(panel(m))) note('band', 'after the move the wire dropped out of the selection: "' + panel(m) + '"');
+  m.key(m.cv, 'ArrowRight', { shiftKey: true }); drives++;
+  const w2 = m.model().wires[0];
+  if (!(w2.a[0] === 5 && w2.b[0] === 9)) note('band', 'a second move left the wire at ' + JSON.stringify(w2));
+  m.key(m.cv, 'Escape'); drives++;
+
+  /* a band on a fresh drawing with Shift held: parts only */
+  const m2 = mount({ model: model() });
+  m2.tool('select');
+  m2.cv.focus();
+  band(m2, [1, 1], [10, 7], true);
+  if (!/2 parts selected/.test(panel(m2)) || /wire/.test(panel(m2))) {
+    note('band', 'a Shift band was meant to leave the wire out and reported "' + panel(m2) + '"');
+  }
+  m2.key(m2.cv, 'ArrowRight', { shiftKey: true }); drives++;
+  const w3 = m2.model().wires[0];
+  if (!(w3.a[0] === 3 && w3.b[0] === 7)) note('band', 'a wire that was not selected moved with a Shift band: ' + JSON.stringify(w3));
+
+  /* a band that holds one end of the wire and not the other leaves it alone */
+  const m3 = mount({ model: model() });
+  m3.tool('select');
+  m3.cv.focus();
+  band(m3, [1, 1], [5, 7]);
+  if (/wire/.test(panel(m3))) note('band', 'a band round one end of a wire selected it: "' + panel(m3) + '"');
+  m.handle.dispose(); m2.handle.dispose(); m3.handle.dispose();
+});
+
 section('diagram', () => {
   const root = new El('div');
   const h = createCircuit(root, { model: { parts: [{ id: 'p0', kind: 'R', x: 3, y: 3, rot: 0, value: 1000 }], wires: [] }, readOnly: true });
