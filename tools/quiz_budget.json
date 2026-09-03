@@ -57,7 +57,7 @@
   "QC510": {"longest": 0, "shortest": 0, "whys": 100, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "RFIC510": {"longest": 9, "shortest": 0, "whys": 48, "blanks": {"longest": 2, "shortest": 0, "markup": 0, "whys": 16}},
   "RFIC520": {"longest": 5, "shortest": 0, "whys": 48, "blanks": {"longest": 2, "shortest": 0, "markup": 0, "whys": 16}},
-  "RFIC530": {"longest": 6, "shortest": 1, "whys": 0, "blanks": {"longest": 1, "shortest": 0, "markup": 0, "whys": 16}},
+  "RFIC530": {"longest": 6, "shortest": 1, "whys": 48, "blanks": {"longest": 1, "shortest": 0, "markup": 0, "whys": 16}},
   "ROB520": {"longest": 0, "shortest": 0, "whys": 88, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "SE201": {"longest": 11, "shortest": 2, "whys": 0, "blanks": {"longest": 0, "shortest": 2, "markup": 0, "whys": 80}},
   "SEC301": {"longest": 0, "shortest": 0, "whys": 120, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},

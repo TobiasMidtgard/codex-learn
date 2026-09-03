@@ -59,6 +59,251 @@ COURSE = {
                 "Two RF frequencies land on the same IF: the wanted signal and its image, reflected about the LO. Nothing after the mixer can separate them.",
                 "Single-balanced versus double-balanced: the Gilbert cell cancels both LO and RF feedthrough at the output, leaving only the products.",
             ],
+            "read": [{
+                "title": "Six decibels on the schematic, two on the analyser",
+                "minutes": 17,
+                "body": r'''
+A double-balanced Gilbert cell on a $1.8$ V supply. The tail sinks $2$ mA, so each side
+of the transconductance pair runs at $1$ mA; at an overdrive of $400$ mV that is
+$g_m = 2I_D/V_{ov} = 5$ mS. The load resistors are $400\ \Omega$, sized so the same
+$1$ mA drops $400$ mV across them and leaves the switching pair its headroom. The LO
+port is driven from a limiting buffer, hard enough that the upper devices are never both
+on for long.
+
+$g_m R_L = 2.0$. The schematic is annotated "$6$ dB", the review minutes say $6$ dB, and
+with a $900$ MHz LO and a small tone at the RF port the analyser reads an IF $3.9$ dB
+below that: $2.10$ dB of conversion gain.
+
+Nothing has gone wrong. The missing $3.92$ dB was never on offer, the same $3.92$ dB is
+what an ideal mixer charges the receiver in noise figure, and accounting for it is the
+whole of this module.
+
+## The upper pair is a switch, and a switch has a Fourier series
+
+Follow the signal. The bottom pair is a small-signal transconductor: an RF voltage
+$A\cos\omega_{rf}t$ at its gates becomes a current of amplitude $g_mA$ in its drains,
+and so far the stage is an amplifier like any other. The upper pair does something an
+amplifier does not do. Its gates see the LO, and once the LO swing exceeds a few hundred
+millivolts one device has the entire tail current and the other has none. Half a period
+later they exchange. The signal current is not scaled by the LO; it is *steered* by it.
+
+Steering a current alternately into the two halves of a differential load is
+multiplication by a function that is $+1$ for half the period and $-1$ for the other
+half. That function is where the arithmetic lives, and the Fourier series of a $\pm1$
+square wave is
+
+$$s(t) = \frac{4}{\pi}\left(\sin\omega_{lo}t + \frac{1}{3}\sin3\omega_{lo}t
+        + \frac{1}{5}\sin5\omega_{lo}t + \dots\right)$$
+
+Two things in that line decide the answer. The fundamental has amplitude $4/\pi = 1.273$
+— larger than the square wave's own peak of $1$, because the harmonics subtract near the
+edges to make the corners square. And multiplying two sinusoids splits the result in
+half: $\cos a\cos b = \tfrac12[\cos(a-b) + \cos(a+b)]$, and only the difference term
+lands at the IF. Multiply the two factors and the load turns the current back into a
+voltage:
+
+$$G_c = \frac{4}{\pi}\cdot\frac12\cdot g_mR_L = \frac{2}{\pi}g_mR_L = 0.6366\,g_mR_L$$
+
+$2/\pi$ is $-3.92$ dB, and it is not a defect of any implementation. It is what
+translating a spectrum costs when the thing doing the translating is a switch. The
+derivation unit *Conversion gain of a switching mixer* walks the same five steps and
+ends by asking for the answer when the LO is too small to commutate: a unit sinusoid has
+fundamental amplitude $1$, not $4/\pi$, so the gain falls to $g_mR_L/2 = 1.0$, exactly
+$2.1$ dB below. That gap is the entire argument for driving the LO port hard, and it is
+also why nothing is gained by driving it harder still.
+
+```python
+import math
+
+g_m, R_L = 5e-3, 400.0            # 1 mA a side, 400 ohm of load
+
+print(f"g_m R_L, the promise     : {g_m * R_L:6.4f} = {20 * math.log10(g_m * R_L):+7.3f} dB")
+for k in (1, 3, 5, 7):
+    g = 2.0 / (k * math.pi) * g_m * R_L
+    print(f"  LO harmonic {k}          : {g:6.4f} = {20 * math.log10(g):+7.3f} dB")
+print(f"a sinusoidal LO instead  : {g_m * R_L / 2:6.4f} = {20 * math.log10(g_m * R_L / 2):+7.3f} dB")
+```
+
+The promise is $2.0000$ and $+6.021$ dB; the fundamental delivers $1.2732$ and $+2.098$
+dB; the sinusoidal LO would give $1.0000$ and $0.000$ dB.
+
+## The $3.92$ dB is not lost. It is spread over nine other bands
+
+The three lines under the fundamental in that output are the rest of the series, and
+they are not bookkeeping. Every odd harmonic of the LO is a working mixer with
+conversion gain $2/(k\pi)$: an RF signal near $3f_{lo}$ arrives at the same IF, $9.5$ dB
+below the wanted one, and near $5f_{lo}$, $14$ dB below. A blocker $9.5$ dB stronger
+than the wanted signal, sitting at $3f_{lo} \pm f_{if}$, reaches the IF as an equal.
+
+Now count the power. Each odd harmonic folds *two* RF bands onto the IF — one above
+$kf_{lo}$ and one below — so a source of broadband noise at the RF port is amplified by
+$\sum_k 2\,(2/k\pi)^2$ over odd $k$, while the wanted single sideband is amplified by
+$(2/\pi)^2$.
+
+```python
+import math
+
+# every odd harmonic folds two bands, k*f_lo +/- f_if, onto the same IF
+folded = sum(2.0 * (2.0 / (k * math.pi)) ** 2 for k in range(1, 200001, 2))
+wanted = (2.0 / math.pi) ** 2
+print(f"noise power gain, 100000 odd harmonics : {folded:.6f}")
+print(f"wanted-signal power gain               : {wanted:.6f}")
+print(f"ratio                                  : {folded / wanted:.4f}"
+      f" = {10 * math.log10(folded / wanted):.3f} dB")
+print(f"pi^2 / 4 and the conversion loss       : {math.pi ** 2 / 4:.4f}"
+      f" = {-20 * math.log10(2.0 / math.pi):.3f} dB")
+```
+
+The noise power gain reads $0.999998$ after a hundred thousand odd harmonics, and the
+limit is exactly one for a reason worth holding on to: multiplying by $\pm1$ leaves
+$y^2 = x^2s^2 = x^2$ at every instant, so
+the total output power equals the total input power however the spectrum was rearranged.
+The wanted signal, meanwhile, keeps only $(2/\pi)^2 = 0.405285$ of its power. The ratio
+is $\pi^2/4 = 2.4674$, which is $3.922$ dB — the same number as the conversion loss,
+printed twice from two unrelated calculations. A perfect switching mixer, with no
+resistors and no transistors and no noise of its own, has a single-sideband noise figure
+of $3.922$ dB, and it has it because its signal gain is $2/\pi$ while its noise gain is
+$1$.
+
+## Priced against the receiver RFIC520 built
+
+RFIC520's capstone front end is an LNA at $1.4$ dB and $16$ dB of gain, a mixer at
+$9.0$ dB, an IF amplifier and an ADC driver, and it cascades to $1.960$ dB. Put a
+perfect switching mixer in the mixer's place — $3.922$ dB of noise figure and the
+$2.098$ dB of conversion gain this cell actually measured — and run Friis again.
+
+```python
+import math
+
+CHAIN = [("LNA", 1.4, 16.0), ("mixer", 9.0, 5.0),
+         ("IF amp", 4.5, 22.0), ("ADC driver", 14.0, 0.0)]
+
+
+def lin(db):
+    return 10.0 ** (db / 10.0)
+
+
+def cascade(stages):
+    F, G = 1.0, 1.0
+    for _, nf, gain in stages:
+        F += (lin(nf) - 1.0) / G
+        G *= lin(gain)
+    return 10.0 * math.log10(F)
+
+
+ideal_nf = 10.0 * math.log10(math.pi ** 2 / 4.0)
+perfect = [CHAIN[0], ("ideal mixer", ideal_nf, 2.098)] + CHAIN[2:]
+print(f"the specified chain            : {cascade(CHAIN):.4f} dB")
+print(f"with a perfect switching mixer : {cascade(perfect):.4f} dB")
+print(f"mixer excess, as specified     : {(lin(9.0) - 1) / lin(16.0):.6f}")
+print(f"mixer excess, perfect          : {(lin(ideal_nf) - 1) / lin(16.0):.6f}")
+```
+
+$1.9602$ dB becomes $1.6070$ dB. Two things are worth reading off that. Of the $9$ dB
+the real mixer costs, $3.92$ dB is arithmetic that no design can remove and about
+$5.1$ dB is implementation — switching-pair noise during the transitions, the load
+resistors, and the $1/f$ noise the module-2 course showed folding up around the LO. And
+replacing that real mixer with a physically impossible one buys the receiver only
+$0.35$ dB, because the LNA's $16$ dB of gain has already divided the mixer's excess from
+$0.1744$ down to where it competes with the LNA's own $1.4$ dB. The mixer is the second
+noise contributor in the chain and it is worth less attention than its own datasheet
+line suggests.
+
+## The mistake: the filter after the mixer will sort out the image
+
+Two RF frequencies convert to the same IF — $f_{lo} + f_{if}$ and $f_{lo} - f_{if}$ —
+and the belief that the IF filter can separate them is the most expensive misconception
+in receiver design, because it is discovered after the board exists. The lab for this
+module, *Measure the conversion gain of a switching mixer*, settles it by measurement.
+Its constants are an LO at $900$ Hz, an RF at $1000$ Hz, $g_m = 5$ mS and
+$R_L = 400\ \Omega$; the code below is that lab's arithmetic in the standard library.
+
+```python
+import math
+
+FS, N_SAMP = 20000.0, 20000       # the lab's own record: exactly one second
+
+
+def lo_wave(t, f_lo, n_harm):
+    """The lab's band-limited square LO: the first n_harm odd harmonics."""
+    s = 0.0
+    for i in range(n_harm):
+        k = 2 * i + 1
+        s += math.sin(2.0 * math.pi * k * f_lo * t) / k
+    return (4.0 / math.pi) * s
+
+
+def gain_at(f_if, f_rf, f_lo, a_rf, gm, rl, n_harm=9):
+    """Amplitude at f_if of the mixer output, divided by the input amplitude."""
+    c = s = 0.0
+    for i in range(N_SAMP):
+        t = i / FS
+        y = gm * rl * a_rf * math.cos(2.0 * math.pi * f_rf * t) * lo_wave(t, f_lo, n_harm)
+        c += y * math.cos(2.0 * math.pi * f_if * t)
+        s += y * math.sin(2.0 * math.pi * f_if * t)
+    return math.hypot(2.0 * c / N_SAMP, 2.0 * s / N_SAMP) / a_rf
+
+
+wanted = gain_at(100.0, 1000.0, 900.0, 0.01, 0.005, 400.0)
+image = gain_at(100.0, 800.0, 900.0, 0.01, 0.005, 400.0)
+third = gain_at(100.0, 2800.0, 900.0, 0.01, 0.005, 400.0)
+print(f"wanted, 100 Hz above the LO  : {wanted:.13f}")
+print(f"image,  100 Hz below the LO  : {image:.13f}")
+print(f"the two differ by            : {abs(wanted - image):.2e}")
+print(f"RF at 3*f_lo + f_if          : {third:.13f}"
+      f"  ({20 * math.log10(third / wanted):.2f} dB down)")
+```
+
+Both read $1.2732395447351$, and they differ by $2.6\times10^{-14}$ — which is the
+arithmetic, not the physics. The lab's own check asserts the same equality to within
+$10^{-6}$. After the multiplication the two signals occupy the same frequency and the
+same bandwidth; they are one waveform. No filter, no amount of IF gain and no digital
+processing downstream can undo an addition that has already happened.
+
+It is a tempting mistake because everything else in a receiver *is* fixed later. Out-of-
+band blockers, LO feedthrough, the sum product at $f_{rf}+f_{lo}$ — all of those land
+somewhere the IF filter can reach. The image is the one product that lands exactly where
+the wanted signal is, which is why the filter has to come *before* the mixer, and why
+choosing the IF is largely a fight about how far away the image sits and how sharp a
+front-end filter can be. The same block prints the third-harmonic path as
+$0.4244131815784$, which is $2/(3\pi)\,g_mR_L$ and $9.54$ dB below the wanted gain: the
+half-IF and harmonic-mixing spurs are the same phenomenon at higher $k$, and the lab's
+last test pins that number too.
+
+## Where the $\pm1$ model stops holding
+
+The switching pair is not instantaneous. During the LO transition both devices conduct,
+the multiplying function is trapezoidal rather than square, and its fundamental is
+smaller than $4/\pi$ — a few tenths of a decibel of gain, and rather more noise, because
+the overlap interval is when the pair contributes noise directly to the output. That is
+the real reason more LO amplitude helps after the gain has saturated: faster edges, a
+shorter overlap.
+
+The model also has no compression. The lab's check that conversion gain is identical at
+$10$ mV and $40$ mV of RF passes exactly, because $g_m$ is a constant in the code. On
+silicon the transconductance pair is a differential pair, its linear range is a couple
+of overdrives wide, and the gain starts falling a decibel by around $V_{ov}$ of input —
+so $P_{1\text{dB}}$ and $IIP3$ are properties of the *lower* stage, which the whole
+$\pm1$ picture never touches. A mixer's linearity and its conversion gain pull in
+opposite directions through the same $g_m$.
+
+Finally, the model as written is discrete-time, and that carries a limit worth knowing
+before trusting a number out of it. At $f_{lo} = 900$ Hz with `n_harm = 9`, the series
+runs to the $17$th harmonic at $15\,300$ Hz, well above the $10$ kHz Nyquist frequency
+of a $20$ kHz record. Those components fold back. None of them lands on a bin the lab
+measures, so every check it makes is sound, but move the RF tone and one can: measuring
+the fundamental downconversion of a $2800$ Hz input at its own $1900$ Hz IF returns
+$1.348$ rather than $1.2732$, a $0.50$ dB error contributed entirely by the aliased
+$17$th harmonic. Keep $(2n_{harm}-1)f_{lo}$ below $F_S/2$ and the folding is gone.
+
+What the model does capture completely is the IF node itself, which is where the
+sandbox, *Conversion gain and the IF load*, takes over: the mixer has no frequency
+response worth the name, and every corner in that plot belongs to $R_L$ working against
+the capacitance hanging off the output. Raising $R_L$ raises the gain and lowers the
+corner in exact proportion, so the IF node has a fixed gain–bandwidth product — one more
+thing $g_mR_L$ on a schematic does not say.
+'''
+            }],
             "sandbox": {
                 "title": "Conversion gain and the IF load",
                 "visualiser": "bode",
@@ -178,7 +423,7 @@ topology, which is the next question.
                         "why": r"""
 $4/\pi = 1.273$ — the fundamental of a $\pm1$ square wave is *larger* than the square
 wave's own amplitude, which is worth pausing on and is exactly what the Fourier series
-says. It also means only $(4/\pi)^2/(\pi^2/8)$ of the energy is at the fundamental and the
+says. It also means only $8/\pi^2 = 0.811$ of the energy is at the fundamental and the
 rest sits at odd harmonics, each of which is another band the mixer will happily downconvert.
 """,
                     },
@@ -446,6 +691,450 @@ assert _g1 < 1e-9, \
                 "$\\omega_n = \\sqrt{I_{cp}K_{vco}/2\\pi N C}$ and $\\zeta = (R/2)\\omega_n C$ — every design decision reduces to those two numbers.",
                 "Overshoot in the phase step response is frequency overshoot in the hop: a synthesiser that rings is a synthesiser that fails its settling mask.",
             ],
+            "read": [{
+                "title": "Four times the pump current, and the loop locks slower",
+                "minutes": 18,
+                "body": r'''
+Five numbers, and they are the ones the lab for this module uses. A charge pump that
+sources $1$ mA. A VCO that tunes at $30$ MHz per volt, so
+$K_{vco} = 2\pi\times30\times10^6$ rad/s/V. A divide ratio of $100$. A loop filter of
+$R = 1.5\ \text{k}\Omega$ in series with $C = 3$ nF.
+
+Those five give a natural frequency of $316\,228$ rad/s — $50.33$ kHz — and a damping
+ratio of $0.7115$. Hop the divide ratio and the output frequency settles inside a
+$5\%$ window in $9.32\ \mu\text{s}$. The specification says $5\ \mu\text{s}$.
+
+The move everyone reaches for first is more pump current: $\omega_n$ goes as
+$\sqrt{I_{cp}}$, so four times the current doubles it, and lock time goes as
+$1/\omega_n$. Four milliamps, and the loop settles in $12.25\ \mu\text{s}$. It is
+slower.
+
+## Two integrators, and the resistor that rescues them
+
+Build the loop gain block by block and the reason will be in the algebra.
+
+The phase–frequency detector and pump together turn a phase error into an average
+current. For an error $\theta_e$ the pump is on for a fraction $\theta_e/2\pi$ of each
+reference period, so the average is $I_{cp}\theta_e/2\pi$ and the gain is
+$I_{cp}/2\pi$ amperes per radian. That current flows into the filter impedance
+$Z(s) = R + 1/sC$, making a voltage. The VCO turns voltage into *frequency*, and phase
+is the integral of frequency, so it is $K_{vco}/s$. The divider contributes $1/N$.
+Multiply:
+
+$$T(s) = \frac{I_{cp}}{2\pi}\left(R + \frac{1}{sC}\right)\frac{K_{vco}}{Ns}
+       = \frac{I_{cp}K_{vco}}{2\pi N}\cdot\frac{sRC + 1}{s^2C}$$
+
+Count the poles at the origin: one from the capacitor and one from the VCO. That is a
+type-II loop, and a type-II loop has zero steady-state phase error — set $s\to0$ and the
+gain is infinite, so any constant error is driven out. It also has $-180°$ of phase from
+those two integrators alone and therefore no margin whatsoever. The only thing standing
+between this loop and an oscillator is the $sRC + 1$ in the numerator, which is the
+resistor.
+
+Set $1 + T(s) = 0$, clear denominators, and the characteristic polynomial is
+
+$$s^2 + \frac{I_{cp}K_{vco}R}{2\pi N}s + \frac{I_{cp}K_{vco}}{2\pi NC} = 0$$
+
+Compare it with $s^2 + 2\zeta\omega_ns + \omega_n^2$ and both design numbers fall out:
+
+$$\omega_n = \sqrt{\frac{I_{cp}K_{vco}}{2\pi NC}}, \qquad
+  \zeta = \frac{R}{2}\,\omega_n C = \frac{R}{2}\sqrt{\frac{I_{cp}K_{vco}C}{2\pi N}}$$
+
+The derivation unit *From charge pump and filter to omega_n and zeta* walks those five
+steps one at a time. Read the two results side by side and the opening paradox is
+already visible: $I_{cp}$ appears under a square root in **both**. Raising the pump
+current does not move $\omega_n$ and leave $\zeta$ alone; it moves them together.
+
+## What raising the pump current actually buys
+
+The lab, *Loop parameters, overshoot and lock time*, holds all four of these functions.
+Here they are in the standard library, on the lab's own constants.
+
+```python
+import math
+
+TWO_PI = 2.0 * math.pi
+
+
+def loop_params(icp, kvco, n_div, r, c):
+    """The lab's own two lines: wn from the constant term, zeta from the s term."""
+    wn = math.sqrt(icp * kvco / (TWO_PI * n_div * c))
+    return wn, 0.5 * r * wn * c
+
+
+def step_response(wn, zeta, dt, steps):
+    y = v = 0.0
+    out = []
+    for _ in range(steps):
+        out.append(y)
+        a = wn * wn * (1.0 - y) - 2.0 * zeta * wn * v
+        y += dt * v
+        v += dt * a
+    return out
+
+
+def overshoot(ys):
+    final = ys[-1]
+    return max(0.0, (max(ys) - final) / final)
+
+
+def lock_time(ys, dt, tol=0.05):
+    final, last = ys[-1], 0
+    for i, y in enumerate(ys):
+        if abs(y - final) > tol * abs(final):
+            last = i
+    return (last + 1) * dt
+
+
+for icp, r in ((1e-3, 1500.0), (4e-3, 1500.0), (4e-3, 750.0)):
+    wn, zeta = loop_params(icp, TWO_PI * 30e6, 100.0, r, 3e-9)
+    ys = step_response(1.0, zeta, 1e-3, 60000)
+    t = lock_time(ys, 1e-3)
+    print(f"I_cp {icp * 1e3:.0f} mA, R {r:6.0f} ohm : wn {wn / TWO_PI / 1e3:7.3f} kHz  "
+          f"zeta {zeta:.4f}  overshoot {overshoot(ys) * 100:5.2f}%  "
+          f"lock {t:6.3f}/wn = {t / wn * 1e6:6.3f} us")
+```
+
+The first line is the design as specified: $50.329$ kHz, $\zeta = 0.7115$, $4.16\%$
+overshoot, $2.948/\omega_n$ and $9.322\ \mu\text{s}$. The second is four times the
+current with nothing else touched: $\omega_n$ has indeed doubled to $100.658$ kHz, but
+$\zeta$ has doubled too, to $1.4230$. The response no longer overshoots at all, and it
+takes $7.745/\omega_n$ to settle rather than $2.948$ — a factor of $2.63$ in normalised
+time against a factor of $2$ in $\omega_n$. Net result $12.246\ \mu\text{s}$, which is
+$31\%$ worse than the $9.322$ it started from, and $2.5$ times the specification.
+
+The third line is the fix, and it is one component. Halve $R$ to $750\ \Omega$ and
+$\zeta$ returns to $0.7115$ while $\omega_n$ stays doubled: $4.661\ \mu\text{s}$,
+exactly half. The pump current was never the wrong lever, but pulling it alone changes
+two things and one of them undoes the other. The lab's second test pins the same pair of
+numbers — $632\,455.5$ rad/s and $\zeta = 1.4230$ — precisely so this cannot be
+discovered by accident later.
+
+## Where $\zeta \approx 0.7$ comes from, and what it is worth
+
+The value $0.707$ is quoted so often it sounds like a constant of nature. It is not; it
+is the answer to a question about the *tolerance window*, and changing the window
+changes the answer.
+
+```python
+import math
+
+
+def step_response(zeta, dt, steps):
+    """The lab's normalised response, wn = 1."""
+    y = v = 0.0
+    out = []
+    for _ in range(steps):
+        out.append(y)
+        a = (1.0 - y) - 2.0 * zeta * v
+        y += dt * v
+        v += dt * a
+    return out
+
+
+def settle(ys, dt, tol):
+    final, last = ys[-1], 0
+    for i, y in enumerate(ys):
+        if abs(y - final) > tol * abs(final):
+            last = i
+    return (last + 1) * dt
+
+
+for z in (0.60, 0.69, 0.70, 0.7115, 0.77, 0.78, 1.00, 1.4230):
+    ys = step_response(z, 1e-3, 60000)
+    os_ = math.exp(-math.pi * z / math.sqrt(1 - z * z)) if z < 1 else 0.0
+    print(f"zeta {z:.4f}: overshoot {os_ * 100:6.2f}%   "
+          f"5% settling {settle(ys, 1e-3, 0.05):7.3f}/wn   "
+          f"2% settling {settle(ys, 1e-3, 0.02):7.3f}/wn")
+for tol in (0.05, 0.02):
+    z = 1.0 / math.sqrt(1.0 + (math.pi / math.log(1.0 / tol)) ** 2)
+    print(f"overshoot equals {tol * 100:.0f}% exactly at zeta = {z:.4f}")
+```
+
+Look at what the $5\%$ column does between $\zeta = 0.69$ and $\zeta = 0.70$: it falls
+from $4.418/\omega_n$ to $2.899/\omega_n$, a third of the settling time gone for a
+hundredth of damping. Nothing about the response changed by a third. What changed is
+that the *overshoot crossed the window*. Below $\zeta = 0.6901$ — where
+$e^{-\pi\zeta/\sqrt{1-\zeta^2}} = 0.05$ exactly — the first peak pokes out of the $5\%$
+band, so the loop enters the window, leaves it again, and only settles on the way down
+from the peak. Above it the peak fits inside and the response never leaves once it has
+arrived.
+
+That is the whole of the $0.707$ folklore. It is not a resonance condition and it is not
+a phase-margin optimum: it is the smallest damping at which the first overshoot fits
+inside a $5\%$ mask, with a little margin. Change the mask to $2\%$ and the same
+argument gives $\zeta = 0.7797$, and the table confirms it — the $2\%$ column falls from
+$5.477$ to $3.603$ between $0.77$ and $0.78$. A synthesiser specified against a tight
+mask wants more damping than the textbook number, and paying for the extra damping with
+$R$ costs nothing at all, whereas paying for it with $I_{cp}$ costs power and moves
+$\omega_n$ as well.
+
+The sandbox, *Damping, ringing and lock time*, is the same result as a picture: at
+$\zeta = 0.1$ the frequency enters the tolerance window and leaves it again several
+times, and it is the *peak*, not the average approach, that decides when the hop is
+declared complete.
+
+## The loop filter is an impedance, and its middle is the margin
+
+The build exercise, *The loop filter, driven by the charge pump itself*, makes the point
+physically: push $1$ mA into the filter and the control voltage in volts is the
+impedance in kilohms. Its values are $C_2 = 100$ nF in series with $R_2 = 1$ k$\Omega$,
+and $C_1 = 10$ nF straight to ground.
+
+```python
+import cmath
+import math
+
+R2, C1, C2 = 1000.0, 10e-9, 100e-9
+TWO_PI = 2.0 * math.pi
+
+
+def z_filter(f):
+    s = 2j * math.pi * f
+    series = R2 + 1.0 / (s * C2)
+    shunt = 1.0 / (s * C1)
+    return series * shunt / (series + shunt)
+
+
+print(f"zero  1/(2 pi R2 C2)        : {1 / (TWO_PI * R2 * C2):9.1f} Hz")
+print(f"pole  1/(2 pi R2 (C1||C2))  : {1 / (TWO_PI * R2 * C1 * C2 / (C1 + C2)):9.1f} Hz")
+for f in (100.0, 1000.0, 5000.0, 200e3):
+    z = z_filter(f)
+    print(f"  {f:8.0f} Hz : |Z| {abs(z) / 1e3:8.4f} kohm   phase "
+          f"{math.degrees(cmath.phase(z)):7.2f} deg")
+```
+
+At $100$ Hz the impedance is $14.50$ k$\Omega$ at $-86.73°$: two capacitors in parallel,
+integrating, and that integration is what makes the loop type II. At $5$ kHz it is
+$0.9174$ k$\Omega$ at $-33.60°$ — $R_2$ has taken over and dragged the phase back by
+more than fifty degrees. **That recovered phase is the loop's entire margin**, and the
+shelf is where the loop bandwidth belongs. Notice the shelf reaches only $0.917$ of
+$R_2$ rather than $1.000$: the zero at $1591.5$ Hz and the pole at $17\,507$ Hz sit a
+decade apart, and neither has finished before the other starts. At $200$ kHz the phase
+has fallen back to $-85.45°$, which is $C_1$ shorting out the ripple that would
+otherwise appear across $R_2$ as reference spurs on the tuning line.
+
+## The named mistake, and a second-order model that is not the loop
+
+The mistake priced above is worth naming plainly: **treating $\omega_n$ and $\zeta$ as
+independent knobs**. It is tempting because that is exactly how they behave in the
+sandbox, where two sliders move two numbers, and because the notation encourages it —
+they are written as separate symbols in the standard form. In a charge-pump PLL they
+share $I_{cp}$, $K_{vco}$, $N$ and $C$, and only $R$ moves one without the other. Every
+channel change moves both as well, since $N$ sits in a denominator of each: hop from
+$N = 100$ to $N = 400$ and $\omega_n$ halves while $\zeta$ halves too, which is why a
+synthesiser is designed at its worst-case divide ratio rather than its typical one.
+
+There is a second thing the model does not say, and it matters more than it looks. The
+step response that the sandbox draws and the lab integrates is
+$\omega_n^2/(s^2 + 2\zeta\omega_ns + \omega_n^2)$ — the textbook prototype. The actual
+closed-loop transfer of this type-II loop carries the loop filter's zero in its
+numerator, $(2\zeta\omega_ns + \omega_n^2)$ over the same denominator, and a zero in the
+numerator makes a response overshoot far more.
+
+```python
+import math
+
+
+def prototype(zeta, dt, steps):
+    """What the sandbox draws and the lab integrates: no zero."""
+    y = v = 0.0
+    out = []
+    for _ in range(steps):
+        out.append(y)
+        a = (1.0 - y) - 2.0 * zeta * v
+        y += dt * v
+        v += dt * a
+    return out
+
+
+def type_two(zeta, dt, steps):
+    """The real closed loop: (2 zeta s + 1)/(s^2 + 2 zeta s + 1), wn = 1."""
+    x1 = x2 = 0.0
+    out = []
+    for _ in range(steps):
+        out.append(x1 + 2.0 * zeta * x2)
+        d1, d2 = x2, -x1 - 2.0 * zeta * x2 + 1.0
+        x1 += dt * d1
+        x2 += dt * d2
+    return out
+
+
+def peak(ys):
+    return (max(ys) - ys[-1]) / ys[-1] * 100.0
+
+
+for z in (0.5, 0.7071, 0.7115, 1.4230):
+    print(f"zeta {z:.4f}: prototype overshoot {peak(prototype(z, 1e-3, 60000)):6.2f}%   "
+          f"with the loop-filter zero {peak(type_two(z, 1e-3, 60000)):6.2f}%")
+```
+
+At the design point, $4.16\%$ becomes $20.66\%$ — five times as much — and even
+$\zeta = 1.423$, which the prototype says cannot overshoot at all, still peaks $8.20\%$
+above target. The prototype is the right object for learning how $\zeta$ and $\omega_n$
+shape a response, and it is what the sandbox and lab use; the capstone switches to the
+exact form, where $|H_{ref}|$ peaks at $73.49$ against a divide ratio of $60$ at
+$\zeta = 0.707$. Carry the prototype's *shapes* forward and the exact transfer's
+*numbers*.
+
+## Where it stops holding
+
+The loop is not continuous. The phase detector delivers one correction per reference
+cycle, so everything above assumes $\omega_n$ is far below $\omega_{ref}$; Gardner's
+stability limit puts the ceiling near $\omega_{ref}/10$, and above it the sampled loop
+goes unstable at a damping the continuous model calls comfortable. The second-order form
+also omits $C_1$ entirely, so it has no ripple rejection and cannot predict a reference
+spur. And none of it describes acquisition: before lock, the phase–frequency detector is
+running its non-linear frequency-pull mode and the linear model has nothing to say
+about how long that takes.
+'''
+            }],
+            "quiz": {
+                "title": "Two numbers, and neither moves alone",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A loop is built with $I_{cp} = 1$ mA, $R = 1.5\\ \\text{k}\\Omega$ and $C = 3$ nF, and it settles too slowly. The pump current is raised to 4 mA and nothing else is touched. What happens to the 5% lock time?",
+                        "opts": [
+                            "It gets worse: $\\zeta$ doubles as well and the loop goes overdamped",
+                            "It halves, because $\\omega_n$ doubles and lock time goes as $1/\\omega_n$",
+                            "It is unchanged, because $I_{cp}$ cancels out of the closed-loop poles",
+                            "It halves, and the extra ringing then adds most of the saving back",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$\omega_n$ does double, to $632\,456$ rad/s, but $\zeta$ goes from $0.7115$ to $1.4230$ and the normalised settling time rises from $2.948/\omega_n$ to $7.745/\omega_n$. The net is $12.25\ \mu\text{s}$ against $9.32$ — a third worse. Halving $R$ to $750\ \Omega$ restores $\zeta$ and delivers the $4.66\ \mu\text{s}$ that was wanted.",
+                            r"This is right about $\omega_n$ and silent about $\zeta$, which is the whole trap: both expressions carry $\sqrt{I_{cp}}$, so the damping doubles at the same time and costs more in normalised time than the frequency gained.",
+                            r"$I_{cp}$ is inside both $\omega_n$ and $\zeta$ and cancels from neither. The place it genuinely does cancel is the *ratio* $R\omega_nC/2$ written in terms of $\omega_n$ — which is why $R$ is the knob that moves damping alone.",
+                            r"There is no extra ringing: at $\zeta = 1.4230$ the poles are real and the response cannot overshoot at all. The loss comes from an overdamped approach being slow, not from oscillation.",
+                        ],
+                        "why": r'''
+Both $\omega_n = \sqrt{I_{cp}K_{vco}/2\pi NC}$ and $\zeta = (R/2)\sqrt{I_{cp}K_{vco}C/2\pi N}$
+carry $\sqrt{I_{cp}}$, so the pump current is not a bandwidth knob — it is a knob that
+moves the bandwidth and the damping together. Four times the current doubles both, and
+the settling time at $\zeta = 1.4230$ is $7.745/\omega_n$ against $2.948$ at $0.7115$.
+The resistor is the only component that changes damping on its own.
+''',
+                    },
+                    {
+                        "q": "Take the series resistor out of the loop filter, leaving the capacitor alone. What does the loop do?",
+                        "opts": [
+                            "It oscillates: $\\zeta$ falls to zero and both poles reach the axis",
+                            "It locks with no phase error at all, and settles more slowly",
+                            "It stops integrating, so a constant phase error survives in lock",
+                            "It locks, but the control node acquires a large ripple at $f_{ref}$",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$\zeta = (R/2)\omega_nC$ is proportional to $R$, so removing the resistor sets the damping to exactly zero. The two poles land on the imaginary axis at $\pm j\omega_n$ and the loop rings at constant amplitude for ever, which is an oscillator rather than a synthesiser.",
+                            r"The zero steady-state error is right — it is a type-II loop either way — but there is no settling to be slower or faster about, because with $\zeta = 0$ the response never settles at all.",
+                            r"Backwards. The capacitor is the integrator, and it is still there; what leaves with the resistor is the zero, which supplied the phase lead. Zero steady-state error survives and stability does not.",
+                            r"Ripple is what the shunt capacitor $C_1$ deals with and it is a separate concern. Removing $R$ actually *reduces* the ripple, because the pump's current pulses no longer drop across a resistance — and it destroys the loop while doing so.",
+                        ],
+                        "why": r'''
+Two integrators — the filter capacitor and the VCO — give $-180°$ of phase and no margin
+whatsoever. The resistor contributes the zero $sRC + 1$ whose phase lead is the entire
+damping term: $\zeta = (R/2)\omega_nC$. With $R = 0$ the characteristic polynomial is
+$s^2 + \omega_n^2$, the poles sit exactly on the imaginary axis, and the loop rings
+without decaying. Everything a real loop filter's middle region does is this.
+''',
+                    },
+                    {
+                        "q": "Why do charge-pump PLL designs so often sit at $\\zeta \\approx 0.7$?",
+                        "opts": [
+                            "It is the least damping whose first peak fits a 5% mask",
+                            "It is where two closed-loop poles become real and equal",
+                            "It is the damping that gives the loop its largest phase margin",
+                            "It is where the closed-loop noise peak at $\\omega_n$ vanishes",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$e^{-\pi\zeta/\sqrt{1-\zeta^2}} = 0.05$ at $\zeta = 0.6901$, and the $5\%$ settling time falls off a cliff there — $4.418/\omega_n$ at $\zeta = 0.69$ against $2.899$ at $0.70$. Specify a $2\%$ mask instead and the same argument moves the answer to $0.7797$, which is why the number is not universal.",
+                            r"That is critical damping, and it happens at $\zeta = 1$ exactly. It gives no overshoot and a settling time of $4.742/\omega_n$ — considerably slower than $0.7$, which is why designs stop short of it.",
+                            r"Phase margin does rise with damping, and it keeps rising past $\zeta = 1$ where the loop is unambiguously slower. If margin alone decided it, the answer would be as much damping as the components allow.",
+                            r"The peak shrinks with damping but does not vanish at $0.7$; the exact type-II transfer still peaks to $73.49$ against $N = 60$ at $\zeta = 0.707$. Flattening that peak is a real reason to add damping, and it points past $0.7$, not at it.",
+                        ],
+                        "why": r'''
+The $5\%$ settling time is discontinuous in $\zeta$, because the first overshoot either
+fits inside the tolerance window or it does not. It fits from $\zeta = 0.6901$ upward,
+where $e^{-\pi\zeta/\sqrt{1-\zeta^2}}$ equals $0.05$, and the settling time drops from
+$4.418/\omega_n$ to $2.899/\omega_n$ across that boundary. So $0.707$ is an answer about
+a $5\%$ mask, with a little margin, and a $2\%$ mask moves it to $0.7797$.
+''',
+                    },
+                    {
+                        "q": "A synthesiser hops from a channel needing $N = 100$ to one needing $N = 400$, with every component unchanged. What has happened to the loop?",
+                        "opts": [
+                            "$\\omega_n$ and $\\zeta$ have both halved, since each carries $N$",
+                            "$\\omega_n$ has halved and $\\zeta$ is unchanged, having no $N$ in it",
+                            "Neither moves: $N$ divides out of both expressions",
+                            "$\\zeta$ has halved while $\\omega_n$ held, as $N$ scales damping only",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$\omega_n = \sqrt{I_{cp}K_{vco}/2\pi NC}$ and $\zeta = (R/2)\sqrt{I_{cp}K_{vco}C/2\pi N}$ both carry $N$ under the same root, so quadrupling it halves both. The loop is slower and less damped at the top of the band than at the bottom, which is why a synthesiser is designed at its worst-case ratio.",
+                            r"The first half is right and the second is the error: $\zeta$ carries $N$ under its root exactly as $\omega_n$ does. Checking one expression and assuming the other is independent is how this gets missed in a review.",
+                            r"$N$ divides the phase fed back, so it divides the loop gain, and loop gain is what sets both parameters. Far from dividing out it sits under the square root in each, so quadrupling it halves both.",
+                            r"Inverted. $N$ appears in both, and it appears in $\omega_n$ with more weight than the damping-only picture suggests — the ratio $\zeta/\omega_n$ is $RC/2$, fixed by components alone.",
+                        ],
+                        "why": r'''
+Both expressions have $N$ under a square root in a denominator, so quadrupling the divide
+ratio halves $\omega_n$ and halves $\zeta$. Their ratio $\zeta/\omega_n = RC/2$ is set by
+components and never moves, which is a useful thing to hold: a channel change slides the
+design along a line of constant $RC$, and the worst-case channel is the one with the
+largest $N$, where the loop is slowest and closest to ringing.
+''',
+                    },
+                    {
+                        "q": "In the loop filter of the build exercise, the impedance flattens near $R_2$ between the zero at 1.6 kHz and the pole at 17.5 kHz. What is that flat region for?",
+                        "opts": [
+                            "Phase lead — the loop's whole stability margin comes from it",
+                            "Rejecting the charge pump's ripple at the reference rate",
+                            "Setting the DC control voltage the VCO has to sit at",
+                            "Making the loop type II, so that any constant phase error is driven out",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The phase runs $-86.7°$ at $100$ Hz and $-33.6°$ at $5$ kHz: more than fifty degrees recovered, and that recovery is the margin. Placing the loop bandwidth on the shelf is what makes the PLL damped; placing it below the zero leaves two integrators and no margin.",
+                            r"Ripple rejection is what $C_1$ and the pole above the shelf do, and it works by pulling the impedance back *down*. A flat impedance rejects nothing.",
+                            r"The filter has no DC path to ground at all — that is the first check in the build exercise. The DC control voltage is set by where the VCO has to sit, not by the filter.",
+                            r"Type II comes from the two integrations, which live *below* the zero where $|Z|$ falls at 20 dB per decade. The shelf is the region where the filter has stopped integrating.",
+                        ],
+                        "why": r'''
+Below the zero the filter integrates and the phase is near $-90°$; adding the VCO's own
+integration makes $-180°$ and no margin at all. On the shelf $R_2$ dominates, the phase
+recovers to $-33.6°$ at $5$ kHz, and that recovery is the phase lead the loop is stable
+by. The measured shelf reaches $0.917$ k$\Omega$ rather than the full $1$ k$\Omega$
+because the zero and the pole sit barely a decade apart.
+''',
+                    },
+                    {
+                        "q": "The step response drawn in the sandbox and integrated in the lab overshoots 4.16% at the design damping of 0.7115. The real closed loop overshoots 20.66%. Where does the difference come from?",
+                        "opts": [
+                            "The loop filter's zero, which the prototype form leaves out",
+                            "Sampling: the detector corrects once per reference cycle",
+                            "The shunt capacitor $C_1$, a third pole the two-pole form omits",
+                            "Numerical error in the forward-Euler integration of the response",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The true transfer is $(2\zeta\omega_ns + \omega_n^2)$ over $(s^2 + 2\zeta\omega_ns + \omega_n^2)$, and the numerator zero — the same $sRC+1$ that supplies the damping — pushes the peak up. It is unavoidable: the component that stabilises the loop is the component that makes it overshoot.",
+                            r"Sampling does change the loop, but in the direction of *less* stability at high $\omega_n/\omega_{ref}$, and both figures above come from continuous-time models where sampling plays no part.",
+                            r"$C_1$ adds a third pole, and poles reduce overshoot rather than increasing it. Neither number above includes $C_1$; the exact second-order transfer has only the zero.",
+                            r"Forward Euler at $10^{-3}/\omega_n$ over 60000 steps reproduces the closed-form $e^{-\pi\zeta/\sqrt{1-\zeta^2}}$ to two decimals, and the same integrator produces both figures. A five-fold gap is structure, not arithmetic.",
+                        ],
+                        "why": r'''
+$\omega_n^2/(s^2+2\zeta\omega_ns+\omega_n^2)$ is the textbook prototype and it has no
+zero. A charge-pump PLL's reference-to-output transfer is
+$(2\zeta\omega_ns+\omega_n^2)/(s^2+2\zeta\omega_ns+\omega_n^2)$ — the loop filter's zero
+sits in the numerator, and a numerator zero adds a differentiated copy of the response to
+itself, raising the peak. At $\zeta = 0.7115$ that is $4.16\%$ against $20.66\%$, and even
+at $\zeta = 1.4230$, where the prototype cannot overshoot at all, the true loop peaks
+$8.20\%$ above target.
+''',
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "Damping, ringing and lock time",
                 "visualiser": "pole-step",
@@ -881,6 +1570,270 @@ assert _light > 3.0 * _good, \
                 "Integrated phase noise becomes RMS jitter: $\\sigma_t = \\sqrt{2\\int S_\\phi\\,df} / 2\\pi f_c$.",
                 "A low $\\zeta$ puts a peak in $|L(j\\omega)|$ near the bandwidth, and that peak appears directly in the output spectrum as a noise bump.",
             ],
+            "read": [{
+                "title": "Forty-three decibels between the crystal and the output",
+                "minutes": 18,
+                "body": r'''
+A $2.4$ GHz synthesiser locked to a crystal reference, divide ratio $100$, on a
+phase-noise analyser. The crystal is excellent: measured at the phase detector it
+contributes a flat $10^{-16}$ per hertz, which the instrument writes as $-160$ dBc/Hz.
+The synthesiser output is flat at $-117$ dBc/Hz from close in out to about a megahertz,
+and then falls at $20$ dB per decade.
+
+Forty-three decibels appeared between the reference and the output, and nothing in the
+loop is broken or badly built. Forty of them are the divide ratio, and the other three
+are the VCO — which the loop has suppressed almost exactly to the level of the
+multiplied reference, and not below it. Both halves of that sentence come out of one
+transfer function, and this reading is about where the corner belongs.
+
+## One loop, two entry points, two different filters
+
+Take the open-loop gain as a single integrator, $T(s) = \omega_c/s$, where $\omega_c$ is
+the unity-gain frequency — the loop bandwidth. It is a crude stand-in for the
+second-order loop of the previous module and it gets every asymptote right.
+
+Noise enters at two places and they are not symmetric. Reference phase noise arrives
+*ahead* of the divider, where the loop is trying to follow it, so it reaches the output
+through $N\,T/(1+T)$. VCO phase noise is generated *at* the output, where the loop is
+trying to remove it, so it reaches the output through $1/(1+T)$. Substitute and clear
+the inner fractions:
+
+$$H_{ref}(s) = \frac{N\omega_c}{s + \omega_c}, \qquad
+  H_{vco}(s) = \frac{s}{s + \omega_c}$$
+
+A low-pass with DC gain $N$, and a high-pass with gain $1$ far out. The derivation unit
+*Noise transfer functions and the optimum bandwidth* builds both, and the thing to carry
+away from it is that $H_{ref}/N$ and $H_{vco}$ sum to exactly one at every frequency —
+$\omega_c/(s+\omega_c) + s/(s+\omega_c)$ — so there is no bandwidth at which both
+sources are suppressed. Widening the loop does not remove noise. It exchanges one source
+for the other.
+
+## Where the forty decibels went
+
+Phase noise is a density, and a density scales as the *square* of a voltage-like
+transfer function. In band $H_{ref}$ is flat at $N$, so the reference density is
+multiplied by $N^2$: $20\log_{10}100 = 40$ dB. Outside the loop bandwidth $H_{vco}$ is
+unity, so the free-running VCO's $k/f^2$ arrives untouched; inside, it is multiplied by
+$(f/f_c)^2$, and $(f/f_c)^2\cdot k/f^2 = k/f_c^2$ — a constant. The suppressed VCO is
+*flat* in band, at a level set only by how wide the loop is.
+
+```python
+import math
+
+N, S_REF, K = 100.0, 1e-16, 1.0       # the lab's constants
+FC = 1e6                              # loop bandwidth, Hz
+
+
+def contributions(f, fc):
+    ref = (N * fc / math.sqrt(f * f + fc * fc)) ** 2 * S_REF
+    vco = (f / math.sqrt(f * f + fc * fc)) ** 2 * (K / (f * f))
+    return ref, vco
+
+
+print(f"the reference at the detector : {10 * math.log10(S_REF):7.2f} dBc/Hz")
+for f in (1e3, 1e4, 1e5, 1e6, 1e7):
+    ref, vco = contributions(f, FC)
+    print(f"  {f / 1e3:8.0f} kHz : ref {ref:.4e}  vco {vco:.4e}  "
+          f"sum {10 * math.log10(ref + vco):7.2f} dBc/Hz")
+print(f"20 log10 N                    : {20 * math.log10(N):7.2f} dB")
+```
+
+The two columns are identical at every offset, which is not a coincidence and is worth
+a moment. The reference term is $N^2S_{ref}f_c^2/(f^2+f_c^2)$ and the VCO term is
+$k/(f^2+f_c^2)$; they share a denominator, so they are equal *everywhere* exactly when
+$N^2S_{ref}f_c^2 = k$ — which is the condition $f_c = \sqrt{k/N^2S_{ref}}$, and that is
+the crossover the derivation unit ends on. At the optimum bandwidth the two curves do
+not cross, they coincide, and the output is $3$ dB above either one alone. The
+$-160$ dBc/Hz crystal becomes $-120$ under $N^2$, and the $3$ dB of VCO on top of it is
+the $-117$ the analyser reads.
+
+## What the optimum is worth
+
+Set $f_c$ to the crossover and the integral takes a closed form. Since
+$N^2S_{ref}f_c^2 = k$ there, the total density collapses to $2k/(f^2+f_c^2)$, and
+$\int_0^\infty df/(f^2+f_c^2) = \pi/2f_c$, so
+
+$$\sigma_\phi^2 = 2\int_0^\infty S\,df = \frac{2\pi k}{f_c}
+   = 2\pi N\sqrt{k\,S_{ref}}$$
+
+Three exponents fall out of that and they are the price list for the whole design.
+Jitter is the square root of the variance, so it goes as $\sqrt{N}$, as $k^{1/4}$ and as
+$S_{ref}^{1/4}$.
+
+```python
+import math
+
+N, S_REF, K, F_CARRIER = 100.0, 1e-16, 1.0, 2.4e9
+
+
+def grid(lo_dec, hi_dec, n):
+    return [10.0 ** (lo_dec + (hi_dec - lo_dec) * i / (n - 1)) for i in range(n)]
+
+
+def density(f, fc):
+    return ((N * fc) ** 2 * S_REF + K) / (f * f + fc * fc)
+
+
+def jitter(fc, fs):
+    area = sum(0.5 * (density(fs[i], fc) + density(fs[i - 1], fc)) * (fs[i] - fs[i - 1])
+               for i in range(1, len(fs)))
+    return math.sqrt(2.0 * area) / (2.0 * math.pi * F_CARRIER)
+
+
+F = grid(2, 8, 6001)
+opt = math.sqrt(K / (N * N * S_REF))
+print(f"crossover sqrt(k / N^2 S_ref)   : {opt / 1e3:9.1f} kHz")
+for fc in (1e5, opt / math.sqrt(10.0), opt, opt * math.sqrt(10.0), 1e7):
+    print(f"  fc {fc / 1e3:9.2f} kHz : {jitter(fc, F) * 1e12:.5f} ps"
+          f"   {jitter(fc, F) / jitter(opt, F):6.4f} x")
+closed = math.sqrt(2.0 * math.pi * N * math.sqrt(K * S_REF)) / (2.0 * math.pi * F_CARRIER)
+print(f"closed form at the optimum      : {closed * 1e12:.5f} ps")
+```
+
+The search in the lab, *Shape the noise and find the best bandwidth*, returns $1$ MHz on
+these constants and $0.16569$ ps of RMS jitter, and the closed form agrees to
+$0.16623$ ps — the small gap is the tail beyond $100$ MHz that the grid does not reach.
+
+Now read the basin. A factor of $\sqrt{10}$ either side of the optimum costs about
+$32\%$ of jitter, and a full decade either side costs a factor of $2.2$. The minimum is
+real and it is *broad*, which is the useful part: the bandwidth can be moved by a factor
+of two for settling time, or for stability against the reference, at a cost of a few per
+cent of jitter. What the basin does not tolerate is a decade.
+
+```python
+import math
+
+F_CARRIER = 2.4e9
+
+
+def grid(lo_dec, hi_dec, n):
+    return [10.0 ** (lo_dec + (hi_dec - lo_dec) * i / (n - 1)) for i in range(n)]
+
+
+def best_jitter(n_div, s_ref, k, fs):
+    fc = math.sqrt(k / (n_div * n_div * s_ref))
+    area = sum(0.5 * (((n_div * fc) ** 2 * s_ref + k) / (fs[i] ** 2 + fc * fc)
+                      + ((n_div * fc) ** 2 * s_ref + k) / (fs[i - 1] ** 2 + fc * fc))
+               * (fs[i] - fs[i - 1]) for i in range(1, len(fs)))
+    return fc, math.sqrt(2.0 * area) / (2.0 * math.pi * F_CARRIER)
+
+
+F = grid(2, 8, 6001)
+base_fc, base = best_jitter(100.0, 1e-16, 1.0, F)
+print(f"the lab's design           : fc {base_fc / 1e3:8.1f} kHz  {base * 1e12:.5f} ps")
+for label, args in (("half the divide ratio", (50.0, 1e-16, 1.0)),
+                    ("10 dB quieter VCO    ", (100.0, 1e-16, 0.1)),
+                    ("10 dB quieter ref    ", (100.0, 1e-17, 1.0))):
+    fc, j = best_jitter(*args, F)
+    print(f"  {label}: fc {fc / 1e3:8.1f} kHz  {j * 1e12:.5f} ps"
+          f"  {20 * math.log10(j / base):+6.2f} dB")
+```
+
+Ten decibels off the VCO buys $4.98$ dB of jitter. Ten decibels off the reference buys
+$5.06$ dB. Halving the divide ratio buys $3.04$ dB. Those are three very different
+prices for what look like comparable engineering efforts: the VCO and the crystal are
+both fourth-root levers, so a $10$ dB improvement in either is halved on the way to
+jitter, while $N$ is a square-root lever and a factor of two in it is worth a full
+$3$ dB. $N$ is the cheapest decibel in the design, and it is the reason the next module
+exists — an integer-N synthesiser cannot lower $N$ without coarsening its channel grid
+by the same factor.
+
+## The mistake: widening the loop to suppress the VCO
+
+The loop corrects VCO noise inside its bandwidth, VCO noise is what the datasheet
+complains about, and so a wider loop looks like a free improvement. At $10$ MHz the
+jitter is $0.36150$ ps against $0.16569$ at the optimum — a factor of $2.18$, or
+$6.8$ dB worse.
+
+The mirror belief loses by almost exactly the same amount. Reference noise is multiplied
+by $N^2$, and $40$ dB of multiplication is alarming enough that keeping the loop narrow
+feels prudent. At $100$ kHz the jitter is $0.37331$ ps: a factor of $2.25$, $7.0$ dB
+worse. Two opposite pieces of advice, both confidently argued, both wrong by the same
+$7$ dB — which is what $H_{ref}/N + H_{vco} = 1$ looks like when it is priced. Neither
+source can be suppressed except by passing more of the other.
+
+Both are tempting because each is *locally* true. Widening the loop really does reduce
+the VCO's contribution, monotonically, everywhere; narrowing it really does reduce the
+reference's. What neither argument does is integrate. The sandbox, *The loop as a filter
+for noise*, is the place to watch it happen: raise $K$ to see the $20\log_{10}N$ plateau
+lift, then move the corner and watch the area under the curve refuse to go down.
+
+## The unit on the axis, and the band under the integral
+
+Two conventions in this course are load-bearing and neither is stated in the code.
+
+The first is what the density means. The lab's `rms_jitter` computes
+$\sigma_t = \sqrt{2\int S\,df}\,/\,2\pi f_c$, and that factor of two is correct exactly
+when $S$ is the *single-sideband* density $\mathcal{L}(f)$ — the quantity a phase-noise
+analyser plots in dBc/Hz, one sideband's worth. If the same array were read as the
+one-sided PSD of $\phi$ itself, the variance would be $\int S\,df$ with no factor of two
+and every jitter number in the course would be $\sqrt2$ smaller.
+
+```python
+import math
+
+N, S_REF, K, F_CARRIER, FC = 100.0, 1e-16, 1.0, 2.4e9, 1e6
+
+
+def grid(lo_dec, hi_dec, n):
+    return [10.0 ** (lo_dec + (hi_dec - lo_dec) * i / (n - 1)) for i in range(n)]
+
+
+def area_over(fs):
+    def d(f):
+        return ((N * FC) ** 2 * S_REF + K) / (f * f + FC * FC)
+    return sum(0.5 * (d(fs[i]) + d(fs[i - 1])) * (fs[i] - fs[i - 1])
+               for i in range(1, len(fs)))
+
+
+a_lab = area_over(grid(2, 8, 6001))
+a_cap = area_over(grid(3, math.log10(2e7), 6001))
+for name, a in (("100 Hz to 100 MHz, the lab   ", a_lab),
+                ("  1 kHz to  20 MHz, capstone ", a_cap)):
+    print(f"{name}: {math.sqrt(2.0 * a) / (2 * math.pi * F_CARRIER) * 1e12:.5f} ps"
+          f"   ({math.degrees(math.sqrt(2.0 * a)):.4f} deg RMS)")
+print(f"the same integral read as S_phi : "
+      f"{math.sqrt(a_lab) / (2 * math.pi * F_CARRIER) * 1e12:.5f} ps"
+      f"   (a factor of {math.sqrt(2.0):.4f})")
+```
+
+$0.16569$ ps against $0.11716$ ps for the same spectrum, and the difference is entirely
+which convention the reader assumes. The course uses $\mathcal{L}(f)$ throughout — the
+lab's factor of two, the capstone's modulator density, and the $-160$ dBc/Hz reading of
+$S_{ref} = 10^{-16}$ all agree on it — so the numbers hang together; the label
+"rad²/Hz" in the docstrings belongs to the other reading of the same array. When a
+jitter figure crosses a team boundary, the factor of $\sqrt2$ is where it goes wrong.
+
+The second convention is the integration band. The lab integrates $100$ Hz to $100$ MHz
+and the capstone $1$ kHz to $20$ MHz, and on *this* spectrum they agree to $1.3\%$
+because a $1/f^2$ tail contributes very little at either end. That agreement is a
+property of the spectrum and not a general fact: the next module adds a noise term that
+*rises* with offset frequency, and there the upper limit decides the answer. An RMS
+jitter without a band attached is not a number, the way a noise figure without a source
+impedance is not a number.
+
+## Where the model stops holding
+
+$T(s) = \omega_c/s$ has no loop-filter zero, so it cannot show the peaking a real loop
+has near its bandwidth. The capstone uses the exact second-order transfers, and there
+$|H_{ref}|$ reaches $73.49$ at $f = f_n$ with $\zeta = 0.707$ against a divide ratio of
+$60$ — $1.76$ dB of gain *above* $N$ that the single-pole model draws as $-3$ dB. Drop
+$\zeta$ and the peak grows into a visible bump in the measured spectrum, which is what
+the sandbox's third prompt is pointing at.
+
+The model has no divider, phase-detector or charge-pump noise at all. In a real
+integer-N part those add a floor at the phase detector that behaves like extra
+$S_{ref}$, and in a fractional-N part the modulator adds something much larger and
+differently shaped; the derivation unit's closing says so plainly, and the optimum moves
+by more than a decade once it is included.
+
+Finally, the VCO here is pure $1/f^2$. Real oscillators have a $1/f^3$ region close in,
+where device flicker noise is upconverted by the tuning nonlinearity, and a flat far-out
+floor from the buffer. The $1/f^3$ region sits inside the loop bandwidth where the loop
+suppresses it, which is a good reason to prefer a wider loop than this model recommends
+— and one more term to add before the answer is a design rather than an illustration.
+'''
+            }],
             "sandbox": {
                 "title": "The loop as a filter for noise",
                 "visualiser": "bode",
@@ -1266,6 +2219,479 @@ assert abs(_best - 1.6569077355436886e-13) < 1e-16, \
                 "A first-order accumulator produces tones, not noise. The period is $2^m/\\gcd(K, 2^m)$, and a short period is a large fractional spur close to the carrier.",
                 "Higher-order MASH modulators trade tones for more shaped noise, which the loop must then filter — the reason a fractional-N loop is narrower than an integer-N one.",
             ],
+            "read": [{
+                "title": "Thirty-nine kilohertz of resolution, and the loop it costs",
+                "minutes": 18,
+                "body": r'''
+The capstone's synthesiser: $2.4$ GHz out, a $40$ MHz crystal reference, so the integer
+part of the divide ratio is $60$. A ten-bit accumulator sets the fractional part, which
+puts the channels $40\ \text{MHz}/2^{10} = 39.0625$ kHz apart.
+
+There is another way to get $39.0625$ kHz channels, and it is worth pricing before the
+mechanism is explained. An integer-N loop steps in units of its reference, so it would
+need a $39.0625$ kHz reference and a divide ratio of $2.4\times10^9/39062.5 = 61\,440$.
+The previous module showed the in-band floor is $N^2S_{ref}$; going from $N = 60$ to
+$N = 61\,440$ is $20\log_{10}(1024) = 60.2$ dB of extra multiplication, on top of a
+reference so slow the loop bandwidth would have to sit in the kilohertz.
+
+So fractional-N is not a refinement. It is the only way to have both a fast reference
+and a fine grid. What it charges for that is the subject of this module, and the bill
+arrives as a loop bandwidth: the capstone's optimum comes out at $21.13$ kHz where the
+previous module's crossover argument would have said $1.67$ MHz, and the settling time
+follows — $22.2\ \mu\text{s}$ instead of $0.28$.
+
+## The accumulator is a rate multiplier
+
+The divider counts VCO cycles and cannot count a fraction of one. What it can do is
+count $N$ sometimes and $N+1$ other times.
+
+Load an $m$-bit accumulator with $K$ on every reference cycle. It advances by $K$ and
+wraps at $2^m$, so over $2^m$ cycles it wraps exactly $K$ times: the overflow rate is
+$K/2^m$. Wire each overflow to the divider's modulus control and the divider spends a
+fraction $K/2^m$ of its cycles at $N+1$ and the rest at $N$. The average is
+
+$$\bar N = N + \frac{K}{2^m}, \qquad
+  f_{out} = f_{ref}\left(N + \frac{K}{2^m}\right)$$
+
+and stepping $K$ by one moves the output by $f_{ref}/2^m$, which is the channel
+resolution — a quantity that no longer has anything to do with how fast the reference
+runs. That is the whole promise, and the fill-in-the-blanks unit *Dividing by a number
+that is not an integer* is four holes on exactly these two lines.
+
+```python
+import math
+
+F_REF, N_INT, M, F_OUT = 40e6, 60, 10, 2.4e9
+
+
+def accumulator(k, m, steps):
+    """The lab's accumulator: add k, carry out and subtract on overflow."""
+    mod = 1 << m
+    acc = 0
+    out = []
+    for _ in range(steps):
+        acc += k
+        carry = 1 if acc >= mod else 0
+        if carry:
+            acc -= mod
+        out.append(carry)
+    return out
+
+
+K = 397
+seq = [N_INT + c for c in accumulator(K, M, 1 << M)]
+mean = sum(seq) / len(seq)
+run, peak = 0.0, 0.0
+for n in seq:
+    run += n - mean
+    peak = max(peak, abs(run))
+print(f"average divide ratio  : {mean!r}   wanted {N_INT + K / (1 << M)!r}")
+print(f"peak phase error      : {peak!r} VCO cycles")
+print(f"channel step f_ref/2^m: {F_REF / (1 << M) / 1e3:.4f} kHz")
+n_integer = F_OUT / (F_REF / (1 << M))
+print(f"integer-N would need N: {n_integer:.0f}, a floor "
+      f"{20 * math.log10(n_integer / N_INT):.2f} dB above this one")
+```
+
+The average is $60.3876953125$ and the wanted value is $60.3876953125$ — the same float,
+because $397/1024$ is exact in binary and the arithmetic is integer throughout. The lab,
+*A fractional-N accumulator and its spurs*, asserts that equality to $10^{-12}$ for the
+same reason.
+
+## Bounded is the same statement as shaped
+
+The second line of that output is the important one. Each reference cycle the divider is
+wrong by either $-K/2^m$ or $1 - K/2^m$ counts, and those errors accumulate into phase.
+The running sum peaks at $0.9990234375$ VCO cycles — which is $1023/1024$, one LSB short
+of a single cycle — and returns to zero after a full period.
+
+It is bounded because the accumulator's own contents are the running sum, scaled: the
+hardware that decides when to carry is the same register that holds the accrued error,
+and a register that wraps at $2^m$ cannot hold more than $2^m - 1$. So the phase error
+of a first-order fractional-N divider is bounded by one VCO cycle by construction, not
+by luck, and no amount of running it changes that.
+
+Now turn the boundedness into a spectrum. If the cumulative error $E[n]$ is bounded,
+then the per-cycle divide error is $e[n] = E[n] - E[n-1]$: a first difference of a
+bounded sequence. Differencing has the transfer $1 - z^{-1}$, whose magnitude at offset
+$f$ is
+
+$$\left|1 - e^{-j2\pi f/f_{ref}}\right| = 2\left|\sin\frac{\pi f}{f_{ref}}\right|
+   \;\approx\; \frac{2\pi f}{f_{ref}} \quad (f \ll f_{ref})$$
+
+rising linearly with frequency. That is first-order noise shaping, and it arrived
+without anyone designing it — it is a consequence of the error being held in a register
+rather than thrown away. The derivation unit *Resolution, and the shape of the
+quantisation noise* takes it one step further: an $L$-th order modulator differences
+$L$ times, and once the loop's own $\omega_c/\omega$ roll-off is applied the output
+noise amplitude above the bandwidth goes as $\omega_c\,\omega^{L-1}$.
+
+## A plain accumulator makes lines, not noise
+
+Shaped is not the same as random, and this is where the first-order scheme fails.
+
+The accumulator is a finite-state machine with period $2^m/\gcd(K, 2^m)$, so its carry
+sequence is strictly periodic and its spectrum is a set of lines. The fundamental sits
+at $\min(K,\,2^m-K)\cdot f_{ref}/2^m$, and how much of it survives depends entirely on
+where the loop's own low-pass has got to by then.
+
+```python
+import math
+
+F_REF, M, FN, ZETA = 40e6, 10, 21134.890398366475, 0.707
+
+
+def loop_lowpass(f):
+    """|H_ref/N| for the capstone's loop: unity in band, rolling off past f_n."""
+    wn = 2.0 * math.pi * FN
+    s = complex(0.0, 2.0 * math.pi * f)
+    return abs((2.0 * ZETA * wn * s + wn * wn) / (s * s + 2.0 * ZETA * wn * s + wn * wn))
+
+
+print(f"loop bandwidth (natural frequency) : {FN / 1e3:.2f} kHz")
+for k in (1, 3, 256, 397, 512):
+    line = min(k, (1 << M) - k) * F_REF / (1 << M)
+    print(f"  K = {k:4d}: fundamental line at {line / 1e3:10.2f} kHz, "
+          f"passed at {20 * math.log10(loop_lowpass(line)):+7.2f} dB")
+```
+
+For the lab's $K = 397$ the line sits at $15\,507.81$ kHz and the loop takes $54.30$ dB
+off it; $K = 256$, the fraction $1/4$, lands at $10$ MHz and loses $50.49$ dB even
+though it carries half the error power on its own; and $K = 512$, the fraction one half,
+puts everything at $f_{ref}/2$ where it is furthest from harm. The trouble is at the
+other end. $K = 3$ puts its fundamental at $117.19$ kHz and the loop removes only
+$11.80$ dB of it, and $K = 1$ puts one at $39.06$ kHz where the loop takes off
+$2.09$ dB — which is to say, nothing. **Channels whose fractional part is close to a
+whole number are the ones with close-in spurs**, and they are exactly the channels a
+frequency plan cannot avoid.
+
+## The mistake: delta-sigma removes the error
+
+The sentence people carry away is that a delta-sigma modulator "gets rid of" the
+fractional spurs. It does not remove anything. It makes the error *bigger* and scatters
+it, and the scattering is what is worth having.
+
+```python
+import cmath
+import math
+
+
+def accumulator(k, m, steps):
+    mod = 1 << m
+    acc = 0
+    out = []
+    for _ in range(steps):
+        acc += k
+        c = 1 if acc >= mod else 0
+        if c:
+            acc -= mod
+        out.append(c)
+    return out
+
+
+def mash11(k, m, steps):
+    """MASH 1-1: a second accumulator fed the first one's remainder, differenced."""
+    mod = 1 << m
+    a1 = a2 = 0
+    prev = 0
+    out = []
+    for _ in range(steps):
+        a1 += k
+        c1 = 1 if a1 >= mod else 0
+        if c1:
+            a1 -= mod
+        a2 += a1
+        c2 = 1 if a2 >= mod else 0
+        if c2:
+            a2 -= mod
+        out.append(c1 + c2 - prev)
+        prev = c2
+    return out
+
+
+def line_spectrum(seq):
+    n = len(seq)
+    mean = sum(seq) / n
+    x = [v - mean for v in seq]
+    return [abs(sum(x[i] * cmath.exp(-2j * math.pi * b * i / n) for i in range(n)) / n) ** 2
+            for b in range(n // 2 + 1)]
+
+
+for name, s in (("plain accumulator", accumulator(397, 10, 1024)),
+                ("MASH 1-1         ", mash11(397, 10, 1024))):
+    mean = sum(s) / len(s)
+    var = sum((v - mean) ** 2 for v in s) / len(s)
+    p = line_spectrum(s)
+    worst = max(range(1, len(p)), key=lambda i: p[i])
+    print(f"{name}: divide offsets {sorted(set(s))}  mean {mean:.10f}")
+    print(f"                   error power {var:.6f}, biggest line at "
+          f"{worst / 1024 * 40e6 / 1e6:6.3f} MHz holding "
+          f"{p[worst] / sum(p[1:]) * 100:5.1f}% of it")
+```
+
+Both produce the same average, $0.3876953125$, to the last digit — the modulator has not
+changed the frequency by a hertz. What has changed is everything else. The plain
+accumulator swings the divider between two values and carries $0.237388$ of error power,
+$75.2\%$ of it in one line. The MASH 1-1 swings it over four values, $-1$ to $+2$, and
+carries $0.508872$ — **more than twice the error power** — with its largest line holding
+$2.2\%$.
+
+The trade is a factor of $2.14$ more error in exchange for a factor of $34$ less
+concentration, and it is a good trade because a spur and noise of the same power are not
+equally harmful: a spur reciprocally mixes an interferer straight onto the wanted
+channel at one specific offset, and no averaging helps. The mistake is tempting because
+the modulator genuinely does make the measured spectrum look clean, and because the
+audio-converter version of the same circuit is usually described as "noise shaping" with
+the emphasis on shaping. The extra error is real, it is the price, and the next section
+is where the bill is presented.
+
+## Priced: the loop the modulator forces
+
+The capstone models the modulator with Riley's result — the quantiser's phase step
+spread over the reference band, differenced $L-1$ times, since converting a divide-count
+error into output phase integrates once and consumes one of the $L$ differences.
+
+```python
+import math
+
+TWO_PI = 2.0 * math.pi
+F_REF, N_DIV, F_OUT, S_REF, K_VCO, ORDER = 40e6, 60.0, 2.4e9, 1e-16, 1.0, 2
+
+
+def ds_psd(f):
+    """The capstone's synth.py, verbatim in scalar form."""
+    return (TWO_PI ** 2 / (12.0 * F_REF)) * (2.0 * math.sin(math.pi * f / F_REF)) ** (2 * (ORDER - 1))
+
+
+def terms(f, wn):
+    s = complex(0.0, TWO_PI * f)
+    den = s * s + 2.0 * 0.707 * wn * s + wn * wn
+    h_ref = abs(N_DIV * (2.0 * 0.707 * wn * s + wn * wn) / den)
+    h_vco = abs(s * s / den)
+    return (h_ref ** 2 * S_REF, h_vco ** 2 * (K_VCO / (f * f)),
+            (h_ref / N_DIV) ** 2 * ds_psd(f))
+
+
+def grid(a, b, n):
+    return [10.0 ** (a + (b - a) * i / (n - 1)) for i in range(n)]
+
+
+FS = grid(3, math.log10(2e7), 4001)
+print(f"N^2 S_ref, the in-band reference floor : {N_DIV ** 2 * S_REF:.4e}")
+for f in (1e4, 21134.89, 1e5, 1.6666667e6):
+    print(f"  modulator at {f / 1e3:9.2f} kHz : {ds_psd(f):.4e}"
+          f"  ({10 * math.log10(ds_psd(f) / (N_DIV ** 2 * S_REF)):+6.2f} dB above it)")
+for fn in (21134.890398366475, 1.6666666666666667e6):
+    wn = TWO_PI * fn
+    parts = [0.0, 0.0, 0.0]
+    prev = terms(FS[0], wn)
+    for i in range(1, len(FS)):
+        cur = terms(FS[i], wn)
+        for j in range(3):
+            parts[j] += 0.5 * (cur[j] + prev[j]) * (FS[i] - FS[i - 1])
+        prev = cur
+    total = sum(parts)
+    j = math.sqrt(2.0 * total) / (TWO_PI * F_OUT)
+    print(f"fn {fn / 1e3:9.2f} kHz : {j * 1e12:8.4f} ps   "
+          f"ref {parts[0] / total * 100:5.2f}%  vco {parts[1] / total * 100:5.2f}%  "
+          f"modulator {parts[2] / total * 100:6.2f}%")
+```
+
+The modulator's density crosses the multiplied reference floor at about $13$ kHz, is
+$4.01$ dB above it at the chosen $21.13$ kHz, and is $41.92$ dB above it at $1.67$ MHz
+— the bandwidth the previous module's crossover argument recommends. Widen the loop to
+there and the jitter is $37.84$ ps against $0.84$: forty-five times worse, $33$ dB, and
+the split says why. At $21.13$ kHz the budget is $65.18\%$ VCO, $34.79\%$ modulator and
+$0.03\%$ reference. At $1.67$ MHz it is $100.00\%$ modulator, to two decimals.
+
+Read that $0.03\%$ carefully. The reference — the source the whole of the previous
+module was balanced against — is now irrelevant, and the optimum is set by a completely
+different pair. The crossover formula $\sqrt{k/N^2S_{ref}}$ has not become wrong; it has
+become the answer to a question with a missing term. The sandbox, *Settling after a
+channel hop*, is what that costs in time: $\omega_n$ smaller by a factor of $79$ means
+settling longer by the same factor, $22.2\ \mu\text{s}$ against $0.28$, which for a
+hopping radio is often the binding constraint rather than the jitter.
+
+## Where it stops holding
+
+The quantisation density has no $m$ in it. That is deliberate and correct — the
+instantaneous error is one divide count whatever the accumulator's width, so extra bits
+buy resolution and no extra noise — but it means the model is silent about spurs, which
+depend on $K$ and $2^m$ through the period. A MASH still produces tones for some $K$,
+particularly the simple fractions, and real parts dither the least significant bit to
+break them up at the cost of a little more noise.
+
+The order is a trap in both directions. With the loop's single roll-off, the output
+noise amplitude goes as $\omega_c\omega^{L-1}$ above the bandwidth: for the MASH 1-1
+here that is flat, which is why the integration band's upper limit matters and why the
+capstone stops at $f_{ref}/2 = 20$ MHz, the modulator's own Nyquist frequency. Take
+$L = 3$ and the output noise *rises* above the bandwidth, which the two-pole filter this
+course derived cannot contain at all — hence the extra poles every real fractional-N
+loop filter carries, and hence a MASH-3 part that measures worse with a wide loop than
+the same part measured narrow.
+
+Finally, the whole treatment is linear. It assumes the phase–frequency detector sees
+error small enough to stay in its linear range, and a MASH swinging the divider over
+four counts produces instantaneous phase excursions large enough to test that. Charge
+pump mismatch and dead zone then fold the shaped noise back down to low frequencies as
+spurs the linear model cannot predict, which is why a fractional-N synthesiser's
+measured close-in spectrum is usually worse than its simulation and why so much design
+effort goes into the pump rather than the modulator.
+'''
+            }],
+            "quiz": {
+                "title": "The average is fractional; the divider is not",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A plain accumulator is replaced with a MASH 1-1 modulator, the fraction unchanged. What happens to the total power in the divide error?",
+                        "opts": [
+                            "It rises — the divider now takes four values rather than two",
+                            "It is unchanged, and only its distribution in frequency moves",
+                            "It falls, because the error stops accumulating between overflows",
+                            "It goes to zero: the divide ratio itself becomes fractional",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"On $K = 397$, $m = 10$ the plain accumulator swings between $N$ and $N+1$ and carries $0.237388$ of error power; the MASH 1-1 swings from $N-1$ to $N+2$ and carries $0.508872$ — a factor of $2.14$ more. What it buys is concentration: the biggest line falls from $75.2\%$ of the error power to $2.2\%$.",
+                            r"The usual summary, and close enough to be worth stating precisely: the modulator does not merely redistribute, it adds. A wider swing of divide values is a larger instantaneous error, and the measurement says $0.508872$ against $0.237388$.",
+                            r"The error still accumulates — that is what makes the shaping first-order in the plain case and higher-order in the MASH. What changes is the sequence of integers chosen, not whether a register is holding the remainder.",
+                            r"Every divider in the loop still divides by a whole number on every single reference cycle. Only the average over many cycles is fractional, and that is true of the plain accumulator too.",
+                        ],
+                        "why": r'''
+A MASH 1-1 uses divide offsets $-1$ through $+2$ where the plain accumulator uses $0$ and
+$+1$, so its instantaneous error is larger and its total error power is $0.508872$
+against $0.237388$ — more than double. The average divide ratio is identical to the last
+digit, $0.3876953125$ in both. What the modulator earns its place with is that its
+biggest spectral line holds $2.2\%$ of the error power instead of $75.2\%$: a spur of a
+given power is far more harmful than the same power spread out, because it mixes an
+interferer onto the wanted channel at one fixed offset.
+''',
+                    },
+                    {
+                        "q": "Why is the loop bandwidth of a fractional-N synthesiser typically far narrower than that of an integer-N one built on the same reference?",
+                        "opts": [
+                            "The modulator's noise climbs with offset and has to be filtered",
+                            "The reference has to be slower, which lowers the stability ceiling",
+                            "The divide ratio is larger, and $\\omega_n$ falls as $1/\\sqrt{N}$",
+                            "The accumulator inserts a delay that consumes the phase margin",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Quantisation noise is shaped upward by the modulator, so the loop has to close before it becomes large. On the capstone's design it sits $4.01$ dB above the multiplied reference at $21.13$ kHz and $41.92$ dB above it at $1.67$ MHz, and moving the bandwidth there takes the jitter from $0.84$ ps to $37.84$ ps.",
+                            r"Backwards, and it inverts the whole point of the technique: fractional-N exists so the reference can stay *fast* while the channel grid stays fine. The capstone runs a $40$ MHz reference for $39$ kHz channels.",
+                            r"$N$ is smaller in a fractional-N design, not larger — $60$ here against the $61\,440$ an integer-N loop would need for the same grid. That reduction is one of the technique's main attractions.",
+                            r"The accumulator runs at the reference rate and its latency is a reference cycle or two, which is well inside a loop bandwidth three orders of magnitude below $f_{ref}$. Margin is not where this is decided.",
+                        ],
+                        "why": r'''
+The modulator adds a noise term whose density rises with offset frequency, so it is small
+close in and large further out — the opposite shape from everything else in the budget.
+The loop passes whatever is inside its bandwidth, so the bandwidth must close before that
+term dominates. On the capstone's synthesiser the modulator is $4.01$ dB above the
+multiplied reference at the chosen $21.13$ kHz and $41.92$ dB above it at $1.67$ MHz,
+and widening the loop to the latter costs a factor of $45$ in RMS jitter.
+''',
+                    },
+                    {
+                        "q": "The crossover rule of the previous module puts the best bandwidth for this synthesiser at 1.67 MHz. The capstone's search returns 21 kHz. What accounts for the difference?",
+                        "opts": [
+                            "A third noise source the rule omits, 42 dB up at 1.67 MHz",
+                            "The exact second-order transfers, which peak near the bandwidth",
+                            "A different carrier, rescaling every jitter figure",
+                            "The narrower integration band, 1 kHz to 20 MHz rather than wider",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$\sqrt{k/N^2S_{ref}}$ balances the VCO against the multiplied reference and knows nothing about a modulator. Add one and the budget at $1.67$ MHz becomes $100.00\%$ modulator to two decimal places, while at $21.13$ kHz it is $65.18\%$ VCO, $34.79\%$ modulator and $0.03\%$ reference.",
+                            r"The peaking is real — $|H_{ref}|$ reaches $73.49$ against $N = 60$ at $\zeta = 0.707$ — and it is worth about a decibel. It cannot move an optimum by a factor of seventy-nine.",
+                            r"Jitter is phase variance divided by $2\pi f_c$, so the carrier scales every candidate bandwidth by the same factor and cannot change which one wins.",
+                            r"The band does matter here, because the modulator's contribution is flat above the loop bandwidth rather than falling. It changes the numbers by a few per cent, not the location of a minimum.",
+                        ],
+                        "why": r'''
+The crossover formula is the answer to a two-source problem: multiplied reference against
+free-running VCO. A fractional-N loop has a third source, and at $1.67$ MHz it is
+$41.92$ dB above the reference floor, so the budget there is $100.00\%$ modulator to two
+decimals and the jitter is $37.84$ ps against $0.84$ at the true optimum. At $21.13$ kHz
+the split is $65.18\%$ VCO, $34.79\%$ modulator, $0.03\%$ reference — the reference, which
+the old rule was balancing, has stopped mattering entirely.
+''',
+                    },
+                    {
+                        "q": "For a first-order accumulator with $m = 10$ on a 40 MHz reference, which channels carry their fractional spur closest to the carrier?",
+                        "opts": [
+                            "Those whose fractional part is nearly a whole number",
+                            "Those with a fractional part of one half, $K = 2^{m-1}$",
+                            "Those whose $K$ shares no common factor with $2^m$ at all",
+                            "Those at the centre of the VCO's tuning range",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The fundamental line sits at $\min(K,\,2^m-K)f_{ref}/2^m$, so $K = 3$ puts one at $117.19$ kHz, which the $21$ kHz loop attenuates by only $11.80$ dB, and $K = 1$ puts one at $39.06$ kHz, attenuated by $2.09$ dB. The lab's $K = 397$ puts its line at $15.5$ MHz, where the loop takes off $54.30$ dB.",
+                            r"$K = 512$ is the fraction one half, which alternates every cycle and puts the whole error at $f_{ref}/2 = 20$ MHz — the furthest out it can possibly be, and the easiest case rather than the worst.",
+                            r"An odd $K$ gives the longest possible period, which spreads the energy over the most lines. The line that matters is the *lowest* one, and its position depends on how near $K$ is to $0$ or $2^m$, not on the factorisation.",
+                            r"The VCO's tuning range sets $K_{vco}$ and the tuning-voltage headroom; it has no bearing on where the accumulator's period puts a line.",
+                        ],
+                        "why": r'''
+The carry sequence is periodic with period $2^m/\gcd(K, 2^m)$ and its fundamental line
+lands at $\min(K,\,2^m-K)\cdot f_{ref}/2^m$. That is $15.5$ MHz for the lab's $K = 397$
+and $10$ MHz for $K = 256$, where the capstone's loop removes $54.30$ dB and $50.49$ dB
+respectively — but $3/1024$ puts a line at $117.19$ kHz, attenuated by $11.80$ dB, and
+$1/1024$ puts one at $39.06$ kHz, attenuated by $2.09$ dB. Fractional parts near a whole
+number are the difficult channels, which is awkward because a frequency plan cannot
+avoid them.
+''',
+                    },
+                    {
+                        "q": "A plain first-order accumulator's cumulative phase error peaks at 0.9990234375 VCO cycles and never exceeds one. Why is it bounded?",
+                        "opts": [
+                            "The register holding the running sum wraps at $2^m$",
+                            "The loop corrects it before it can grow larger",
+                            "The divide ratio is never more than one count from its average",
+                            "Each overflow removes exactly the error the previous one made",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The accumulator's contents *are* the running sum of the divide error, scaled by $2^m$, and a register that wraps cannot hold more than $2^m - 1$. The peak of $0.9990234375$ is $1023/1024$: one LSB short of a full cycle, by construction rather than by luck.",
+                            r"The loop does eventually absorb the error, but the bound holds with the loop open and would hold if the loop were removed. It is a property of the arithmetic, not of any feedback.",
+                            r"True of the instantaneous error and irrelevant to the cumulative one — a per-cycle error bounded by one count could still accumulate without limit if it kept the same sign, which is exactly what happens with a $\pm$ dithered divider.",
+                            r"The overflow removes $2^m$ from the register, not the previous cycle's error. Overflows come at irregular intervals set by $K$, and the error between them is what the running sum keeps track of.",
+                        ],
+                        "why": r'''
+The hardware that decides when to carry is the same register that holds the accrued
+error. The accumulator contents equal the cumulative divide error times $2^m$, and a
+register that wraps at $2^m$ cannot hold more than $2^m - 1$ — so the phase error is
+bounded by one VCO cycle by construction. The lab measures $0.9990234375$, exactly
+$1023/1024$. This is also the reason the shaping is first-order: a sequence whose running
+sum is bounded is the first difference of a bounded sequence, and differencing has the
+magnitude $2|\sin(\pi f/f_{ref})|$, which rises with frequency.
+''',
+                    },
+                    {
+                        "q": "The capstone integrates its jitter from 1 kHz to 20 MHz. Why does the upper limit deserve more care here than in the integer-N budget of the previous module?",
+                        "opts": [
+                            "Above the bandwidth the modulator's density is flat, not falling",
+                            "The VCO's $1/f^2$ noise stops falling once the loop lets it through",
+                            "The reference multiplication by $N^2$ applies at every offset alike",
+                            "A trapezoidal rule loses accuracy on a coarse logarithmic grid",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"First-order phase shaping rises as $f$ and the loop rolls off as $1/f$, so their product is flat: every extra octave of integration band adds proportionally to the variance. The previous module's spectrum fell as $1/f^2$ out there, which is why its band mattered by only $1.3\%$.",
+                            r"The VCO's contribution is $1/f^2$ once the loop stops filtering it, so it keeps falling and its tail converges. It is the term whose upper limit matters least.",
+                            r"$N^2$ multiplies the reference in band only; outside the loop bandwidth $H_{ref}$ rolls off and the reference contributes $0.03\%$ of this budget in any case.",
+                            r"The grid has 4001 points over four decades, which resolves everything here. Changing the limit changes the answer because it changes the *integral*, not because it changes the accuracy of the rule.",
+                        ],
+                        "why": r'''
+The modulator's phase noise is shaped upward as $f$ and the loop rolls it off as $1/f$,
+so above the loop bandwidth their product is essentially flat — and the integral of a flat
+density grows in proportion to the band. The previous module's spectrum fell as $1/f^2$
+out there, so its two candidate bands agreed to $1.3\%$. The capstone stops at
+$f_{ref}/2 = 20$ MHz, which is not an arbitrary choice: it is the modulator's own Nyquist
+frequency, above which its spectrum is an alias of what lies below.
+''',
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "Settling after a channel hop",
                 "visualiser": "pole-step",
