@@ -64,6 +64,279 @@ COURSE = {
                 "*Hyperbolic* is the entire condition. One eigenvalue on the axis and the linearisation decides nothing; the terms you discarded now settle the question.",
                 "The conclusion is local, and nothing inside the linearisation tells you how far it reaches.",
             ],
+            "read": [
+                {
+                    "title": "The same block, measured twice, with two different answers",
+                    "minutes": 14,
+                    "body": r'''
+A kilogram of aluminium sits on ceramic standoffs in still air at 20 °C. It is painted
+matt black, it presents about 600 cm² of surface, and a cartridge heater is buried in
+it. A thermocouple reads its temperature into a logger.
+
+Two step tests are run on it, months apart, by two engineers who never compare notes.
+The first sets the heater to 20 W, waits until the reading stops moving — it settles at
+70 °C — then nudges the heater to 21 W and times how long the block takes to cover 63%
+of the move it is going to make. The answer comes back at a little under half an hour.
+The second engineer does the identical thing at 200 W, where the block sits at 246 °C,
+nudges to 201 W, and gets under nine minutes.
+
+Same block, same paint, same air, the same 1 W step. One of them writes 1800 s in the
+commissioning file and the other writes 520 s, and neither of them made a mistake.
+
+```python
+C = 900.0          # J/K, one kilogram of aluminium
+K = 3.0618e-9      # emissivity * sigma * area, in W/K^4
+T_AMB = 293.0      # K, the still air around it
+
+
+def net_power(T, P):
+    """Watts into the block: the heater, less what the surface radiates away."""
+    return P - K * (T ** 4 - T_AMB ** 4)
+
+
+def equilibrium(P, lo=293.0, hi=2000.0):
+    """Bisect for the temperature at which the net power is zero."""
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if net_power(mid, P) > 0.0:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+def step_test(P, dP, dt=0.05):
+    """Settle at P, add dP, and time the first 63.2% of the move."""
+    T0, T1 = equilibrium(P), equilibrium(P + dP)
+    target = T0 + 0.632 * (T1 - T0)
+    T, t = T0, 0.0
+    while T < target:
+        T += dt * net_power(T, P + dP) / C
+        t += dt
+    return t
+
+
+for P in (20.0, 200.0):
+    Te = equilibrium(P)
+    print(f"{P:5.0f} W settles at {Te:6.1f} K "
+          f"({Te - 273.15:5.1f} C);  C/(4kT^3) = {C / (4.0 * K * Te ** 3):6.1f} s")
+    for dP in (1.0, 0.1):
+        print(f"        a +{dP:.1f} W step takes {step_test(P, dP):6.1f} s "
+              f"to cover 63.2% of its move")
+```
+
+```text
+   20 W settles at  343.4 K ( 70.2 C);  C/(4kT^3) = 1815.1 s
+        a +1.0 W step takes 1792.9 s to cover 63.2% of its move
+        a +0.1 W step takes 1812.3 s to cover 63.2% of its move
+  200 W settles at  519.2 K (246.1 C);  C/(4kT^3) =  524.9 s
+        a +1.0 W step takes  523.6 s to cover 63.2% of its move
+        a +0.1 W step takes  524.7 s to cover 63.2% of its move
+```
+
+Two numbers in that output have not been explained yet, and they are the ones that
+matter: 1815.1 and 524.9. They were computed from a formula rather than measured, and
+each sits a fraction of a per cent from the corresponding measurement — closer, in both
+cases, when the step is made smaller. That convergence is the whole subject of this
+module in one line.
+
+## The matrix that changes when you move
+
+The block obeys one equation and it is not linear:
+
+$$C\dot{T} = P - k\left(T^4 - T_a^4\right)$$
+
+An *equilibrium* is a state at which the right-hand side vanishes, which is to say a
+root of $f = 0$ rather than a point where the state itself is zero. Put $\dot{T} = 0$
+and the heater power is exactly the radiated power: $P = k(T_e^4 - T_a^4)$. At 20 W that
+gives $T_e = 343.4$ K and at 200 W it gives 519.2 K, which is what `equilibrium` bisects
+for above.
+
+Now ask what happens a little away from one of those points. Write $T = T_e + \delta$,
+substitute, and expand the fourth power:
+
+$$C\dot{\delta} = P - k\left((T_e + \delta)^4 - T_a^4\right)
+                = \underbrace{P - k(T_e^4 - T_a^4)}_{=\,0}
+                  - k\left(4T_e^3\delta + 6T_e^2\delta^2 + \dots\right)$$
+
+The constant term is zero by the definition of $T_e$ — that is what an equilibrium buys
+you, and it is why the expansion is taken *there* and nowhere else. Discard the
+$\delta^2$ term and what is left is linear:
+
+$$C\dot{\delta} = -4kT_e^3\,\delta \qquad\Longrightarrow\qquad
+\tau = \frac{C}{4kT_e^3}$$
+
+Nothing was announced. The $4T_e^3$ is the derivative of $T^4$, and it carries the
+operating point with it because a derivative is evaluated somewhere. Put the two numbers
+in: at 343.4 K, $4kT_e^3 = 0.4959$ W/K and $\tau = 900/0.4959 = 1815$ s; at 519.2 K it
+is 1.7154 W/K and $\tau = 525$ s. The ratio of the two time constants is 3.46, and
+$(519.2/343.4)^3$ is 3.456. The two commissioning files disagree by the cube of the
+ratio of the absolute temperatures, and the disagreement was in the physics all along.
+
+The general statement is the same calculation with more indices. For $\dot{x} = f(x)$
+the linearisation at an equilibrium $x_e$ is the Jacobian
+
+$$A = \left.\frac{\partial f}{\partial x}\right|_{x = x_e}$$
+
+and $\dot{\delta} = A\delta$ for the deviation $\delta = x - x_e$. Every tool from
+CTRL510 then applies to $A$ — eigenvalues, controllability, pole placement, the
+observer, the whole apparatus — with the one restriction that the answers are about
+$\delta$, near $x_e$, and about nothing else.
+
+## Two equilibria, and a matrix for each
+
+The block has one equilibrium, so it is a gentle example. A pendulum has two in every
+turn, and they could hardly be less alike. With $x_1$ the angle from hanging and
+$x_2 = \dot{x_1}$, and $g/l = 19.62\ \mathrm{s^{-2}}$ for a half-metre arm:
+
+```python
+import math
+
+G_OVER_L = 19.62          # a 0.5 m pendulum, in 1/s^2
+B = 0.2                   # the damping
+
+
+def jac_pendulum(theta):
+    """d/dx of [x2, -(g/l) sin x1 - b x2], evaluated at (theta, 0)."""
+    return [[0.0, 1.0], [-G_OVER_L * math.cos(theta), -B]]
+
+
+def eigenvalues(M):
+    """The pair of a 2x2, as (real, imag) tuples."""
+    tr = M[0][0] + M[1][1]
+    det = M[0][0] * M[1][1] - M[0][1] * M[1][0]
+    disc = tr * tr - 4.0 * det
+    r = abs(disc) ** 0.5
+    if disc >= 0.0:
+        return [((tr + r) / 2.0, 0.0), ((tr - r) / 2.0, 0.0)]
+    return [(tr / 2.0, r / 2.0), (tr / 2.0, -r / 2.0)]
+
+
+for name, theta in (("hanging", 0.0), ("upright", math.pi)):
+    J = jac_pendulum(theta)
+    ev = eigenvalues(J)
+    print(f"{name}: J = {J}")
+    print("         eigenvalues " +
+          ", ".join(f"{re:+.4f}{im:+.4f}j" for re, im in ev) +
+          f"   largest real part {max(re for re, im in ev):+.4f}")
+```
+
+```text
+hanging: J = [[0.0, 1.0], [-19.62, -0.2]]
+         eigenvalues -0.1000+4.4283j, -0.1000-4.4283j   largest real part -0.1000
+upright: J = [[0.0, 1.0], [19.62, -0.2]]
+         eigenvalues +4.3306+0.0000j, -4.5306+0.0000j   largest real part +4.3306
+```
+
+One entry moved, because $\cos 0 = 1$ and $\cos\pi = -1$, and the character of the
+system moved with it: a lightly damped spiral at the bottom, a saddle at the top. The
+saddle has a positive real eigenvalue of $+4.33$, so a milliradian of tilt becomes a
+radian in $\ln(1000)/4.33 = 1.6$ s. This is why balancing a broom needs a hand that
+keeps moving, and it is the picture the sandbox *One pendulum, two equilibria, two
+different matrices* draws: set $a_{21}$ positive for the top, negative for the bottom,
+and watch one field turn into the other.
+
+## The mistake, and why it is tempting
+
+The mistake is to speak of *the* linearisation of a plant, and to carry one $A$ around
+as though it described the machine. It is tempting because in CTRL510 that was true.
+There, $A$ came from the hardware and held still, and a sentence like "the plant has a
+time constant of 1815 s" was a complete statement about a piece of equipment.
+
+Here it is not, and the block shows exactly how it fails. A controller tuned on the 20 W
+model, with an integrator sized for a 1815 s lag, is driving a plant that responds 3.5
+times faster when the process runs hot — and a loop tuned for a lag it does not have
+overshoots and then hunts. The failure does not look like a modelling error, either. It
+looks like the plant drifted, because the same controller behaved differently on a
+Tuesday.
+
+The correct sentence names the point: *at 70 °C* the block has a time constant of 1815
+s. Anything else needs re-linearising, and the useful habit is to write $A(x_e)$ rather
+than $A$ until the coordinates are pinned down.
+
+## The one case where the Jacobian says nothing
+
+Hartman–Grobman is the theorem that licenses all of this: where no eigenvalue of $A$
+lies on the imaginary axis, the non-linear flow near $x_e$ is a continuous deformation
+of the linear one. Stability, instability and the saddle structure all carry across
+unchanged. The condition has a name — *hyperbolic* — and it is the entire condition. Not
+"the non-linearity is small", not "the system is second order". One eigenvalue on the
+axis and the theorem withdraws.
+
+What it withdraws is worth seeing, because the withdrawal is total rather than partial.
+Three scalar fields, each with derivative exactly zero at the origin, so each with the
+identical linearisation $\dot{\delta} = 0$:
+
+```python
+def escape(f, x0, dt, seconds):
+    """Euler the scalar field f from x0 and report where it ends up."""
+    x, n = x0, int(seconds / dt)
+    for _ in range(n):
+        x += dt * f(x)
+        if abs(x) > 1e6:
+            return None
+    return x
+
+
+fields = (("-x**3", lambda x: -x ** 3),
+          ("+x**3", lambda x: +x ** 3),
+          (" x**2", lambda x: x ** 2))
+for label, f in fields:
+    ends = []
+    for x0 in (0.5, -0.5):
+        end = escape(f, x0, 1e-4, 40.0)
+        ends.append("blew up" if end is None else f"{end:+.5f}")
+    print(f"xdot = {label}:  f'(0) = 0.0   from +0.5 -> {ends[0]:>9}"
+          f"   from -0.5 -> {ends[1]:>9}")
+```
+
+```text
+xdot = -x**3:  f'(0) = 0.0   from +0.5 ->  +0.10911   from -0.5 ->  -0.10911
+xdot = +x**3:  f'(0) = 0.0   from +0.5 ->   blew up   from -0.5 ->   blew up
+xdot =  x**2:  f'(0) = 0.0   from +0.5 ->   blew up   from -0.5 ->  -0.02381
+```
+
+Asymptotically stable, unstable, and stable from one side while unstable from the other.
+Three different answers from one Jacobian, and the Jacobian was not wrong about any of
+them — it never made a claim. The derivation *Linearising a pendulum, and one system
+where it lies* takes the first of these all the way to a closed form, and the decay it
+finds is $x_0/\sqrt{1 + 2x_0^2t}$: an algebraic decay, not an exponential one, which no
+linear system produces and no linear model could have predicted.
+
+## Where this stops holding
+
+Two limits, and the second is the one that bites.
+
+The conclusion is *local*, and the linearisation contains no measure of how local. The
+Jacobian at the block's 70 °C point is as valid at 70.001 °C as at 200 °C by its own
+lights; it is the discarded $6kT_e^2\delta^2$ term that decides, and reading its size
+means going back to the non-linear equation. Estimating a region of attraction is what
+module 2 does with Lyapunov functions, and it is a genuinely different technique rather
+than a refinement of this one.
+
+And the conclusion is about the *deviation*. A linearisation that reports "asymptotically
+stable" is promising that small deviations shrink, which is compatible with the state
+leaving for good if the deviation is not small. The undamped pendulum is the cleanest
+warning: set $b = 0$ and the hanging eigenvalues are $\pm 4.43j$, purely imaginary, and
+the linearisation returns to saying nothing. Whether a real pendulum with dry friction in
+the pivot settles or creeps is decided entirely by terms that were discarded on the first
+line.
+
+## What you are about to build
+
+The lab *Linearise anything, and know when not to believe it* asks for the numerical
+version of everything above: `jacobian(f, x0, h)` by central differences, and
+`verdict(J, tol)` returning `"asymptotically stable"`, `"unstable"` or `"inconclusive"`
+from the largest real part. That third string is the point of the whole lab. Its tests
+check that the hanging pendulum comes back stable, the upright one unstable, and the
+undamped one and the cubic both `"inconclusive"` — and the last test runs $\dot{x} =
+-x^3$ from $x = 1$ and from $x = 5$ and asserts the two land within a few per cent of
+each other, which no exponential decay does. Reporting stability for the cubic would be
+a true statement the Jacobian does not support, and a gate that accepted it would be
+teaching the habit this module exists to break.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "One pendulum, two equilibria, two different matrices",
                 "visualiser": "phase-portrait",
@@ -471,6 +744,470 @@ assert 0.9 < _b / _a < 1.1, \
                 "For a linear system $V = x^\\top P x$ works exactly when $A^\\top P + PA = -Q$ has a positive definite solution $P$, for some — equivalently every — positive definite $Q$.",
                 "Failing to find a $V$ proves nothing whatsoever. The condition is sufficient, never necessary, and a badly chosen $V$ fails on stable systems.",
             ],
+            "read": [
+                {
+                    "title": "The fault that lasted forty milliseconds too long",
+                    "minutes": 15,
+                    "body": r'''
+A 588 MVA turbo-alternator is running into a transmission line, delivering 0.8 of its
+rated power. Its rotor angle — how far the machine's magnetic axis leads the grid's —
+sits at 26.4°, and it has been there all afternoon. An inertia constant of 3 s, a
+50 Hz system and a line that can carry 1.8 per unit at most.
+
+A three-phase fault appears on the line. While it is on, the machine can export nothing,
+so the turbine's 0.8 pu keeps arriving and the rotor accelerates. The protection clears
+the fault and the line comes back. Two recorders, on two different occasions, catch a
+fault cleared at 220 ms and one cleared at 260 ms.
+
+```python
+import math
+
+M = 2 * 3.0 / (2 * math.pi * 50.0)   # 2H/ws, for H = 3 s at 50 Hz
+PM = 0.8                             # mechanical power in, per unit
+PMAX = 1.8                           # the most the line can carry
+D = 0.02                             # damping, per unit
+D0 = math.asin(PM / PMAX)            # the angle the machine runs at
+
+
+def run(clear_at, seconds=8.0, dt=1e-5):
+    """Fault at t = 0 with the line open, restored at `clear_at`."""
+    delta, omega, peak, late = D0, 0.0, D0, []
+    for n in range(int(seconds / dt)):
+        pmax = 0.0 if n * dt < clear_at else PMAX
+        acc = (PM - pmax * math.sin(delta) - D * omega) / M
+        delta, omega = delta + dt * omega, omega + dt * acc
+        peak = max(peak, delta)
+        if n * dt > seconds - 1.0:
+            late.append(delta)
+    return math.degrees(peak), math.degrees(min(late)), math.degrees(max(late))
+
+
+print(f"the machine runs at {math.degrees(D0):.2f} deg")
+for tc in (0.220, 0.260):
+    peak, lo, hi = run(tc)
+    print(f"  cleared at {tc * 1000:.0f} ms: peak {peak:7.1f} deg,"
+          f"  over the last second {lo:8.1f} to {hi:8.1f} deg")
+
+# The linearisation at the operating angle. It is the same in both runs.
+a21 = -PMAX * math.cos(D0) / M
+a22 = -D / M
+print(f"A = [[0, 1], [{a21:.3f}, {a22:.4f}]]  ->  eigenvalues "
+      f"{a22 / 2:.4f} +/- {math.sqrt(-4 * a21 - a22 * a22) / 2:.4f}j")
+```
+
+```text
+the machine runs at 26.39 deg
+  cleared at 220 ms: peak   115.1 deg,  over the last second     24.2 to     28.2 deg
+  cleared at 260 ms: peak 15870.7 deg,  over the last second  13578.8 to  15870.7 deg
+A = [[0, 1], [-84.428, -1.0472]]  ->  eigenvalues -0.5236 +/- 9.1735j
+```
+
+Forty milliseconds, two turbine revolutions apart, and the outcomes are not on the same
+scale. The first swings to 115°, comes back, and rings down towards 26.4° again. The
+second passes 15 870° and is still climbing: the rotor has slipped forty-four poles and
+the machine is being disconnected by its own protection.
+
+## The question the eigenvalues cannot be asked
+
+The last line of that output is the whole difficulty. The linearisation at the operating
+angle is $-0.52 \pm 9.17j$ — a 1.46 Hz oscillation decaying with a time constant of
+1.9 s — and it is *the same matrix in both runs*, because both runs return to the same
+operating point on the same line with the same everything. Module 1's machinery is
+working perfectly and answering a question nobody asked: does a small enough deviation
+decay? Yes. Both times.
+
+What is being asked is how large a deviation the machine survives, and the linearisation
+contains no such number. There is nothing to compute. The Jacobian is the first term of a
+series and has thrown away the very terms that make $\sin\delta$ turn over at 90° and
+start helping the fault instead of opposing it.
+
+Lyapunov's method answers it without solving the differential equation and without
+linearising anything.
+
+## A scalar that only falls
+
+Take the machine's own energy, in the frame that rotates with the grid. Kinetic energy
+of the rotor is $\tfrac{1}{2}M\omega^2$ with $\omega = \dot{\delta}$. Potential energy
+is the net work done in getting from $\delta_0$ to $\delta$: the turbine puts in
+$P_m(\delta - \delta_0)$ and the line takes out
+$\int_{\delta_0}^{\delta} P_{max}\sin\sigma\,\mathrm{d}\sigma$. Subtract:
+
+$$V(\delta, \omega) = \tfrac{1}{2}M\omega^2 - P_m(\delta - \delta_0)
+                      - P_{max}\left(\cos\delta - \cos\delta_0\right)$$
+
+That is a construction, not a guess. Check the two conditions on it. It is zero at the
+operating point by inspection. Is it positive nearby? Its gradient in $\delta$ is
+$-P_m + P_{max}\sin\delta$, which vanishes at $\delta_0$ precisely because $\delta_0$ is
+the equilibrium, and its second derivative there is $P_{max}\cos\delta_0 = 1.612 > 0$.
+So $V$ has a strict minimum at the operating point, which is what positive definite
+means locally.
+
+Now differentiate along the trajectories — the step where the dynamics enter, and the
+only step where they do:
+
+$$\dot{V} = \frac{\partial V}{\partial \delta}\dot{\delta}
+          + \frac{\partial V}{\partial \omega}\dot{\omega}
+          = \left(P_{max}\sin\delta - P_m\right)\omega + M\omega\dot{\omega}$$
+
+Substitute the swing equation, $M\dot{\omega} = P_m - P_{max}\sin\delta - D\omega$:
+
+$$\dot{V} = \left(P_{max}\sin\delta - P_m\right)\omega
+          + \omega\left(P_m - P_{max}\sin\delta - D\omega\right) = -D\omega^2$$
+
+Every term carrying $\sin\delta$ cancelled. Nothing was linearised, no small-angle
+approximation was taken, and the result holds at 26° and at 115° alike. The same
+cancellation happens for the pendulum in the derivation *Proving stability without
+solving*, and for the spring before it — the pattern is that the conservative part of a
+mechanical system moves energy between two terms of $V$ and can never change the total,
+so what survives is exactly the dissipation.
+
+## Semi-definite is not a failure
+
+$\dot{V} = -D\omega^2$ is not negative definite. It vanishes on the whole line
+$\omega = 0$, not at one point, so the strict-decrease argument stops short: $V$ never
+grows, the state stays inside whatever level set it started in, and that is stability
+without any promise of convergence.
+
+LaSalle finishes it. Ask where a trajectory could *remain* while $\dot{V} = 0$. It would
+have to keep $\omega = 0$, and therefore $\dot{\omega} = 0$, and the swing equation then
+forces $P_{max}\sin\delta = P_m$ — which happens at $\delta_0$ and at $\pi - \delta_0$
+and nowhere between. So inside any region around the operating point that excludes the
+other root, the largest invariant set in $\{\dot{V} = 0\}$ is the operating point alone,
+and the machine converges to it. A trajectory that reaches $\omega = 0$ anywhere else is
+immediately pushed off that line by an acceleration that is not zero.
+
+This is the ordinary case rather than the exotic one, because damping in a mechanical
+system almost always acts on velocity and velocity almost always passes through zero.
+Reaching for a cleverer $V$ when the natural one gives a semi-definite derivative is
+usually wasted effort; LaSalle is the tool the situation calls for.
+
+## Where the boundary actually is
+
+$V$ never grows, so a trajectory cannot leave the level set it starts in. The rotor
+angle is therefore trapped — unless the level set it starts in is open at one end.
+
+The other equilibrium, $\delta_u = \pi - \delta_0 = 153.6°$, is a saddle, and $V$ there
+is a local maximum along the $\delta$ axis. It is the ridge of the potential well. If
+the machine is inside the well when the line comes back, $V$ can only fall and it slides
+to the bottom. If it is over the ridge, $V$ still falls and it slides down the far side,
+which is 360° away.
+
+```python
+import math
+
+M = 2 * 3.0 / (2 * math.pi * 50.0)
+PM, PMAX, D = 0.8, 1.8, 0.02
+D0 = math.asin(PM / PMAX)
+
+
+def V(delta, omega):
+    """Kinetic energy, less the net work done getting to this angle."""
+    return (0.5 * M * omega ** 2 - PM * (delta - D0)
+            - PMAX * (math.cos(delta) - math.cos(D0)))
+
+
+def clearing_state(clear_at, dt=1e-6):
+    """Angle and speed at the instant the fault is cleared."""
+    delta, omega = D0, 0.0
+    for _ in range(int(clear_at / dt)):
+        delta, omega = delta + dt * omega, omega + dt * (PM - D * omega) / M
+    return delta, omega
+
+
+d_u = math.pi - D0                       # the other root of PM = PMAX sin(delta)
+v_cr = V(d_u, 0.0)
+print(f"the ridge sits at {math.degrees(d_u):.2f} deg, and V there is {v_cr:.4f}")
+for tc in (0.220, 0.260):
+    d, w = clearing_state(tc)
+    print(f"  cleared at {tc * 1000:.0f} ms: angle {math.degrees(d):6.2f} deg, "
+          f"V = {V(d, w):.4f}  ->  {'over' if V(d, w) > v_cr else 'under'} the ridge")
+
+# The largest angle the machine may be at when the line comes back.
+d_cr = math.acos(math.cos(D0) - v_cr / PMAX)
+print(f"critical angle {math.degrees(d_cr):.2f} deg, reached at "
+      f"{math.sqrt(2 * M * (d_cr - D0) / PM) * 1000:.1f} ms")
+```
+
+```text
+the ridge sits at 153.61 deg, and V there is 1.4485
+  cleared at 220 ms: angle  80.25 deg, V = 1.2025  ->  under the ridge
+  cleared at 260 ms: angle 100.62 deg, V = 1.7757  ->  over the ridge
+critical angle 84.77 deg, reached at 220.6 ms
+```
+
+One number, 1.4485, separates the two recordings — and it was obtained by evaluating a
+formula at a saddle point, with no simulation of the fault at all. Simulating the real
+machine and bisecting on the clearing time puts the true boundary at 244.9 ms. The
+energy criterion says 220.6 ms: conservative by 11%, and conservative is the direction a
+sufficient condition is supposed to err in. The gap is the damping, which was ignored in
+the closed form and which removes a little energy during the swing out.
+
+The protection engineer sets the relay from the 220.6 ms figure, and does so knowing it
+is pessimistic, because the alternative is a number obtained by simulating every fault
+location on every line in every configuration.
+
+## The mistake, and why it is tempting
+
+The mistake is reading a failed $V$ as an unstable system. The condition is sufficient
+and never necessary, and the usual first candidate fails on systems that are perfectly
+stable. Take the sum of squares — the circles the sandbox *Does every trajectory cross
+the circles inwards* draws — and try it on this machine's own linearisation.
+
+```python
+import math
+
+# The swing equation linearised at the operating angle, from the reading above.
+A = [[0.0, 1.0], [-84.4278, -1.04719]]
+
+
+def vdot(P, x):
+    """d/dt of x.T P x along xdot = Ax, computed entry by entry."""
+    f = [A[0][0] * x[0] + A[0][1] * x[1], A[1][0] * x[0] + A[1][1] * x[1]]
+    grad = [2 * (P[0][0] * x[0] + P[0][1] * x[1]),
+            2 * (P[1][0] * x[0] + P[1][1] * x[1])]
+    return grad[0] * f[0] + grad[1] * f[1]
+
+
+def lyap_2x2(A):
+    """Solve A.T P + P A = -I for the symmetric P, by hand."""
+    a, b = A[1][0], A[1][1]              # the field is [[0, 1], [a, b]]
+    p2 = -1.0 / (2.0 * a)
+    p3 = (-1.0 - 2.0 * p2) / (2.0 * b)
+    p1 = -b * p2 - a * p3
+    return [[p1, p2], [p2, p3]]
+
+
+circle = [[1.0, 0.0], [0.0, 1.0]]
+r = 0.5 ** 0.5
+print("V = x1^2 + x2^2, the circle:")
+for x in ([r, r], [r, -r]):
+    print(f"   at ({x[0]:+.4f}, {x[1]:+.4f})  Vdot = {vdot(circle, x):+9.4f}")
+
+P = lyap_2x2(A)
+print(f"V = x.T P x with P = [[{P[0][0]:.4f}, {P[0][1]:.6f}], "
+      f"[{P[1][0]:.6f}, {P[1][1]:.4f}]]:")
+for x in ([r, r], [r, -r]):
+    print(f"   at ({x[0]:+.4f}, {x[1]:+.4f})  Vdot = {vdot(P, x):+9.4f}")
+print(f"   the level sets are ellipses {math.sqrt(P[0][0] / P[1][1]):.2f} "
+      f"times wider in x2 than in x1")
+```
+
+```text
+V = x1^2 + x2^2, the circle:
+   at (+0.7071, +0.7071)  Vdot =  -84.4750
+   at (+0.7071, -0.7071)  Vdot =  +82.3806
+V = x.T P x with P = [[40.7953, 0.005922], [0.005922, 0.4831]]:
+   at (+0.7071, +0.7071)  Vdot =   -1.0000
+   at (+0.7071, -0.7071)  Vdot =   -1.0000
+   the level sets are ellipses 9.19 times wider in x2 than in x1
+```
+
+On the circle, $\dot{V}$ is $+82.4$ in one direction. A trajectory through that point is
+moving *outwards*, and anyone who tried the circle and stopped there would report a
+stable machine as unproved. The circle is not wrong about the system; it is the wrong
+shape. An angle in radians and a speed in radians per second are not comparable
+quantities, and the sum of their squares treats them as though they were.
+
+The right shape falls out of a linear solve. For $\dot{x} = Ax$ and $V = x^\top Px$,
+$\dot{V} = x^\top(A^\top P + PA)x$, so demanding $\dot{V} = -x^\top Qx$ means solving
+$A^\top P + PA = -Q$ — a *linear* equation in the entries of $P$, which is why the
+search for a Lyapunov function stops being a search at all. The $P$ above is stretched
+9.19 times in the speed direction, and 9.19 is $\omega_n$, the natural frequency: the
+ellipse is exactly as elongated as the orbit it has to contain.
+
+## Where this stops holding
+
+Three limits, in increasing order of how much trouble they cause.
+
+The estimate is conservative. The sublevel set $\{V < 1.4485\}$ is contained in the
+region of attraction, not equal to it, and the 220.6 ms against 244.9 ms above is that
+gap made numerical. A tighter $V$ tightens the estimate; no $V$ delivers the true
+boundary.
+
+The certificate's *rate* can be far looser than its verdict. From $A^\top P + PA = -Q$
+the bound is $V(t) \le V(0)e^{-\alpha t}$ with $\alpha = \lambda_{\min}(Q)/\lambda_{\max}(P)$,
+which here is $1/40.795 = 0.0245$ — against a true decay of $2 \times 0.5236 = 1.047$,
+a factor of forty-three. The verdict is exact and the rate is a bound, and an
+ill-conditioned $P$ makes it a weak one.
+
+And the energy function itself is a privilege of a particular model. The classical swing
+equation above has no transfer conductance — no resistive path that dissipates power as
+a function of angle. Put resistance into the network and the exact $V$ stops existing;
+the whole transient-energy literature is about what to use instead. Lyapunov's theorem
+still holds. Finding the function is where the work is, and there is no procedure that
+always produces one.
+
+## What you are about to build
+
+The lab *Solve the Lyapunov equation and use what it gives you* takes the linear
+specialisation and makes it computational: `lyap(A, Q)` flattens $A^\top P + PA = -Q$
+into a Kronecker system and solves it, `is_pos_def(M)` checks the certificate, and
+`v_trace` follows $V$ down a real trajectory. One of its tests hands `lyap` an
+*unstable* $A$ and asserts that the solve still returns a matrix — one that is not
+positive definite. That is how the method reports instability: not by failing, but by
+handing back something that is not a Lyapunov function. Its final test checks the decay
+bound $\alpha = \lambda_{\min}(Q)/\lambda_{\max}(P)$ derived above, on a plant where it
+comes to 0.1586. The fill-in *Lyapunov, without solving anything* walks the conditions
+one at a time, and the sandbox lets you set $a_{11}$ and $a_{22}$ to zero and watch
+$\dot{V}$ go to zero with them — stability with no convergence, which is where LaSalle
+starts.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Certifying stability without a solution",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "Along a trajectory of $\\dot{x} = f(x)$, what is $\\dot{V}$ for a scalar $V(x)$?",
+                        "opts": [
+                            "$\\partial V/\\partial t$, the explicit time derivative of $V$",
+                            "$\\nabla V$, the gradient of $V$ at the current state",
+                            "$\\nabla V \\cdot f(x)$, the gradient contracted with the field",
+                            "$f(x)$ itself, scaled by the current value of $V$ at that point",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"$V$ here is a function of the state alone and carries no explicit $t$, so that derivative is zero. All of its variation arrives through $x(t)$, which is exactly the dependence the chain rule is needed for.",
+                            r"The gradient is a vector and points uphill in state space; a rate of change is a scalar. Without contracting it against something that says how the state is moving, the field never appears and the conclusion could not be about this system.",
+                            r"The chain rule on $V(x(t))$, and it is the only step at which the dynamics enter the argument. Nothing is integrated, which is why the method never needs a solution.",
+                            r"Scaling the field by $V$ gives a vector with the wrong units and no relation to how fast $V$ changes. It also drops $\nabla V$, so the shape of $V$ stops mattering.",
+                        ],
+                        "why": r"""
+$\dot{V} = \nabla V \cdot \dot{x} = \nabla V \cdot f(x)$, by the chain rule. This is
+where $f$ enters and the only place it does — which is the whole economy of the method,
+because the vector field is used without ever being integrated. For the generator in the
+reading, $\nabla V = (P_{max}\sin\delta - P_m,\ M\omega)$ and contracting it with the
+swing equation makes every $\sin\delta$ cancel, leaving $-D\omega^2$ at any angle, small
+or not.
+""",
+                    },
+                    {
+                        "q": "A natural energy $V$ gives $\\dot{V} = -D\\omega^2$, which vanishes on the whole line $\\omega = 0$. What follows directly?",
+                        "opts": [
+                            "Asymptotic stability, since $\\dot{V}$ is never positive anywhere",
+                            "Stability, with the convergence still to be argued separately",
+                            "Nothing at all, because $\\dot{V}$ is not negative definite",
+                            "Instability, since $V$ can stop falling away from the origin",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Never positive is not the same as strictly negative. An undamped pendulum has $\dot{V} = 0$ everywhere and orbits forever without approaching anything, so the semi-definite case genuinely does contain non-convergent systems.",
+                            r"$V$ is non-increasing, so a trajectory cannot leave the level set it began in — a real conclusion, and often the one that was wanted. Convergence needs LaSalle, or a different $V$.",
+                            r"Too pessimistic, and it throws away the useful half. Boundedness of the state is precisely what a non-increasing $V$ delivers, and for many designs that is the specification.",
+                            r"A quantity that never grows cannot certify escape. Instability needs its own argument — a $V$ that increases along trajectories near the equilibrium, which is a different theorem.",
+                        ],
+                        "why": r"""
+Non-increasing $V$ traps the state inside its starting level set: that is stability, and
+it is a real result rather than a consolation prize. What it does not give is
+convergence, because the trajectory might settle onto a level set and circle there. The
+repair is LaSalle: ask where a trajectory could *stay* with $\dot{V} = 0$. On
+$\omega = 0$ the machine has $M\dot{\omega} = P_m - P_{max}\sin\delta$, which is zero
+only at the two equilibria, so anywhere else it is pushed straight off the line and
+cannot remain.
+""",
+                    },
+                    {
+                        "q": "You try $V = x_1^2 + x_2^2$ on a plant and find $\\dot{V} > 0$ somewhere. What have you established?",
+                        "opts": [
+                            "The plant is unstable, since a trajectory moves away from the origin",
+                            "The plant is stable but not asymptotically, as on a closed orbit",
+                            "The plant has a limit cycle passing through that point",
+                            "Nothing about the plant — that candidate failed, and another may not",
+                        ],
+                        "a": 3,
+                        "whys": [
+                            r"The state does move outward across *that circle* at that point, which is what makes the reading appealing — but crossing one level set outwards says nothing about where the trajectory goes, and it may cross back and converge.",
+                            r"Closed orbits give $\dot{V} = 0$ around the loop, not a positive value. A strictly positive $\dot{V}$ somewhere is compatible with convergence, with divergence, and with a cycle.",
+                            r"Nothing here is periodic. A single sign of $\dot{V}$ at a single point constrains neither the existence of a closed orbit nor its location.",
+                            r"The condition is sufficient and never necessary. The reading's own generator is provably stable and the circle reports $\dot{V} = +82.4$ on it, because an angle and an angular rate are not comparable quantities to add in squares.",
+                        ],
+                        "why": r"""
+A failed candidate is a failed candidate. Lyapunov's theorem gives one direction only: a
+$V$ that works proves stability, and no $V$ found proves nothing. The reading makes this
+concrete — the circle gives $\dot{V} = +82.4$ at one point on a machine whose
+eigenvalues are $-0.52 \pm 9.17j$, and the ellipse that comes out of
+$A^\top P + PA = -I$ gives $\dot{V} = -1$ at the same point. The circle was the wrong
+shape, not evidence.
+""",
+                    },
+                    {
+                        "q": "Why is a Lyapunov estimate of a region of attraction always conservative?",
+                        "opts": [
+                            "Numerical integration of $\\dot{V}$ accumulates error over the run",
+                            "$V$ is only defined near the equilibrium, so it cannot reach further",
+                            "It reports a sublevel set inside the true region, not the region",
+                            "It assumes the linearisation holds over the whole set",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"Nothing is integrated. The whole appeal of the direct method is that $\dot{V}$ is evaluated algebraically from $\nabla V$ and $f$, so there is no run over which error could accumulate.",
+                            r"$V$ in the reading is defined for every angle, and it is evaluated at the saddle 127° away from the operating point. Its domain is not the limitation.",
+                            r"What the argument delivers is a set the state cannot leave, and the largest such sublevel set fits inside the true basin rather than filling it. A better $V$ enlarges the estimate; none of them attains it.",
+                            r"It assumes the opposite. The generator's $\dot{V} = -D\omega^2$ was derived from the full $\sin\delta$ with no approximation, which is why it is trusted at 115° where a linearisation would be meaningless.",
+                        ],
+                        "why": r"""
+The argument certifies a *sublevel set*: since $V$ cannot increase, a state inside
+$\{V < c\}$ stays inside it, and the largest usable $c$ is the value of $V$ at the
+nearest point where the argument breaks — the saddle, for the generator. The true basin
+is bounded by the saddle's stable manifold, a curve no level set of $V$ follows exactly,
+so the inscribed set is strictly smaller. In the reading that gap is 220.6 ms against a
+true 244.9 ms, and the error is in the safe direction: the relay is set early.
+""",
+                    },
+                    {
+                        "q": "For $\\dot{x} = Ax$, why does taking $V = x^\\top Px$ turn the search for a Lyapunov function into a solve?",
+                        "opts": [
+                            "The eigenvectors of $A$ can be read straight off the entries of $P$",
+                            "$\\dot{V} = x^\\top(A^\\top P + PA)x$, which is linear in the unknown $P$",
+                            "Every stable $A$ has $P = I$ as a certificate, so nothing is searched for",
+                            "A quadratic $V$ makes $\\dot{V}$ quadratic, hence automatically negative",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"$P$ and $A$ share no eigenvectors in general, and the solve is done to avoid an eigen-decomposition rather than to produce one.",
+                            r"Setting that equal to $-x^\top Qx$ leaves $A^\top P + PA = -Q$, whose unknown appears once and to the first power. A search over functions collapses into one linear system.",
+                            r"The reading's own machine refutes this: $P = I$ is the circle, and it gives $\dot{V} = +82.4$ at a point on a stable plant. Identity works for some $A$ and fails for many.",
+                            r"A quadratic form is negative only if its matrix is negative definite, which is a condition to be arranged rather than a consequence of the degree. $x^\top x$ is quadratic and positive everywhere.",
+                        ],
+                        "why": r"""
+$\dot{V} = \dot{x}^\top Px + x^\top P\dot{x} = x^\top(A^\top P + PA)x$, so requiring
+$\dot{V} = -x^\top Qx$ for a chosen positive definite $Q$ gives $A^\top P + PA = -Q$.
+The unknown $P$ enters once and linearly, so vectorising turns it into $n^2$ equations
+in $n^2$ unknowns — the Kronecker system the lab builds. That the answer exists and is
+positive definite for every stable $A$ and every positive definite $Q$ is the converse
+theorem, and it is why a failed quadratic on a *linear* plant means the plant is
+unstable, while a failed quadratic on a non-linear one means nothing.
+""",
+                    },
+                    {
+                        "q": "The generator's $\\dot{V} = -D\\omega^2$ was derived with no small-angle approximation. What made the $\\sin\\delta$ terms cancel?",
+                        "opts": [
+                            "The angles stayed small enough for $\\sin\\delta$ to equal $\\delta$",
+                            "The damping term dominates the restoring term at every angle",
+                            "The sine was expanded and the higher-order terms were discarded",
+                            "$V$ was built as the work integral of the same force in the field",
+                        ],
+                        "a": 3,
+                        "whys": [
+                            r"The peak angle in the surviving run is 115°, where $\sin\delta$ is 0.906 and $\delta$ is 2.007 — not remotely equal. If the derivation had needed that, it could not have been used for the fault at all.",
+                            r"It does not: $D\omega$ is 0.02 per unit of speed against a restoring term reaching 1.8. The damping is what *survives* the cancellation, not what overwhelms it.",
+                            r"Nothing was expanded and nothing was discarded. A truncated sine would have left a residue growing with angle, and the result would not hold at 115°.",
+                            r"$\partial V/\partial \delta$ is $P_{max}\sin\delta - P_m$ by construction, and $M\dot{\omega}$ contains the same expression negated. Conservative forces move energy between the two terms of $V$ and cannot change the total.",
+                        ],
+                        "why": r"""
+The potential half of $V$ is $-P_m(\delta - \delta_0) - P_{max}(\cos\delta -
+\cos\delta_0)$, whose $\delta$-derivative is $P_{max}\sin\delta - P_m$ — the negative of
+the conservative part of the swing equation, because that is how the integral was
+constructed. Contracting the gradient with the field therefore pairs each conservative
+term with itself and subtracts. This is a general pattern rather than an accident of
+this plant: energy built from the field cancels against the field, and only the
+dissipative terms survive into $\dot{V}$. The same cancellation is worked twice in
+*Proving stability without solving*, once for a spring and once for a pendulum.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "Does every trajectory cross the circles inwards",
                 "visualiser": "phase-portrait",
@@ -879,6 +1616,288 @@ assert _worst < 1.001, \
                 "Bendixson: if $\\nabla\\!\\cdot f$ has one strict sign throughout a simply connected region, no closed orbit lies wholly inside it.",
                 "Poincaré–Bendixson: a trajectory that stays inside a bounded planar region containing no equilibrium must approach a closed orbit. This is a two-dimensional theorem and has no analogue in three.",
             ],
+            "read": [
+                {
+                    "title": "Two oscillator boards, and only one of them keeps its amplitude",
+                    "minutes": 14,
+                    "body": r'''
+Two oscillator boards sit on the bench, built around identical 1 kHz LC tanks. Each has
+a JFET stage feeding energy back into the tank to make up the loss in the coil.
+
+Board A has the feedback trimmed with a multiturn pot until the loop gain reads exactly
+one at the operating point, so the negative resistance the stage presents cancels the
+tank's loss precisely. Board B does no trimming: its stage is deliberately non-linear,
+presenting a strong negative conductance for small signals that fades and reverses as
+the swing grows.
+
+Each board is kicked twice, once with a 0.1 V pulse and once with a 3.0 V pulse, and the
+envelope is read off the scope after it has stopped changing. Normalise time to the
+tank's own frequency and both boards are the same pair of equations with one parameter
+between them.
+
+```python
+def vdp(x, mu):
+    """x1' = x2,  x2' = mu (1 - x1^2) x2 - x1.  mu = 0 is the linear board."""
+    return [x[1], mu * (1.0 - x[0] ** 2) * x[1] - x[0]]
+
+
+def rk4(f, x, mu, dt, steps):
+    """Classical fourth-order Runge-Kutta, the stepper the lab asks for."""
+    for _ in range(steps):
+        k1 = f(x, mu)
+        k2 = f([x[i] + 0.5 * dt * k1[i] for i in range(2)], mu)
+        k3 = f([x[i] + 0.5 * dt * k2[i] for i in range(2)], mu)
+        k4 = f([x[i] + dt * k3[i] for i in range(2)], mu)
+        x = [x[i] + dt / 6.0 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])
+             for i in range(2)]
+        yield x
+
+
+def settled_amplitude(mu, x0, dt=0.002, steps=20000):
+    """Peak |x1| over the second half of the run, once the transient is gone."""
+    peak = 0.0
+    for n, x in enumerate(rk4(vdp, list(x0), mu, dt, steps)):
+        if n >= steps // 2:
+            peak = max(peak, abs(x[0]))
+    return peak
+
+
+for mu, label in ((0.0, "linear board  "), (1.0, "van der Pol   ")):
+    small = settled_amplitude(mu, [0.1, 0.0])
+    big = settled_amplitude(mu, [3.0, 0.0])
+    print(f"{label} kicked to 0.1 -> {small:.5f}   kicked to 3.0 -> {big:.5f}")
+```
+
+```text
+linear board   kicked to 0.1 -> 0.10000   kicked to 3.0 -> 3.00000
+van der Pol    kicked to 0.1 -> 2.00862   kicked to 3.0 -> 2.00862
+```
+
+Board A remembers its kick forever. Board B forgets it entirely: a start thirty times
+smaller ends on the same orbit to five figures. Nothing in CTRL510 or CTRL520 produces
+the second row, and the reason is not that the analysis there was incomplete.
+
+## What the linear board is actually doing
+
+Board A is a *centre*: trace zero, determinant positive, eigenvalues on the imaginary
+axis. It does have closed orbits, and that is what makes it tempting to call it an
+oscillator. But there is a closed orbit through every point of the plane, one for each
+amplitude, nested like the rings of a tree. None of them is isolated. None has a
+neighbourhood free of other closed orbits, so no trajectory can be said to approach any
+particular one — the amplitude is a free constant fixed by whatever the kick happened to
+be, which is exactly the first row of the output.
+
+Worse, the family is held together by an equality that no hardware maintains.
+
+```python
+def linear_board(x, eps):
+    """The tank with the feedback trimmed eps away from exact cancellation."""
+    return [x[1], -x[0] + eps * x[1]]
+
+
+def rk4(f, x, p, dt, steps):
+    for _ in range(steps):
+        k1 = f(x, p)
+        k2 = f([x[i] + 0.5 * dt * k1[i] for i in range(2)], p)
+        k3 = f([x[i] + 0.5 * dt * k2[i] for i in range(2)], p)
+        k4 = f([x[i] + dt * k3[i] for i in range(2)], p)
+        x = [x[i] + dt / 6.0 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])
+             for i in range(2)]
+        yield x
+
+
+def after(eps, seconds, dt=0.002):
+    peak = 0.0
+    steps = int(seconds / dt)
+    for n, x in enumerate(rk4(linear_board, [1.0, 0.0], eps, dt, steps)):
+        if n >= steps - int(6.3 / dt):
+            peak = max(peak, abs(x[0]))
+    return peak
+
+
+print("the trimmed tank, starting at amplitude 1.000")
+for eps in (0.0, -0.002, 0.002):
+    print(f"  feedback error {eps:+.3f}:  after 60 s {after(eps, 60.0):8.4f}"
+          f"   after 300 s {after(eps, 300.0):10.4f}")
+```
+
+```text
+the trimmed tank, starting at amplitude 1.000
+  feedback error +0.000:  after 60 s   1.0000   after 300 s     1.0000
+  feedback error -0.002:  after 60 s   0.9450   after 300 s     0.7443
+  feedback error +0.002:  after 60 s   1.0615   after 300 s     1.3478
+```
+
+Two parts in a thousand of trim error, which is less than the tempco of the pot, and the
+amplitude has moved a quarter of the way to zero or a third of the way to the rail in
+five minutes — and it keeps going, because nothing stops it. The whole family of orbits
+is destroyed by an arbitrarily small perturbation, which is what *structurally unstable*
+means. The sandbox *Hunting for a closed orbit in a linear field* is the same experiment
+with a slider: nudge $a_{22}$ off zero and every orbit opens at once.
+
+So board A is not an oscillator that needs better trimming. It is an oscillator that
+cannot be trimmed, because the property being asked for does not survive in any
+neighbourhood of the setting that provides it.
+
+## Reading the plane instead of solving it
+
+Board B has no such equality to maintain, and it can be understood without solving
+anything. Two tools do most of the work in the plane.
+
+The *nullclines* are the curves where one component of $\dot{x}$ vanishes. Here
+$\dot{x_1} = x_2$ is zero on the horizontal axis, so trajectories cross that axis
+vertically; and $\dot{x_2} = 0$ on the curve $x_2 = x_1/(\mu(1 - x_1^2))$, crossed
+horizontally. They meet only at the origin, which is therefore the only equilibrium.
+Linearise there and the Jacobian is $\begin{bmatrix} 0 & 1 \\ -1 & \mu \end{bmatrix}$,
+with trace $\mu > 0$: an unstable focus. Everything near the origin is leaving.
+
+The *divergence* decides where a closed orbit can live:
+
+$$\nabla\!\cdot f = \frac{\partial f_1}{\partial x_1} + \frac{\partial f_2}{\partial x_2}
+                  = 0 + \mu\left(1 - x_1^2\right)$$
+
+Bendixson's criterion says that on a simply connected region where this keeps one strict
+sign, no closed orbit fits entirely inside. The sign changes at $|x_1| = 1$ and nowhere
+else, so a closed orbit is obliged to straddle that pair of vertical lines. It cannot
+hide in the middle strip, where the field is expanding areas, and it cannot stay outside,
+where the field is contracting them. That single observation already places the orbit
+before any energy argument is made, and it is what the derivation *Where van der Pol's
+cycle comes from* establishes in its first two steps.
+
+Notice what the divergence *is*, physically: with $|x_1| < 1$ the damping coefficient is
+negative, so the stage is pumping; beyond $|x_1| = 1$ it is positive and the stage is
+absorbing. A trajectory that swings past 1 spends part of each cycle being fed and part
+being drained.
+
+## Where the amplitude is set
+
+That balance is the amplitude. Take $V = \tfrac{1}{2}(x_1^2 + x_2^2)$, contract its
+gradient with the field the way module 2 did, and the $x_1x_2$ terms cancel:
+
+$$\dot{V} = x_1\dot{x_1} + x_2\dot{x_2} = \mu\left(1 - x_1^2\right)x_2^2$$
+
+On a closed orbit $V$ returns to where it started, so the integral of $\dot{V}$ around
+the loop is zero. For small $\mu$ the orbit is nearly the circle $x_1 = a\cos t$,
+$x_2 = -a\sin t$, and averaging over a period with $\langle\sin^2\rangle = \tfrac{1}{2}$
+and $\langle\cos^2\sin^2\rangle = \tfrac{1}{8}$ gives
+$\mu(\tfrac{1}{2}a^2 - \tfrac{1}{8}a^4) = 0$, whose non-zero root is $a = 2$.
+
+```python
+import math
+
+
+def vdp(x, mu):
+    return [x[1], mu * (1.0 - x[0] ** 2) * x[1] - x[0]]
+
+
+def trajectory(mu, x0, dt, steps):
+    """RK4 the field and return every state, the start included."""
+    x, out = list(x0), [list(x0)]
+    for _ in range(steps):
+        k1 = vdp(x, mu)
+        k2 = vdp([x[i] + 0.5 * dt * k1[i] for i in range(2)], mu)
+        k3 = vdp([x[i] + 0.5 * dt * k2[i] for i in range(2)], mu)
+        k4 = vdp([x[i] + dt * k3[i] for i in range(2)], mu)
+        x = [x[i] + dt / 6.0 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])
+             for i in range(2)]
+        out.append(x)
+    return out
+
+
+def period(traj, dt):
+    """Mean gap between upward zero crossings of x1, over the second half."""
+    tail, times = traj[len(traj) // 2:], []
+    for n in range(len(tail) - 1):
+        if tail[n][0] < 0.0 <= tail[n + 1][0]:
+            frac = -tail[n][0] / (tail[n + 1][0] - tail[n][0])
+            times.append((n + frac) * dt)
+    return sum(b - a for a, b in zip(times, times[1:])) / (len(times) - 1)
+
+
+DT = 0.002
+print(f"the small-mu prediction is amplitude 2 and period {2 * math.pi:.5f}")
+for mu, steps in ((0.05, 160000), (1.0, 40000), (2.0, 40000)):
+    traj = trajectory(mu, [0.1, 0.0], DT, steps)
+    amp = max(abs(x[0]) for x in traj[len(traj) // 2:])
+    print(f"  mu = {mu:<5} amplitude {amp:.5f}   period {period(traj, DT):.5f}")
+
+# Where the energy comes from and where it goes, over one settled cycle.
+traj = trajectory(1.0, [0.1, 0.0], DT, 40000)
+cycle = traj[-int(period(traj, DT) / DT):]
+pump = sum((1.0 - x[0] ** 2) * x[1] ** 2 * DT for x in cycle if abs(x[0]) < 1.0)
+drain = sum((1.0 - x[0] ** 2) * x[1] ** 2 * DT for x in cycle if abs(x[0]) >= 1.0)
+print(f"one cycle at mu = 1: pumped in {pump:+.4f}, dissipated {drain:+.4f}, "
+      f"net {pump + drain:+.4f}")
+```
+
+```text
+the small-mu prediction is amplitude 2 and period 6.28319
+  mu = 0.05  amplitude 1.99997   period 6.28411
+  mu = 1.0   amplitude 2.00862   period 6.66329
+  mu = 2.0   amplitude 2.01989   period 7.62987
+one cycle at mu = 1: pumped in +5.6625, dissipated -5.6615, net +0.0010
+```
+
+At $\mu = 0.05$ the prediction is right to five figures, in amplitude and period both. As
+$\mu$ grows the amplitude drifts up a per cent and the period a fifth, because the orbit
+stops being a circle and the averaging that produced $a = 2$ stops being valid. And the
+last line is the mechanism, measured: 5.6625 units of energy fed in while the swing is
+inside $|x_1| < 1$, 5.6615 taken back out beyond it, and a net of one part in five
+thousand — which is the integration error, not a real imbalance. The orbit sits exactly
+where the pumping and the damping cancel over a cycle, and that is one number rather than
+a family, which is why it is isolated.
+
+## The mistake, and why it is tempting
+
+The mistake is treating a closed orbit as a limit cycle. It is tempting because the scope
+trace looks identical — a steady sinusoid at a fixed amplitude — and because the linear
+centre is the first oscillator anyone analyses, so the word *oscillator* gets attached to
+the wrong picture early.
+
+The difference is not visible in one trace. It shows in a second trace from a different
+start: two runs on board B land on the same orbit, two runs on board A do not. It also
+shows in what a design can promise. A limit cycle has an amplitude that is a property of
+the circuit and is recovered after a disturbance; a centre has an amplitude that is a
+property of the last thing that happened to it, and no amount of component tolerance
+buys it back. Hewlett's audio oscillator earned its patent for putting a lamp in the
+feedback path precisely to convert the second into the first.
+
+There is a smaller version of the same error in reading $a = 2$ as the answer. It is the
+$\mu \to 0$ limit and the table above shows it drifting immediately.
+
+## Where this stops holding
+
+Two limits, and the second is a change of subject rather than a caveat.
+
+Bendixson gives a *negative* result — where no cycle can be — and never produces one. The
+positive statement is Poincaré–Bendixson: a trajectory confined to a bounded region of the
+plane containing no equilibrium must approach a closed orbit. Its proof needs a trapping
+region, and constructing one is work: for van der Pol it means finding an annulus that
+the flow enters from both sides, with an unstable focus excluded at the centre.
+
+And that theorem is planar. It rests on the Jordan curve theorem — a closed curve in the
+plane separates inside from outside, so a trajectory cannot get past its own earlier
+path. In three dimensions there is no such obstruction, a trajectory can pass over itself,
+and a bounded non-repeating trajectory becomes possible: the Lorenz and Rössler systems
+are bounded, have no stable equilibrium and no periodic orbit, and never repeat. Nothing
+in this module's toolkit detects that, and no amount of care with nullclines in a
+projection of a three-dimensional flow will.
+
+## What you are about to build
+
+The lab *Find the limit cycle and prove it is isolated* asks for `rk4_step`, `integrate`
+and `period` — the three routines above — and its checks are the claims made here. Forward
+Euler is refused on purpose: its error accumulates in a direction that inflates or
+deflates a closed orbit, so it would measure the integrator rather than the oscillator,
+and the harmonic-oscillator check at $\mu = 0$ demands agreement with $(\cos t, -\sin t)$
+to $10^{-8}$, which nothing of lower order reaches. Its central test starts van der Pol at
+0.1 and at 3.0 and asserts the two amplitudes agree to $10^{-4}$: that agreement is what
+isolation *means*, expressed as an assertion. The last test runs $\mu = 0.05$ from 1.9 over
+80 s and warns that convergence takes a time of order $1/\mu$ — the reason the table above
+gives the smallest $\mu$ four times the run of the others.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "Hunting for a closed orbit in a linear field",
                 "visualiser": "phase-portrait",
@@ -1269,6 +2288,459 @@ assert abs(_to - 2.0) < 5e-3, \
                 "The gain must beat the *bound*, not the nominal value. Under-gain and the surface is never reached, and no amount of patience fixes it.",
                 "Chatter: infinite switching frequency is an artefact of an idealised model, and a real actuator pays for it in heat and wear. The boundary layer replaces $\\mathrm{sgn}$ with a saturation and buys smoothness with a band of error.",
             ],
+            "read": [
+                {
+                    "title": "The gust the pointing loop could not be tuned against",
+                    "minutes": 15,
+                    "body": r'''
+A 3 m dish on an alt-azimuth mount. The elevation axis carries 40 kg·m² of inertia and is
+driven directly by a torque motor. The site survey says the wind can put up to 80 N·m of
+gust torque on the structure, in bursts of a few radians per second, and gives no more
+detail than that — a bound, and nothing about the shape. The pointing specification is
+1 mrad.
+
+The obvious loop is a PD on the elevation error. Place both closed-loop poles at $-p$ and
+sweep $p$ against the worst gust the survey allows.
+
+```python
+import math
+
+J = 40.0        # kg m^2, the elevation axis
+D_TORQUE = 80.0                 # N m, the worst gust the site survey allows
+D = D_TORQUE / J                # 2.0 rad/s^2, the same bound in acceleration
+
+
+def pd_run(wn, dt=0.0005, steps=12000, w_gust=3.0):
+    """Both poles at -wn, released 1 rad off target into the worst gust."""
+    x = [1.0, 0.0]
+    late = []
+    for n in range(steps):
+        t = n * dt
+        u = -wn * wn * x[0] - 2.0 * wn * x[1]
+        d = D * math.sin(w_gust * t)
+        x = [x[0] + dt * x[1], x[1] + dt * (u + d)]
+        if n > steps * 4 // 5:
+            late.append(abs(x[0]))
+    return max(late)
+
+
+print("gust of 80 N.m at 3 rad/s on a 40 kg.m^2 axis; the spec is 1 mrad")
+for wn in (4.0, 12.0, 45.0):
+    err = pd_run(wn)
+    print(f"  PD with both poles at -{wn:<5} peak error {err * 1e3:8.3f} mrad"
+          f"   predicted {D / abs(complex(wn * wn - 9.0, 2 * wn * 3.0)) * 1e3:8.3f}")
+```
+
+```text
+gust of 80 N.m at 3 rad/s on a 40 kg.m^2 axis; the spec is 1 mrad
+  PD with both poles at -4.0   peak error   80.058 mrad   predicted   80.000
+  PD with both poles at -12.0  peak error   13.077 mrad   predicted   13.072
+  PD with both poles at -45.0  peak error    0.983 mrad   predicted    0.983
+```
+
+The measurements land on the frequency-response prediction $|d|/|(j\omega)^2 + 2p(j\omega)
++ p^2|$ to three figures, which is reassuring and also the problem: the only way through
+is $p = 45$ rad/s, a 7 Hz loop. The first structural mode of a dish this size is usually
+somewhere between 5 and 15 Hz, so the tuning that meets the specification is the tuning
+that drives the loop straight into the structure. Rebalancing $Q$ and $R$ the way CTRL520
+does moves the poles around inside the same constraint; it does not change the fact that
+a linear loop rejects a disturbance only in proportion to its gain there.
+
+## Choosing the error dynamics first
+
+Sliding mode inverts the order of the design. Rather than choosing a controller and then
+measuring the error dynamics that result, write down the error dynamics wanted and make
+them a constraint. Define
+
+$$s = \dot{e} + \lambda e \qquad (\lambda > 0)$$
+
+The set $s = 0$ is not an arbitrary line in the plane. Read it as an equation and it says
+$\dot{e} = -\lambda e$: a first-order decay with time constant $1/\lambda$, chosen in
+seconds before any control law exists. Take $\lambda = 4$ and the error settles with the
+same 0.25 s timescale as the $p = 4$ PD above.
+
+Two things are already true and neither has been earned yet. The plant does not appear in
+$s = 0$ — the constraint describes the error and says nothing about inertia, friction or
+wind. And the order has dropped: a second-order axis constrained to a line in its own
+phase plane has one degree of freedom left.
+
+The design problem is now a single question: how do you make the state get to that line,
+and stay on it?
+
+## Making the state arrive
+
+Take $V = \tfrac{1}{2}s^2$, which is positive definite in $s$ and is the module 2
+machinery applied to one variable. Ask for a decrease that does not fade:
+
+$$\dot{V} = s\dot{s} \le -\eta|s| \qquad (\eta > 0)$$
+
+The right-hand side is the whole of the design. Compare it with the linear alternative
+$s\dot{s} \le -\eta s^2$, which is also a perfectly good Lyapunov decrease and gives
+$s \to 0$ exponentially, arriving never. With $-\eta|s|$, dividing through by $|s|$ gives
+$\frac{\mathrm{d}}{\mathrm{d}t}|s| \le -\eta$: $|s|$ falls at a rate bounded away from
+zero however small it becomes, so it hits zero at a time
+
+$$t_r \le \frac{|s(0)|}{\eta}$$
+
+and stays there. Finite arrival is what the absolute value buys, and it costs a control
+that is discontinuous at $s = 0$, because a continuous law cannot deliver a non-vanishing
+push arbitrarily close to the surface.
+
+For the dish, $\dot{s} = \ddot{e} + \lambda\dot{e} = u + d + \lambda\dot{e}$ with $u$ the
+commanded angular acceleration. Taking $u = -\lambda\dot{e} - k\,\mathrm{sgn}(s)$ leaves
+$\dot{s} = d - k\,\mathrm{sgn}(s)$, so $s\dot{s} = ds - k|s| \le (D - k)|s|$ using only
+$|d| \le D$. Setting $k = D + \eta$ gives $s\dot{s} \le -\eta|s|$ exactly. The derivation
+*The reaching law, the reaching time, and what the layer costs* runs the same argument one
+branch at a time and reaches the same $t_r = s_0/\eta$.
+
+The gain is set against the *bound*, not against any particular gust. Nothing here needed
+to know that the wind was a sinusoid at 3 rad/s.
+
+## Why the disturbance disappears
+
+```python
+import math
+
+LAM, ETA, D = 4.0, 2.0, 2.0      # surface slope, margin, and the gust bound
+DT, STEPS = 0.0005, 12000
+
+
+def sat(v, phi):
+    """Hard sign when phi is zero, otherwise a ramp of width phi, clipped."""
+    if phi <= 0.0:
+        return (v > 0.0) - (v < 0.0)
+    return max(-1.0, min(1.0, v / phi))
+
+
+def run(phi, d_amp, x0=(1.0, 0.0)):
+    """Closed loop, forward Euler. Returns the states, the surface and the torque."""
+    x, xs, ss, us = list(x0), [], [], []
+    for n in range(STEPS):
+        t = n * DT
+        s = x[1] + LAM * x[0]
+        u = -LAM * x[1] - (D + ETA) * sat(s, phi)
+        xs.append(list(x))
+        ss.append(s)
+        us.append(u)
+        d = d_amp * math.sin(3.0 * t)
+        x = [x[0] + DT * x[1], x[1] + DT * (u + d)]
+    return xs, ss, us
+
+
+def first_crossing(ss):
+    for n in range(len(ss) - 1):
+        if ss[n] * ss[n + 1] <= 0.0:
+            return n * DT
+    return float("inf")
+
+
+xs, ss, us = run(0.0, D)
+print(f"s(0) = {ss[0]:.1f}, so the guarantee is t_r <= |s0|/eta = {abs(ss[0]) / ETA:.1f} s")
+print(f"  the surface is actually reached at {first_crossing(ss):.4f} s")
+for d_amp in (0.0, D, -D):
+    xs, ss, us = run(0.0, d_amp)
+    tail = xs[STEPS * 4 // 5:]
+    print(f"  gust {d_amp:+.1f} rad/s^2: peak error over the last second "
+          f"{max(abs(x[0]) for x in tail) * 1e6:7.3f} microrad")
+```
+
+```text
+s(0) = 4.0, so the guarantee is t_r <= |s0|/eta = 2.0 s
+  the surface is actually reached at 1.2905 s
+  gust +0.0 rad/s^2: peak error over the last second 250.250 microrad
+  gust +2.0 rad/s^2: peak error over the last second 209.385 microrad
+  gust -2.0 rad/s^2: peak error over the last second 209.387 microrad
+```
+
+Two hundred microradians, against eighty thousand from the PD with the same 0.25 s error
+timescale. And the three rows barely differ: turning the worst gust on, and then reversing
+it, changes the answer by less than a fifth — and in the direction of making it slightly
+*better*, which is a sign that what is left is not the wind at all.
+
+The reason the wind vanishes is worth stating precisely. On the surface, $s$ is held at
+zero, so $\dot{s} = 0$, so $u + d + \lambda\dot{e} = 0$ at every instant. The control is
+switching fast enough that its average — the *equivalent control* — is whatever it has to
+be to satisfy that, and that average therefore contains $-d$ exactly. The disturbance is
+being cancelled by a law that was never told what it was. What made this possible is that
+$d$ enters through the same channel as $u$: both are torques on the same axis, so
+anything $d$ can do to $\dot{s}$, $u$ can undo. That is the meaning of *matched*.
+
+## What it costs
+
+```python
+import math
+
+LAM, ETA, D = 4.0, 2.0, 2.0
+DT, STEPS, J = 0.0005, 12000, 40.0
+
+
+def sat(v, phi):
+    if phi <= 0.0:
+        return (v > 0.0) - (v < 0.0)
+    return max(-1.0, min(1.0, v / phi))
+
+
+def run(phi, d_amp=D):
+    x, xs, ss, us = [1.0, 0.0], [], [], []
+    for n in range(STEPS):
+        s = x[1] + LAM * x[0]
+        u = -LAM * x[1] - (D + ETA) * sat(s, phi)
+        xs.append(list(x))
+        ss.append(s)
+        us.append(u)
+        d = d_amp * math.sin(3.0 * n * DT)
+        x = [x[0] + DT * x[1], x[1] + DT * (u + d)]
+    return xs, ss, us
+
+
+print("phi     torque step   band in s   predicted   pointing error")
+for phi in (0.0, 0.005, 0.05):
+    xs, ss, us = run(phi)
+    step = sum(abs(b - a) for a, b in zip(us, us[1:])) / (len(us) - 1)
+    tail = slice(STEPS * 4 // 5, STEPS)
+    band = max(abs(v) for v in ss[tail])
+    err = max(abs(x[0]) for x in xs[tail])
+    predicted = D * phi / (D + ETA)
+    print(f"{phi:<6}  {step * J:9.4f} Nm  {band:10.6f}  {predicted:10.6f}  "
+          f"{err * 1e6:9.1f} urad")
+```
+
+```text
+phi     torque step   band in s   predicted   pointing error
+0.0      167.8513 Nm    0.002975    0.000000      209.4 urad
+0.005      0.0979 Nm    0.002500    0.002500      500.3 urad
+0.05       0.0957 Nm    0.024983    0.025000     4998.5 urad
+```
+
+The first row is a motor being commanded to change its torque by 168 N·m every 0.5 ms,
+for as long as the dish is pointing. That is not a control signal, it is a heater and a
+gearbox-wear schedule, and the physical drive would not follow it in any case.
+
+Replacing $\mathrm{sgn}(s)$ with $s/\phi$ inside a band of width $\phi$ makes the law
+continuous there. The dynamics inside become $\dot{s} = d - ks/\phi$, which settles where
+the two balance: $|s| \to D\phi/k$, and the middle two columns confirm it to four decimal
+places. The pointing error follows at roughly $|s|/\lambda$.
+
+That is a complete design. With $\phi = 0.005$ the torque activity drops by a factor of
+1700 and the pointing error is 0.5 mrad, inside the 1 mrad specification. With
+$\phi = 0.05$ it is 5 mrad and the dish misses. $\phi$ is the dial between an actuator
+that survives and an error budget that closes, and the sandbox *Reaching, sliding, and the
+price of not chattering* is that dial: lift $\phi$ off zero and the trajectories stop
+crossing the surface and settle into the band between the faint lines.
+
+## The mistake, and why it is tempting
+
+The mistake is sizing the switching gain against the disturbance you expect rather than
+the bound you were given. It is tempting because every other loop in the building is
+tuned that way — you run the machine, you look at the error, you raise the gain until it
+is small enough — and because a gain of $D + \eta$ looks wastefully large on a calm day.
+
+It fails in a way that does not announce itself. With $k < D$ there is a region where
+$d$ overcomes the switching term, $s\dot{s}$ goes positive, and the state never reaches
+the surface at all. Nothing oscillates, nothing saturates, no alarm trips: the loop looks
+like a slightly sluggish PD, because that is what it has become. And it works perfectly
+for months, until the gust that the survey was written for arrives. The lab's reaching
+test names this failure directly — the message on a missed reaching time reads *the usual
+cause is a switching gain of eta instead of dbound + eta*.
+
+The related error is raising $\eta$ to fix a steady error inside a boundary layer. From
+$|s| \to D\phi/k$, raising $\eta$ raises $k$ and does shrink the band — but $\phi$ divides
+it directly and $k$ only through a sum that already contains $D$. Going from $\eta = 2$ to
+$\eta = 20$ buys a factor of 5.5; going from $\phi = 0.05$ to $\phi = 0.005$ buys a factor
+of 10 and costs nothing but switching activity.
+
+## Where this stops holding
+
+Three limits, in the order they arrive on real hardware.
+
+*Ideal sliding needs infinite switching frequency, and no implementation has one.* Even
+with $\phi = 0$ the first row above shows a band of 0.0030 in $s$ — because between
+samples nothing switches, and $s$ drifts by about $k\,\Delta t = 4 \times 0.0005$. Halving
+the sample interval halves it, exactly. A digital sliding-mode controller therefore always
+has a boundary layer; the choice is whether you set its width or the sample clock does.
+
+*Unmatched uncertainty is not rejected at all.* The whole argument turned on $d$ entering
+alongside $u$. A flexible mode between the motor and the dish surface does not: the torque
+reaches the reflector through the structure, and no gain on $u$ can cancel a disturbance
+the input cannot reach. Worse, a hard-switching law excites exactly such modes, which is
+one of the reasons chatter is a structural problem and not only a thermal one.
+
+*The surface must have relative degree one with respect to the input.* $s = \dot{e} +
+\lambda e$ works because $u$ appears in $\dot{s}$. Put an actuator lag between the command
+and the torque and it does not; the switching then acts through a first-order filter, the
+sign arrives late, and the ideal sliding motion is replaced by a limit cycle around the
+surface — module 3's subject, arriving uninvited.
+
+## What you are about to build
+
+The lab *Sliding-mode control of a disturbed double integrator* is this reading with the
+inertia normalised away: `sat`, `surface`, `control` and `run`, on
+$\dot{x_1} = x_2$, $\dot{x_2} = u + d(t)$ with $|d| \le D$ and the amplitude withheld from
+you. Its numbers are the ones above — $\lambda = 4$, $\eta = 2$, $D = 2$, $s(0) = 4$, a
+guarantee of 2 s and an actual reaching time near 1.29 s. One test runs the loop at
+$d = 0$, $+2$ and $-2$ and asserts the peak excursion stays under $10^{-3}$ in all three,
+which is invariance stated as an assertion; another asserts the chatter ratio between
+$\phi = 0$ and $\phi = 0.05$ exceeds 100; and the last checks that the steady band is
+$D\phi/(D + \eta) = 0.025$ rather than merely small, because a band that happens to be
+small is not evidence that you understand what set it. The fill-in *The surface, the
+reaching law, and the price of chattering* walks the four decisions in order, and the
+sandbox draws all of it moving.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Switching hard enough, and paying for it",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "Why is the reaching condition $s\\dot{s} \\le -\\eta|s|$ rather than $s\\dot{s} \\le -\\eta s^2$?",
+                        "opts": [
+                            "The $s^2$ form is not sign-definite, so it constrains only $s > 0$",
+                            "A push that does not fade as $s$ shrinks brings arrival in finite time",
+                            "Only the modulus form makes $V = \\tfrac{1}{2}s^2$ decrease along the motion",
+                            "The modulus keeps the control continuous as the state crosses $s = 0$",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"$s^2$ is positive for either sign of $s$, so $-\eta s^2$ is a perfectly good decrease on both branches. It is not defective — it is merely slower in the one way that matters.",
+                            r"Divide by $|s|$ and the condition reads $\mathrm{d}|s|/\mathrm{d}t \le -\eta$: a rate bounded away from zero no matter how close the state gets, so $|s|$ runs out at $t_r \le |s(0)|/\eta$.",
+                            r"Both forms make $V$ decrease. The difference is the *shape* of the decrease near zero, which decides whether the state arrives or merely approaches.",
+                            r"The opposite is true and it is the price of the method. A non-vanishing push arbitrarily close to the surface cannot come from a continuous law, which is why the control has to switch.",
+                        ],
+                        "why": r"""
+$s\dot{s} \le -\eta s^2$ gives $\dot{V} \le -2\eta V$ and therefore exponential decay:
+$s$ shrinks forever and reaches zero never. Dividing $s\dot{s} \le -\eta|s|$ by $|s|$
+instead gives $\mathrm{d}|s|/\mathrm{d}t \le -\eta$, a rate that does not soften as the
+surface approaches, so $|s|$ is exhausted at $t_r \le |s(0)|/\eta$ — two seconds for the
+dish, reached in 1.29. Everything the method claims rests on arriving rather than
+approaching, because only on the surface is the disturbance annihilated exactly.
+""",
+                    },
+                    {
+                        "q": "The gust bound is $D = 2$ and you set the switching gain to $\\eta = 2$, omitting $D$. What is the symptom?",
+                        "opts": [
+                            "Chattering doubles in amplitude while the surface is still reached",
+                            "The surface is still reached, but after $|s_0|/\\eta$ rather than sooner",
+                            "The loop behaves like a sluggish PD and the surface is never reached",
+                            "Sliding is unaffected, since the equivalent control absorbs the gust",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"Chatter amplitude is set by the switching gain, and a smaller gain gives a smaller one. The failure is not noisy, which is exactly what makes it easy to miss.",
+                            r"$|s_0|/\eta$ is the guarantee that has been lost, not a slower version of it. The bound was derived from $s\dot{s} \le -\eta|s|$, and that inequality no longer holds anywhere the gust opposes the switching.",
+                            r"With $k = 2$ and $|d| \le 2$ there are instants where $\dot{s}$ has the wrong sign, so $s$ stalls short of zero and the state never gets the invariance property.",
+                            r"The equivalent control only exists once the state is *on* the surface, which is the thing that has stopped happening. It is a consequence of sliding, not a mechanism that produces it.",
+                        ],
+                        "why": r"""
+The reaching argument needs $s\dot{s} = ds - k|s| \le (D - k)|s|$ to be negative, which
+requires $k > D$. At $k = D$ the gust can cancel the switching term exactly, $s$ stops
+falling short of zero, and the state settles somewhere off the surface, where the
+disturbance is not rejected at all. Nothing rings and nothing saturates — the closed loop
+degrades quietly into an ordinary proportional loop on the error rate, which is why the
+lab's reaching test spells out that the usual cause of a missed reaching time is a gain
+of `eta` instead of `dbound + eta`.
+""",
+                    },
+                    {
+                        "q": "While sliding, the error obeys $\\dot{e} = -\\lambda e$ whatever the plant is. What makes that so?",
+                        "opts": [
+                            "The equivalent control inverts an identified model of the plant",
+                            "Holding $s$ at zero *is* that equation, since $s = \\dot{e} + \\lambda e$",
+                            "The closed-loop poles have been placed at $-\\lambda$ by the switching gain",
+                            "The switching term cancels the plant dynamics term by term",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"No model is inverted and none is available — the dish's gust torque is known only by a bound. What the equivalent control does is take whatever value $\dot{s} = 0$ requires, which needs no identification.",
+                            r"The surface was written down as the differential equation wanted, rearranged into an algebraic constraint. Enforcing the constraint enforces the equation, and the plant never enters either one.",
+                            r"Pole placement needs a model and gives a linear closed loop. Here the order has *dropped* to one, which no state feedback on a second-order plant does.",
+                            r"Cancellation term by term would require knowing the terms. The switching term dominates them instead, which is a different and much weaker requirement.",
+                        ],
+                        "why": r"""
+$s = \dot{e} + \lambda e$ and $s = 0$ are the same statement, so a controller that holds
+$s$ at zero has enforced $\dot{e} = -\lambda e$ by construction. This is why the design
+order is inverted relative to CTRL510 and CTRL520: the error dynamics are chosen first,
+in seconds, and the control law is then whatever forces the constraint. The plant appears
+only in the sizing of the switching gain, and only through a bound.
+""",
+                    },
+                    {
+                        "q": "A gust torque on the elevation axis is rejected; a flexible mode between motor and reflector is not. What separates them?",
+                        "opts": [
+                            "The flexible mode is faster than the switching, so it averages away",
+                            "Unmatched terms are always small enough to sit below the switching gain",
+                            "Only a disturbance in the input channel can be dominated by the input",
+                            "A second-order surface would be needed, since the mode adds two states",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"Averaging is what makes the *equivalent control* meaningful, and it does not remove anything the input cannot reach. A fast unmatched mode is if anything worse, because hard switching excites it.",
+                            r"Size is not the criterion and this gets the logic backwards — a large matched disturbance is rejected completely while an arbitrarily small unmatched one is not rejected at all.",
+                            r"$\dot{s} = u + d + \lambda\dot{e}$: because $u$ and $d$ enter the same sum, whatever $d$ does to $\dot{s}$ the gain on $u$ can undo. A term that reaches the output another way is untouched.",
+                            r"Adding states to the surface is a real technique and it does not repair this. The mode remains outside the input channel however the surface is written.",
+                        ],
+                        "why": r"""
+The reaching argument is one line: $\dot{s} = u + d + \lambda\dot{e}$, and $u$ can
+dominate $d$ because they are added together. That is the whole of what *matched* means,
+and it is a structural property rather than a question of magnitude. A flexible mode
+carries torque to the reflector through the structure, so it changes the pointing without
+appearing in that sum, and no switching gain touches it. It is also the reason chatter is
+a structural problem: a discontinuous command has energy at every frequency, including
+the mode's.
+""",
+                    },
+                    {
+                        "q": "Inside a boundary layer of width $\\phi$ the switching term becomes $ks/\\phi$. What sets the steady $|s|$?",
+                        "opts": [
+                            "The width $\\phi$ itself, since $s$ may wander anywhere inside the band",
+                            "Zero, because the layer changes the control shape and not the dynamics",
+                            "The reaching margin $\\eta$, which is what the layer is trading away here",
+                            "The value at which $ks/\\phi$ balances the disturbance, namely $D\\phi/k$",
+                        ],
+                        "a": 3,
+                        "whys": [
+                            r"$\phi$ is the ceiling rather than the answer, and the gap matters: with the dish's numbers the band is $D\phi/k = \phi/2$, so half of the layer is never used.",
+                            r"The dynamics change completely. Outside, $s$ falls at a fixed rate and arrives; inside, $\dot{s} = d - ks/\phi$ is a first-order lag driven by the disturbance, and a driven lag has a non-zero steady value.",
+                            r"$\eta$ enters only through $k = D + \eta$, so raising it from 2 to 20 shrinks the band by 5.5 while $\phi$ divides it directly. The trade the layer makes is chatter against error, not margin against error.",
+                            r"$\dot{s} = 0$ requires $ks/\phi = d$, and with $|d| \le D$ that is $|s| \le D\phi/k$ — 0.0025 for the dish, which is what the run measures to four decimals.",
+                        ],
+                        "why": r"""
+Inside the layer the law is linear: $\dot{s} = d - ks/\phi$. Setting $\dot{s} = 0$ gives
+$s = d\phi/k$, so the surface variable settles wherever the ramped control balances the
+present disturbance, bounded by $D\phi/k$. For the dish that is
+$2 \times 0.005/4 = 0.0025$, measured as 0.002500, and the pointing error follows at
+roughly $|s|/\lambda$. The exact rejection is gone because the control is no longer free
+to take any value the constraint demands — inside the band it is pinned to $ks/\phi$, and
+$s$ has to move away from zero to generate the torque the gust requires.
+""",
+                    },
+                    {
+                        "q": "With $\\phi = 0$ on a 2 kHz digital controller the pointing error is 209 µrad, and it halves when the sample interval halves. What is that residual?",
+                        "opts": [
+                            "Gust leaking through the surface, since rejection is never perfect",
+                            "An unavoidable layer, as wide as $s$ drifts between two samples",
+                            "Euler error in the plant simulation rather than in the loop",
+                            "The tail of the reaching transient, still decaying at the end of the run",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The run with the gust switched off has the *larger* error of the three, so what is left cannot be the gust. Reversing the gust changes the figure by under a fifth, in both directions.",
+                            r"Nothing switches between samples, so $s$ runs on at up to $k$ for a full interval before the sign is re-evaluated: a band of about $k\,\Delta t$, and halving $\Delta t$ halves it.",
+                            r"The plant's own discretisation error is second order in $\Delta t$ near a smooth trajectory, and it would not scale linearly. It is also common to the PD run, which shows no such floor.",
+                            r"The surface is reached at 1.29 s and the figure is taken over the last second of a 6 s run, four seconds later. A decaying transient would also shrink as the run lengthened, and it does not.",
+                        ],
+                        "why": r"""
+Ideal sliding needs the control to switch the instant $s$ changes sign, which a sampled
+implementation cannot do: between ticks the sign is frozen, $s$ carries on at up to
+$k = 4$, and it overshoots by about $k\,\Delta t = 0.002$ before being turned around. That
+is a boundary layer nobody asked for, and the linear scaling with $\Delta t$ is its
+signature — 411, 209, 104 and 49 µrad at 1, 0.5, 0.25 and 0.125 ms. The design lesson is
+that $\phi = 0$ is unavailable in practice, so the choice is whether the width is set
+deliberately or inherited from the sample clock.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "Reaching, sliding, and the price of not chattering",
                 "visualiser": "sliding-mode",

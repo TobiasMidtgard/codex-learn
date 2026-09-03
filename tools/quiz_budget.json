@@ -16,7 +16,7 @@
   "CS451": {"longest": 0, "shortest": 0, "whys": 116, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 100}},
   "CTRL510": {"longest": 6, "shortest": 1, "whys": 48, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 16}},
   "CTRL520": {"longest": 7, "shortest": 1, "whys": 48, "blanks": {"longest": 5, "shortest": 0, "markup": 0, "whys": 32}},
-  "CTRL530": {"longest": 7, "shortest": 0, "whys": 0, "blanks": {"longest": 4, "shortest": 1, "markup": 0, "whys": 40}},
+  "CTRL530": {"longest": 7, "shortest": 0, "whys": 48, "blanks": {"longest": 4, "shortest": 1, "markup": 0, "whys": 40}},
   "DL501": {"longest": 1, "shortest": 1, "whys": 120, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "DSP510": {"longest": 4, "shortest": 0, "whys": 0, "blanks": {"longest": 3, "shortest": 2, "markup": 0, "whys": 32}},
   "DSP520": {"longest": 8, "shortest": 0, "whys": 48, "blanks": {"longest": 1, "shortest": 0, "markup": 0, "whys": 32}},
