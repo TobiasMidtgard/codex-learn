@@ -37,7 +37,7 @@
   "ELEC420": {"longest": 0, "shortest": 0, "whys": 80, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "ELEC430": {"longest": 0, "shortest": 0, "whys": 80, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "EMAG510": {"longest": 2, "shortest": 0, "whys": 48, "blanks": {"longest": 1, "shortest": 0, "markup": 0, "whys": 20}},
-  "EMAG520": {"longest": 5, "shortest": 1, "whys": 0, "blanks": {"longest": 2, "shortest": 1, "markup": 0, "whys": 20}},
+  "EMAG520": {"longest": 5, "shortest": 1, "whys": 48, "blanks": {"longest": 2, "shortest": 1, "markup": 0, "whys": 20}},
   "EMAG530": {"longest": 8, "shortest": 1, "whys": 0, "blanks": {"longest": 5, "shortest": 0, "markup": 0, "whys": 32}},
   "ETH501": {"longest": 0, "shortest": 0, "whys": 80, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "FM501": {"longest": 0, "shortest": 0, "whys": 96, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},

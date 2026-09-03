@@ -62,6 +62,238 @@ COURSE = {
                 "Return loss in dB is the same statement again, in the units a spectrum analyser prints.",
                 "A lossless line multiplies $\\Gamma$ by $e^{-2j\\beta l}$: the phase changes, the magnitude never does.",
             ],
+            "read": [
+                {
+                    "title": "Two airlines, and the number that would not move",
+                    "minutes": 15,
+                    "body": r'''
+A vector network analyser sits on the bench, calibrated at the test-port face with a
+3.5 mm short-open-load kit, sweeping through 2.000 GHz. Screwed straight onto the
+port is a 100 Ω mismatch standard: a coaxial part built to be exactly twice the
+system impedance, sold so that an instrument can be checked against a bad load as
+well as a good one. The marker reads $\Gamma = 0.3333$ at $0.0^\circ$, a VSWR of
+2.000:1, a return loss of 9.54 dB, and an impedance of 100.0 Ω.
+
+Unscrew it. Put a 37.474 mm 50 Ω airline in between — a hollow tube with a wire down
+the middle, no dielectric, mechanically stable to a micron. Screw the standard back
+onto the far end and read the marker again.
+
+The magnitude is 0.3333. The return loss is 9.54 dB. The VSWR is 2.000:1. Not one of
+those three has moved in the fourth decimal place. The phase has gone from $0.0^\circ$
+to $-180.0^\circ$, and the impedance readout now says **25.0 Ω**.
+
+Add a second identical airline and everything comes back: $0.0^\circ$ again, 100.0 Ω
+again. Three readings, and the whole module is in them. Nothing about the load
+changed. Something about *where you were standing* did, and one family of numbers
+noticed while another family did not.
+
+## What a length of line does to a ratio
+
+$\Gamma$ is not a property of a load. It is a ratio of two wave amplitudes evaluated
+at a plane, and the plane is part of the quantity. Move the plane back by $l$ toward
+the generator and follow the two waves. The incident wave has $l$ further to go before
+it reaches the load, so it arrives with an extra lag $e^{-j\beta l}$. Whatever comes
+back has $l$ further to travel to reach you, so it arrives with another $e^{-j\beta l}$.
+The reflected amplitude at the new plane is down by both factors and the incident
+amplitude is *up* by one of them, so the ratio carries the lag twice:
+
+$$\Gamma(l) = \frac{V^-e^{-j\beta l}}{V^+e^{+j\beta l}} = \Gamma_L\,e^{-2j\beta l}$$
+
+That factor of two is the whole geometry of the module and it is worth being able to
+say out loud: the reflection goes out and comes back, so the phase of $\Gamma$ turns
+at twice the rate a single wave's does. It is why the pattern closes after half a
+wavelength rather than a whole one, and it is why 37.474 mm — a quarter of the
+149.896 mm free-space wavelength at 2 GHz — produced exactly half a turn.
+
+$|e^{-2j\beta l}| = 1$ for real $\beta$, so $|\Gamma(l)| = |\Gamma_L|$ for every $l$.
+The magnitude is not merely hard to change with a line: it is *unchangeable* by one,
+because the operation a lossless line performs is a rotation of the plane about the
+origin, and a rotation moves no point away from the centre. Everything in the readout
+that survived the airline — $|\Gamma|$, VSWR, return loss — is a function of the
+radius alone:
+
+$$S = \frac{1 + |\Gamma|}{1 - |\Gamma|}, \qquad
+\mathrm{RL} = -20\log_{10}|\Gamma|$$
+
+They are three names for the one coordinate the rotation cannot touch. The phase is
+the other coordinate, and it is the one the rotation is *for*. Reading the pair that
+way explains a fact the derivation *From the load impedance to the standing wave*
+arrives at from the standing-wave side: a slotted line reports $S$, which discards
+the phase, so it has to recover the phase separately from the position of a minimum.
+Half the information is in the radius and half is in the angle, and no instrument
+gets both from one reading.
+
+## Why 100 Ω came back as 25 Ω
+
+Normalise, writing $z = Z_L/Z_0$, so that
+
+$$\Gamma = \frac{z - 1}{z + 1}, \qquad z = \frac{1 + \Gamma}{1 - \Gamma}$$
+
+Half a turn is $\Gamma \to -\Gamma$. Put $-\Gamma$ into the second expression and the
+numerator and denominator swap:
+
+$$z' = \frac{1 - \Gamma}{1 + \Gamma} = \frac{1}{z}$$
+
+A quarter wavelength of line is *inversion in the normalised impedance*. Two ohms
+becomes half an ohm normalised; $z = 2$ became $z = 1/2$, which is 25 Ω on a 50 Ω
+system, which is what the readout said. Undoing the normalisation gives
+$Z' = Z_0^2/Z_L$, and everything the rest of this course does with a quarter-wave
+transformer is that one line read in the other direction.
+
+Notice what the derivation did not need: no tangent, no limit, no input-impedance
+formula. The rotation form contains the quarter-wave inverter as a special case
+because a quarter wave is nothing more special than a half turn.
+
+## The map that makes the chart possible
+
+$\Gamma = (z-1)/(z+1)$ is a bilinear map, and one line of algebra says where it sends
+things. With $z = r + jx$,
+
+$$|\Gamma|^2 = \frac{(r-1)^2 + x^2}{(r+1)^2 + x^2}$$
+
+The two denominators differ only in the sign of the $2r$ cross term, so
+$|\Gamma| \le 1$ exactly when $(r-1)^2 \le (r+1)^2$, which holds exactly when
+$r \ge 0$. Every load that dissipates rather than generates lands inside the closed
+unit disc, and the rim is reserved for loads that dissipate nothing. An unbounded
+half-plane has been folded onto a disc you can print, which is the whole reason a
+Smith chart exists — and why a measured $|\Gamma| > 1$ is a claim about an active
+device rather than a bad load.
+
+The sandbox *Where a load sits, and where a line takes it* is that disc with the
+reference impedance nailed to 50 Ω. Set its load to 100 Ω with no reactance and walk
+the line-length control from 0 to 0.5: the bright dot goes round once, the dashed
+circle it rides never changes size, and the readout underneath holds at
+$|\Gamma| = 0.333$, VSWR 2:1, for the whole trip.
+
+```python
+import cmath
+import math
+
+C_LIGHT = 2.99792458e8
+z0, f = 50.0, 2.000e9
+lam = C_LIGHT / f                    # air-dielectric line, so the free-space value
+g_load = (100.0 - z0) / (100.0 + z0)
+
+print(f"lambda at {f / 1e9:.3f} GHz = {lam * 1e3:.3f} mm, "
+      f"a quarter of it is {lam * 1e3 / 4:.3f} mm")
+
+for name, l_mm in (("bare", 0.0), ("one airline", 37.474), ("two airlines", 74.948)):
+    beta_l = 2.0 * math.pi * (l_mm * 1e-3) / lam
+    g = g_load * cmath.exp(-2j * beta_l)
+    ang = math.degrees(cmath.phase(g))
+    ang = 0.0 if abs(ang) < 1e-9 else ang
+    z = z0 * (1.0 + g) / (1.0 - g)
+    print(f"{name:>12}: |Gamma| = {abs(g):.4f} at {ang:+8.2f} deg -> "
+          f"Z = {z.real:7.2f} {z.imag:+6.2f}j ohm, VSWR {(1 + abs(g)) / (1 - abs(g)):.3f}:1, "
+          f"RL {-20 * math.log10(abs(g)):.3f} dB")
+```
+
+It reproduces the bench: 0.3333 at $0^\circ$, 0.3333 at $-180^\circ$ giving 25.00 Ω,
+and 0.3333 at $0^\circ$ again giving 100.00 Ω, with the VSWR pinned at 2.000:1 and the
+return loss at 9.542 dB on all three rows. Those last two numbers are the ones the
+lab *Reflection, VSWR and a length of line* checks first, and its final test is this
+same invariance stated as an assertion: rotate a load through four arbitrary lengths
+and $|\Gamma|$ must not move by more than $10^{-9}$.
+
+## Why the lab forbids the tangent
+
+That lab asks for `input_impedance` and then tells you not to write it as
+
+$$Z_{in} = Z_0\,\frac{Z_L + jZ_0\tan\beta l}{Z_0 + jZ_L\tan\beta l}$$
+
+The reason is geometric rather than numerical. The disc is compact and the impedance
+plane is not, so a rotation — a bounded, ordinary motion of the disc — has to be
+represented in impedance coordinates by an expression that passes through infinity.
+The tangent is where that infinity lives, and it sits at $\beta l = \pi/2$, which is
+the one length this course cares about most. IEEE arithmetic happens to rescue the
+expression, because `math.tan` returns a large finite number near $\pi/2$ rather than
+an infinity and the two large numbers divide out. Hand it a real infinity and the
+rescue stops:
+
+```python
+import cmath
+import math
+
+z0, zl = 50.0, 100.0
+t = float("inf")                            # the tangent at exactly a quarter wave
+print("tan form  :", z0 * (zl + 1j * z0 * t) / (z0 + 1j * zl * t))
+
+g = ((zl - z0) / (zl + z0)) * cmath.exp(-2j * (math.pi / 2))
+print("rotation  :", z0 * (1.0 + g) / (1.0 - g))
+```
+
+The tangent form prints `(nan+nanj)` and the rotation prints `(25.000000000000004-2.2962127484012876e-15j)`.
+The rotation has a singularity of its own, at $\Gamma = +1$, but that is the genuine
+open circuit where the impedance really is unbounded, rather than an artefact of the
+coordinates.
+
+## The mistake: trusting three right numbers and one wrong one
+
+The error that costs people afternoons is reporting an impedance at the wrong
+reference plane. A 3 mm PTFE-filled SMA adapter left in the path after calibration is
+0.087 of a wavelength at 6 GHz, so it rotates $\Gamma$ by 63 degrees.
+
+```python
+import cmath
+import math
+
+C_LIGHT = 2.99792458e8
+z0 = 50.0
+f, eps_r, adapter_mm = 6.0e9, 2.1, 3.0     # a PTFE-filled SMA adapter at 6 GHz
+
+lam = C_LIGHT / f / math.sqrt(eps_r)
+beta_l = 2.0 * math.pi * (adapter_mm * 1e-3) / lam
+g_seen = ((100.0 - z0) / (100.0 + z0)) * cmath.exp(-2j * beta_l)
+z_seen = z0 * (1.0 + g_seen) / (1.0 - g_seen)
+
+print(f"the adapter is {adapter_mm / (lam * 1e3):.4f} wavelengths long, so it "
+      f"rotates Gamma by {math.degrees(2.0 * beta_l):.1f} degrees")
+print(f"reported VSWR {(1 + abs(g_seen)) / (1 - abs(g_seen)):.4f}:1 and return loss "
+      f"{-20 * math.log10(abs(g_seen)):.3f} dB -- both exactly right")
+print(f"reported impedance {z_seen.real:.2f} {z_seen.imag:+.2f}j ohm, for a load "
+      f"that is 100.00 +0.00j")
+```
+
+A 62.6 degree rotation, a VSWR of 2.0000:1 and a return loss of 9.542 dB that are both
+*correct*, and an impedance of $55.23 - j36.79\ \Omega$ for a load that is a hundred
+ohms of pure resistance. The reactance was manufactured by three millimetres of
+adapter.
+
+This is tempting because the instrument is not lying and the three numbers on the
+front page of the report are right. Return loss, VSWR and mismatch loss are functions
+of the radius, and the radius is the coordinate a rotation preserves, so they survive
+any amount of forgotten line. The impedance is a function of both coordinates, and it
+is the one that is wrong. Someone who has checked the VSWR against the specification
+and found it in tolerance has verified nothing about the plane at all, and will then
+design a matching network for $55 - j37$ and build it for a load that was never there.
+
+## Where this stops holding
+
+**Loss.** Every claim above rested on $\beta$ being real. On a lossy line the
+propagation constant is $\gamma = \alpha + j\beta$ and the rotation becomes
+$\Gamma(l) = \Gamma_L e^{-2\alpha l}e^{-2j\beta l}$ — a spiral inward, because the
+reflection is attenuated on the way out and again on the way back. Ten metres of cable
+with 0.5 dB/m at the frequency of interest adds 10 dB to the measured return loss, so
+the 100 Ω standard would read $|\Gamma| = 0.105$, a VSWR of 1.24:1, and look like an
+excellent load. The invariant this module is built on is the first thing loss
+destroys, and a match measured at the far end of a long feeder is a measurement of the
+feeder.
+
+**A complex $Z_0$.** The proof that passive loads land in the disc used $Z_0$ real.
+On a lossy or strongly dispersive line — a telephone pair at audio, an on-chip
+interconnect — $Z_0 = \sqrt{(R + j\omega L)/(G + j\omega C)}$ is complex, and
+$(Z_L - Z_0)/(Z_L + Z_0)$ can exceed unity for a perfectly passive load. The repair is
+the power-wave definition, $(Z_L - Z_0^*)/(Z_L + Z_0)$, which restores $|\Gamma| \le 1$
+at the cost of making $\Gamma = 0$ mean conjugate match rather than equality. Module 2
+assumes a real reference impedance throughout, as every network analyser does.
+
+**One mode, one plane.** A reflection coefficient presumes a single propagating mode
+and a single identifiable plane at which the load is a lumped impedance. Above the
+first higher-order mode of the coax there are two waves going each way and one complex
+number is not enough to describe what comes back.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "Where a load sits, and where a line takes it",
                 "visualiser": "smith",
@@ -427,6 +659,402 @@ for _bl in (0.3, 1.1, 2.7, 4.0):
                 "Losslessness makes $S$ unitary, so $S^\\dagger S = I$ — a constraint that rules out most matrices someone hands you.",
                 "$\\Gamma_{in} = S_{11} + S_{12}S_{21}\\Gamma_L/(1 - S_{22}\\Gamma_L)$: what a mismatched load does to the input.",
             ],
+            "read": [
+                {
+                    "title": "Four traces from a chip attenuator, and what they refuse to be",
+                    "minutes": 16,
+                    "body": r'''
+A two-port calibration has been done on the analyser and the device under test is an
+0402 chip attenuator soldered onto a scrap of FR-4, with 3.6 mm of 50 Ω microstrip
+running out to an edge launch at each end. The part is sold as a 6 dB pad. At 2.000 GHz
+the instrument reports four complex numbers:
+
+$$S_{11} = 0.0200\,\angle 168^\circ \qquad S_{12} = 0.5012\,\angle{-31.2^\circ}$$
+$$S_{21} = 0.5012\,\angle{-31.2^\circ} \qquad S_{22} = 0.0210\,\angle 165^\circ$$
+
+Three separate facts are sitting in that table, and none of them is the attenuation.
+
+```python
+import cmath
+import math
+
+S11 = cmath.rect(0.0200, math.radians(168.0))
+S12 = cmath.rect(0.5012, math.radians(-31.2))
+S21 = cmath.rect(0.5012, math.radians(-31.2))
+
+print(f"|S21| = {abs(S21):.4f}, which is {20 * math.log10(abs(S21)):+.2f} dB")
+print(f"|S11| = {abs(S11):.4f}, which is {20 * math.log10(abs(S11)):+.2f} dB")
+print(f"S12 and S21 differ by {abs(S12 - S21):.2e}")
+
+out = abs(S11) ** 2 + abs(S21) ** 2
+print(f"a unit wave into port 1 puts {out:.4f} back out of the two ports,")
+print(f"so the part absorbs {100 * (1 - out):.1f} per cent of what it is sent")
+
+C_LIGHT = 2.99792458e8
+lam = C_LIGHT / 2.0e9 / math.sqrt(3.2)      # microstrip, effective permittivity 3.2
+frac = 31.2 / 360.0
+print(f"a 31.2 degree lag is {frac:.4f} wavelengths, "
+      f"or {frac * lam * 1e3:.2f} mm of that microstrip")
+```
+
+It prints $-6.00$ dB of transmission, $-33.98$ dB of input reflection, an $S_{12}$ and
+$S_{21}$ that differ by exactly zero, 74.8 per cent of the incident power absorbed,
+and 7.26 mm of line. The last two numbers are the interesting ones. The 74.8 per cent
+says the part is not a lossless network and could not be. The 7.26 mm is the 3.6 mm of
+launch at each end, which means the numbers describe the *board*, not the chip.
+
+## Waves, because voltages have stopped being available
+
+At the low-frequency end of this degree a two-port was described by a $Z$ matrix, and
+$Z_{11}$ was measured by driving port 1 and leaving port 2 open. At 2 GHz that
+procedure fails at the point where you have to build the open. A gap in a microstrip
+line is a capacitor of a tenth of a picofarad, whose reactance at 2 GHz is 800 Ω and
+falling; it is also an antenna. The $Y$ matrix asks for a short instead, and a via to
+ground is an inductor of half a nanohenry, $j6$ Ω and rising. Neither termination is
+the thing the definition names, and the error grows with frequency in opposite
+directions.
+
+What can be built accurately at 2 GHz, and at 40 GHz, is a *matched load*: a thin-film
+resistor on a substrate whose return loss is 40 dB or better and whose behaviour is
+uneventful over decades. So the useful description is the one whose measurement
+conditions call for matched loads on the ports you are not driving. That is not an
+experimental convenience bolted onto a definition; it *is* the definition, which is the
+point the fill-in-the-blanks exercise *What the S matrix actually promises* makes hole
+by hole.
+
+Define the wave amplitudes at port $i$ as
+
+$$a_i = \frac{V_i^+}{\sqrt{Z_0}}, \qquad b_i = \frac{V_i^-}{\sqrt{Z_0}}$$
+
+so that $\tfrac{1}{2}|a_i|^2$ is the power arriving at that port and
+$\tfrac{1}{2}|b_i|^2$ the power leaving it. Linearity then forces the outgoing set to
+be a linear function of the incoming set, $b = Sa$, and picking out one entry means
+killing every incoming wave but one:
+
+$$S_{ij} = \left.\frac{b_i}{a_j}\right|_{a_k = 0,\ k \ne j}$$
+
+Setting $a_k = 0$ means nothing may come back into port $k$, and the only load with
+that property is $Z_0$. Read the subscripts as destination-then-source: $S_{21}$ is
+what comes out of port 2 when port 1 is driven, which is the forward transmission, and
+the reversed reading is the mistake everyone makes once.
+
+For a one-port the matrix has a single entry, and $b_1/a_1$ is the reflection
+coefficient of module 1 with its measurement condition written down. The sandbox
+*S11 of a one-port, read three ways* is exactly that: the chart is a plot of $S_{11}$
+and the readout is the three ways an instrument reports one complex number.
+
+## Building an S matrix out of a circuit
+
+The lab *Build and interrogate scattering matrices* hands you
+$S_{11} = z/(z + 2Z_0)$ for a series impedance and asks you to implement it. It comes
+out of two lines of circuit analysis, and the analysis is worth doing once rather than
+trusting the formula.
+
+Terminate port 2 in $Z_0$, as the definition requires. Looking into port 1 there is
+nothing but $z$ in series with that termination, so $Z_{in} = z + Z_0$ and
+
+$$S_{11} = \frac{Z_{in} - Z_0}{Z_{in} + Z_0} = \frac{z + Z_0 - Z_0}{z + Z_0 + Z_0}
+= \frac{z}{z + 2Z_0}$$
+
+For $S_{21}$, the total voltage at the port-1 node is $V_1 = V_1^+(1 + S_{11})$, and
+that node drives a divider made of $z$ and the termination. The port-2 load absorbs
+everything that reaches it, so the wave leaving port 2 *is* that voltage:
+
+$$S_{21} = \frac{b_2}{a_1} = (1 + S_{11})\frac{Z_0}{z + Z_0}
+= \frac{2z + 2Z_0}{z + 2Z_0}\cdot\frac{Z_0}{z + Z_0} = \frac{2Z_0}{z + 2Z_0}$$
+
+Carry two values through it, one that dissipates and one that cannot.
+
+```python
+z0 = 50.0
+for label, z in (("50 ohm", 50.0 + 0j), ("j50", 50.0j)):
+    z_in = z + z0                            # port 2 sits in its own matched load
+    s11 = (z_in - z0) / (z_in + z0)
+    s21 = (1.0 + s11) * z0 / (z + z0)        # the divider from the port-1 node
+    print(f"{label:>7}: S11 = {s11.real:+.4f}{s11.imag:+.4f}j   "
+          f"S21 = {s21.real:+.4f}{s21.imag:+.4f}j")
+    print(f"         |S11|^2 = {abs(s11) ** 2:.4f}  |S21|^2 = {abs(s21) ** 2:.4f}  "
+          f"sum = {abs(s11) ** 2 + abs(s21) ** 2:.4f}")
+```
+
+A 50 Ω resistor in series gives $S_{11} = 1/3$ and $S_{21} = 2/3$, and the two squared
+magnitudes come to $0.5556$ — the resistor has taken $4/9$ of the incident power, which
+is what a resistor is for. A $j50$ reactance gives $S_{11} = 0.2 + j0.4$ and
+$S_{21} = 0.8 - j0.4$, whose squared magnitudes are $0.2000$ and $0.8000$ and sum to
+$1.0000$ exactly. Both matrices are symmetric, so both devices are reciprocal; one is
+unitary and the other is not. Reciprocity and losslessness are separate properties and
+the lab has a test for each, including a gyrator that is unitary without being
+symmetric.
+
+The unitarity condition itself is a two-line consequence of the definitions. Total
+incoming power is $\tfrac{1}{2}a^\dagger a$ and total outgoing power is
+$\tfrac{1}{2}b^\dagger b = \tfrac{1}{2}a^\dagger S^\dagger S a$. If the network stores
+and dissipates nothing, those are equal for *every* choice of $a$, and a Hermitian form
+that agrees with the identity on every vector is the identity:
+
+$$S^\dagger S = I$$
+
+Read column by column that says $\sum_i |S_{ij}|^2 = 1$: whatever is not reflected at a
+port must leave by some other port. It is why a lossless two-port cannot be improved at
+transmitting without being improved at not reflecting — there is one unit of power and
+unitarity has already spent it.
+
+## The load reaches back through the device
+
+$S_{11}$ was defined with port 2 matched. Put a real load on port 2 and the wave that
+leaves through $S_{21}$ comes back off the load, re-enters port 2, and some of it
+emerges at port 1 through $S_{12}$ — where it adds to the $S_{11}$ reflection that was
+already there. Some of it instead bounces off port 2's own mismatch $S_{22}$, goes
+back to the load, and returns for another go. The input reflection is the sum over
+every round trip:
+
+$$\Gamma_{in} = S_{11} + S_{12}S_{21}\Gamma_L\left[1 + S_{22}\Gamma_L
++ (S_{22}\Gamma_L)^2 + \cdots\right]$$
+
+The bracket is a geometric series with ratio $S_{22}\Gamma_L$, which is under one in
+magnitude for any passive pair, so it sums to $1/(1 - S_{22}\Gamma_L)$ and
+
+$$\Gamma_{in} = S_{11} + \frac{S_{12}S_{21}\Gamma_L}{1 - S_{22}\Gamma_L}$$
+
+The derivation *What a mismatched load does to the input* reaches the same expression
+by algebra on $b = Sa$ in four steps, with no bouncing at all. Watching the two agree
+is worth a minute: the series is the physics and the algebra is the bookkeeping, and
+the denominator that looks like an arbitrary correction term is the whole infinite
+regress of round trips folded into one division.
+
+```python
+s11, s12, s21, s22 = 0.10, 0.70, 0.70, 0.10
+g_l = 1.0 / 3.0
+running = s11
+for n in range(1, 6):
+    term = s12 * s21 * g_l * (s22 * g_l) ** (n - 1)
+    running += term
+    print(f"after {n} round trip(s): term {term:.6f}, running total {running:.6f}")
+print(f"closed form: {s11 + s12 * s21 * g_l / (1.0 - s22 * g_l):.6f}")
+```
+
+The first bounce moves the answer from 0.100000 to 0.263333, the second adds 0.005444,
+and by the fifth the running total has settled on 0.268966, which is what the closed
+form prints.
+
+## The mistake: reading $S_{11}$ off a datasheet as the input match
+
+A filter's data sheet says 20 dB input return loss and the schematic review passes.
+The filter is then followed by an amplifier whose input is a 2:1 mismatch, and the
+board comes back off the line failing its own return-loss specification.
+
+```python
+import cmath
+import math
+
+s11, s12s21, s22 = 0.10, 0.49, 0.10
+print(f"the datasheet says |S11| = {s11:.2f}, a return loss of "
+      f"{-20 * math.log10(s11):.1f} dB")
+for deg in (0, 90, 180, 270):
+    g_l = (1.0 / 3.0) * cmath.exp(1j * math.radians(deg))
+    g_in = s11 + s12s21 * g_l / (1.0 - s22 * g_l)
+    print(f"  a 2:1 load at {deg:3d} deg: |Gamma_in| = {abs(g_in):.4f}, "
+          f"return loss {-20 * math.log10(abs(g_in)):.1f} dB")
+```
+
+The four rows read 11.4 dB, 14.5 dB, 24.7 dB and 14.5 dB. The same filter and the same
+2:1 load, differing in nothing but the length of line between them, produce an input
+match anywhere from worse than 12 dB to better than the datasheet figure. The
+specification was never a property of the filter alone.
+
+This is tempting for a reason better than carelessness. $S_{11}$ is one number in a
+table, it is labelled *input return loss*, and for a device with strong isolation the
+correction term genuinely is negligible — an amplifier with $S_{12}$ at $-25$ dB makes
+$S_{12}S_{21}$ small enough that reading $S_{11}$ alone is right to a fraction of a
+decibel. The habit forms on components where it works and is then carried to filters
+and couplers, where $S_{12}S_{21}$ is close to unity and the term dominates. The
+question to ask of any quoted $S_{11}$ is what was on the other port when it was
+measured, and the answer is always 50 Ω.
+
+## Where the description stops holding
+
+**The reference plane.** An S matrix without a plane is not a measurement. Moving the
+plane by $l$ multiplies $S_{11}$ by $e^{-2j\beta l}$ and $S_{21}$ by $e^{-j\beta l}$,
+so the 7.26 mm of launch line found at the top of this reading has already rotated
+$S_{11}$ by 62 degrees before the chip is reached. Magnitudes survive it and phases do
+not, and cascading two devices whose planes disagree gives an answer that is wrong in a
+way no magnitude plot reveals.
+
+**A real reference impedance.** Everything here divided by $\sqrt{Z_0}$ with $Z_0$
+real. On-chip, where the interconnect is lossy and $Z_0$ is complex, the same
+definition allows $|S_{11}| > 1$ for a passive network, and the repair is the
+power-wave normalisation with $Z_0^*$ in the numerator.
+
+**Linearity.** $b = Sa$ presumes the response scales with the drive. An amplifier
+driven 1 dB into compression has no scattering matrix at all: its $S_{21}$ depends on
+$|a_1|$, and the four numbers become a surface over drive level. Small-signal
+S-parameters are a linearisation about an operating point, and every large-signal
+question — intermodulation, harmonic output, load-pull — lives outside them.
+
+**One mode per port.** A port carries one propagating mode by assumption. Where two
+modes propagate, a physical connector is two electrical ports and a $2\times 2$ matrix
+is measuring an average of things that do not average.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "What the four numbers do and do not promise",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A filter's data sheet quotes $|S_{11}| = 0.10$ at the band centre. On your board its output feeds an amplifier that presents a 2:1 mismatch, through a length of line you have not measured. What is the filter's input reflection now?",
+                        "opts": [
+                            "Anywhere from roughly 0.06 to 0.27, set by the phase of the load's reflection",
+                            "Still 0.10, because $S_{11}$ belongs to the filter and not to what follows it",
+                            "Worse than 0.10 by a factor of three, since the load returns a third of the wave",
+                            "Better than 0.10, because the returning wave partly cancels what was reflected",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The correction $S_{12}S_{21}\Gamma_L/(1 - S_{22}\Gamma_L)$ has roughly the magnitude of $\Gamma_L$ for a low-loss filter, and its phase is set by the line length, so it adds to $S_{11}$ or subtracts from it depending on a length nobody wrote down.",
+                            r"This is the reading of a data sheet that ignores the condition under which the number was measured. $S_{11}$ is $b_1/a_1$ with port 2 in 50 Ω, and the amplifier is not 50 Ω, so the measurement condition has been broken and the quoted number no longer applies.",
+                            r"The factor is real but the reasoning treats the correction as a fixed multiplier. It is a complex term added to $S_{11}$, so its phase decides whether it makes the reflection larger or smaller, and both happen.",
+                            r"Cancellation is one of the outcomes, and at some line lengths the input match genuinely improves past the data sheet figure. Betting on it means betting on a phase that changes with frequency and with every board revision.",
+                        ],
+                        "why": r"""
+$\Gamma_{in} = S_{11} + S_{12}S_{21}\Gamma_L/(1 - S_{22}\Gamma_L)$. With
+$|S_{12}S_{21}| \approx 0.49$ for a low-loss filter, $|\Gamma_L| = 1/3$ and
+$|S_{22}| = 0.1$, the correction has magnitude near 0.17 — larger than $S_{11}$ itself.
+Sweeping the line length rotates it through every phase, so the input reflection runs
+between about 0.06 and 0.27, or 24.7 dB to 11.4 dB of return loss. The data sheet
+number is the value with 50 Ω on the output, and it was never a promise about any other
+load.
+""",
+                    },
+                    {
+                        "q": "A two-port sold as a lossless matching section measures $|S_{11}| = 0.30$ and $|S_{21}| = 0.90$ at the frequency of interest. What follows?",
+                        "opts": [
+                            "It absorbs about a tenth of the incident power, so it is not lossless",
+                            "Nothing follows: a passive network only requires that the two squares sum to at most one",
+                            "Energy is not conserved there, so the calibration must be at fault",
+                            "It is lossless, since unitarity constrains the phases of $S$ rather than the magnitudes",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$0.30^2 + 0.90^2 = 0.90$, so a tenth of what goes in comes out of neither port. That is either dissipation in the part or radiation from it, and both disqualify the word lossless.",
+                            r"The inequality is right for a passive network in general, which is what makes this tempting. But the claim under test was *lossless*, and lossless is the equality case; a sum of 0.90 is a passive network that is definitely not the one advertised.",
+                            r"Nothing is violated. Energy that leaves by neither port has gone into heat or into the air, and every real component does some of both.",
+                            r"Unitarity is a statement about magnitudes first: the columns of $S$ must have unit length, which is exactly $\sum_i |S_{ij}|^2 = 1$. The phase relations it also imposes come on top of that.",
+                        ],
+                        "why": r"""
+$S^\dagger S = I$ read down the first column is $|S_{11}|^2 + |S_{21}|^2 = 1$, so a
+lossless two-port has no freedom left once one magnitude is fixed. Here the sum is
+$0.09 + 0.81 = 0.90$, so 10 per cent of the incident power is unaccounted for — about
+0.46 dB of insertion loss beyond what the mismatch explains. That is an ordinary number
+for a real inductor at a few gigahertz, and an impossible one for the ideal section the
+part was sold as.
+""",
+                    },
+                    {
+                        "q": "Why did the scattering description displace the impedance description above a few hundred megahertz?",
+                        "opts": [
+                            "A matched termination stays accurate up there while an open or a short does not",
+                            "Terminal voltages fall too low to measure once a device is a fair fraction of a wavelength",
+                            "The impedance matrix stops existing once a device spans a wavelength",
+                            "Travelling waves carry power and terminal voltages do not, so only waves conserve it",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The $Z$ matrix needs opens and the $Y$ matrix needs shorts, and at 2 GHz an open gap is a tenth-of-a-picofarad capacitor and a grounding via is a half-nanohenry inductor. A thin-film 50 Ω load with 40 dB of return loss is a stock item, so the description built on matched terminations is the one that can be measured.",
+                            r"Voltage amplitude is not the problem — a network analyser works with milliwatts and has plenty of dynamic range. What fails is that the voltage is no longer the same everywhere on a terminal, so there is no single number for the definition to refer to.",
+                            r"The matrix exists wherever the network is linear; for many structures you can compute it perfectly well and convert to $S$. The obstacle is measurement, not existence.",
+                            r"Voltage and current together carry power perfectly well, and $Z$ parameters conserve energy exactly as $S$ parameters do. The two descriptions hold the same information and convert into each other.",
+                        ],
+                        "why": r"""
+The obstacle is the boundary condition each definition demands. $Z_{11}$ is measured
+with port 2 open; at 2 GHz a gap in a microstrip line is a capacitor of roughly 0.1 pF,
+some 800 Ω and falling with frequency, and it radiates as well. $Y$ parameters want a
+short, and a via to ground is around 0.5 nH, some $j6$ Ω and rising. Both errors grow
+with frequency and in opposite directions. A matched load, by contrast, is a resistive
+film that behaves over decades — so the description whose measurement conditions are
+matched loads is the one that survives, and the terminations are part of the definition
+rather than a laboratory detail.
+""",
+                    },
+                    {
+                        "q": "A measured two-port has $S_{12} = S_{21}$ to within the noise floor, and $S^\\dagger S$ is nowhere near the identity. Which device is that consistent with?",
+                        "opts": [
+                            "A resistive attenuator, which behaves alike in both directions and takes power out",
+                            "A ferrite isolator, which passes the wave one way and absorbs it the other",
+                            "A section of ideal transmission line, which delays the wave and dissipates none of it",
+                            "An amplifier, whose forward gain is far larger than its reverse transmission",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Symmetric because it is a network of ordinary resistors with no preferred direction, and badly non-unitary because taking power out is its entire function. A 6 dB pad puts only a quarter of the incident power out of the far port.",
+                            r"An isolator is the standard example of a *non*-reciprocal device: its whole usefulness is that $S_{21}$ and $S_{12}$ differ by tens of decibels, which is the opposite of what was measured.",
+                            r"An ideal line is both reciprocal and lossless, so its matrix is symmetric *and* unitary. It satisfies the first observation and contradicts the second.",
+                            r"A large ratio between forward and reverse transmission is precisely $S_{12} \neq S_{21}$, so an amplifier fails the symmetry test before its power balance is examined at all.",
+                        ],
+                        "why": r"""
+The two properties are independent and this question fixes each one separately.
+Symmetry is reciprocity: any network of ordinary linear materials has it, and a
+magnetised ferrite or a transistor is what breaks it. Unitarity is losslessness, and a
+resistor breaks that without touching the symmetry. An attenuator is the device that is
+firmly reciprocal and firmly lossy, which is the combination measured. The lab's own
+tests make the same separation, one for a resistive series element and one for a
+gyrator that is unitary while not being symmetric.
+""",
+                    },
+                    {
+                        "q": "The 6 dB chip pad measured $S_{21} = 0.5012$ at $-31.2^\\circ$, with 3.6 mm of microstrip at each end inside the calibration planes. You recalibrate onto the chip's own pads. What should you expect?",
+                        "opts": [
+                            "The phase moves back toward zero while the magnitude stays close to 0.5012",
+                            "Nothing moves, because a scattering matrix describes the part rather than the fixture",
+                            "The magnitude climbs noticeably, because the line loss was being charged to the chip",
+                            "Both change, since a shorter path reflects less at the two launches",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Moving the plane in by $l$ at each end multiplies $S_{21}$ by $e^{+j\beta l}$ twice, which is a pure phase for a low-loss line. The 31.2 degrees was the 7.26 mm of microstrip, and removing it takes the phase most of the way to zero while leaving the 6 dB alone.",
+                            r"This is the assumption the reference plane exists to destroy. The same physical part measured through two different fixtures gives two different matrices, which is why a plane has to be stated alongside the numbers.",
+                            r"Something like a hundredth of a decibel is in that much FR-4 at 2 GHz, so the magnitude does move — far too little to notice against a 6 dB pad, and nothing like the change the phase shows.",
+                            r"The launches reflect whether or not they are inside the calibration planes; recalibrating changes where the numbers are quoted, not what the copper does.",
+                        ],
+                        "why": r"""
+Shifting a reference plane along a lossless line is the module-1 rotation applied to
+each port: $S_{11}$ picks up $e^{-2j\beta l}$ and $S_{21}$ picks up $e^{-j\beta l}$ for
+each end that moves. At 2 GHz on microstrip of effective permittivity 3.2 the
+wavelength is 83.8 mm, so 7.26 mm of total launch line is 0.0867 of a wavelength and
+accounts for the full 31.2 degrees. Magnitudes are almost untouched — FR-4 loses on the
+order of 0.01 dB over that distance — which is the general rule: a plane shift is
+visible in phase and invisible in a magnitude plot, so a cascade built from
+wrongly-referenced matrices fails in a way no magnitude sweep exposes.
+""",
+                    },
+                    {
+                        "q": "In $\\Gamma_{in} = S_{11} + S_{12}S_{21}\\Gamma_L/(1 - S_{22}\\Gamma_L)$, what is the denominator doing?",
+                        "opts": [
+                            "Summing the extra round trips the wave makes between port 2 and the load",
+                            "Accounting for the power the two-port dissipates on each pass through it",
+                            "Holding $|\\Gamma_{in}|$ below one, as a passive network requires it to be",
+                            "Converting between the reference impedances of the two ports",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"It is the geometric series $1 + S_{22}\Gamma_L + (S_{22}\Gamma_L)^2 + \cdots$ written closed. Each power is one more bounce off the port-2 mismatch and back off the load, and the ratio is under one for passive parts, so the regress converges.",
+                            r"Dissipation is already in the magnitudes of the four entries; the denominator appears identically for a lossless two-port, where there is nothing to dissipate.",
+                            r"Passivity does bound $|\Gamma_{in}|$, but that is a consequence of the entries themselves. The denominator can be less than one in magnitude and make the fraction *larger*, which is the resonant case rather than a safety limit.",
+                            r"A single reference impedance is used throughout; that is what allows the entries to be combined arithmetically in the first place.",
+                        ],
+                        "why": r"""
+Follow the wave. Some of $a_1$ reflects at once as $S_{11}a_1$. The rest crosses as
+$S_{21}a_1$, reflects off the load as $\Gamma_L S_{21}a_1$, and returns through
+$S_{12}$. But part of that returning wave does not cross — it bounces off the port-2
+mismatch $S_{22}$, goes back to the load, and comes around again, indefinitely. Summing
+$1 + S_{22}\Gamma_L + (S_{22}\Gamma_L)^2 + \cdots$ gives $1/(1 - S_{22}\Gamma_L)$, so
+the term that looks like an arbitrary correction is an infinite regress of round trips
+folded into one division. With $S_{22}\Gamma_L$ near unity the sum is large, and the
+two-port and its load have become a resonator.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "S11 of a one-port, read three ways",
                 "visualiser": "smith",
@@ -825,6 +1453,236 @@ assert abs(gamma_in(_X, 0.5) - _X[0, 0]) > 0.1, \
                 "A shorted stub of length $l$ presents a pure reactance, and its length is the design variable.",
                 "The double-stub tuner, and the forbidden region it pays for having its spacing fixed.",
             ],
+            "read": [
+                {
+                    "title": "Two rectangles of copper, and where their lengths came from",
+                    "minutes": 16,
+                    "body": r'''
+A 1.000 GHz driver stage sits on a piece of 1.6 mm FR-4. Between the transistor's
+output pad and the SMA connector there is nothing but copper: a 13.7 mm run of 50 Ω
+microstrip, and hanging off it at a right angle a 13.3 mm finger with a via to ground
+at its far end. The analyser reads 45 dB of return loss at 1.000 GHz.
+
+Take a scalpel to the finger and read again: 3.4 dB. The transistor's own output is
+$25 - j60\ \Omega$, a reflection coefficient of 0.677 and a VSWR of 5.19:1, and more
+than four fifths of the incident power was coming back out of the connector. Two
+rectangles of copper, no components, no adjustment, and the mismatch is gone.
+
+Everything in this module is the question of where 13.7 and 13.3 came from.
+
+## Two moves, because there are two things wrong
+
+A load that is not $Z_0$ is wrong in two independent ways: its real part and its
+imaginary part. The two pieces of copper fix one each, and the order is forced by what
+each is capable of.
+
+A length of line, from module 1, rotates $\Gamma$ about the origin and does nothing
+else. It cannot change $|\Gamma|$, so on its own it can never match anything — but it
+can carry the load to any point on its circle, and one of those points will have the
+property you want. A shunt element added across the line changes the *susceptance* at
+that plane and leaves the conductance alone, because elements in parallel add
+admittances. So the line is used to make the real part right and the stub to remove
+what is left, and it has to be in that order: the stub cannot fix a conductance and
+the line cannot fix a mismatch.
+
+That the second move works in admittance is not a matter of taste. A stub hangs off
+the side of the line; parallel elements add $Y$, and nothing simple happens to $Z$. So
+the target is the locus $\mathrm{Re}\,y = 1$, and the first job is to find where that
+locus lives on the $\Gamma$ plane.
+
+## Where the unit-conductance circle sits
+
+Write $\Gamma = u + jv$ and $y = (1 - \Gamma)/(1 + \Gamma)$. Multiply above and below
+by the conjugate of the denominator:
+
+$$y = \frac{(1 - u - jv)(1 + u - jv)}{(1 + u)^2 + v^2}
+= \frac{1 - u^2 - v^2 - 2jv}{(1 + u)^2 + v^2}$$
+
+so the conductance is
+
+$$g = \frac{1 - |\Gamma|^2}{(1 + u)^2 + v^2}$$
+
+Set $g = 1$ and expand the denominator: $1 - \rho^2 = 1 + 2u + u^2 + v^2 = 1 + 2u +
+\rho^2$, which collapses to
+
+$$u = -\rho^2, \qquad\text{that is}\qquad \cos\phi = -\rho$$
+
+The unit-conductance circle meets the constant-$\rho$ circle at exactly two points, at
+angles $\phi = \pm\arccos(-\rho)$. That is the step the lab
+*Design a quarter-wave transformer and a single-stub match* hands over as a recipe;
+it is three lines of algebra and it is worth having done them, because the result says
+something the recipe hides. As $\rho \to 0$ the crossings run to $\pm 90^\circ$ and as
+$\rho \to 1$ they close on $180^\circ$: a badly mismatched load has both of its
+crossings almost diametrically opposite itself, which is why a severe mismatch does not
+need a long line.
+
+Rotation by $d$ wavelengths takes the angle from $\theta$ to $\theta - 4\pi d$, since
+$2\beta l = 2(2\pi/\lambda)(d\lambda) = 4\pi d$. Setting that equal to $\phi$,
+
+$$d = \frac{\theta - \phi}{4\pi} \bmod 0.5$$
+
+with two answers, one per crossing, and the design takes the nearer.
+
+## What the stub has to be
+
+A shorted line of length $\ell$ presents $Z = jZ_0\tan 2\pi\ell$, so its normalised
+admittance is $y = -j\cot 2\pi\ell$ — a pure susceptance, tunable to any value by
+choosing $\ell$, and free. Requiring $-\cot 2\pi\ell = b$ gives
+$2\pi\ell = \operatorname{atan2}(-1, b)$, taken modulo half a wavelength because the
+susceptance repeats there.
+
+```python
+import cmath
+import math
+
+z0 = 50.0
+zl = 25.0 - 60.0j                      # the driver's output at 1.000 GHz
+
+g = (zl - z0) / (zl + z0)
+rho, theta = abs(g), cmath.phase(g)
+print(f"Gamma = {rho:.4f} at {math.degrees(theta):.2f} deg, "
+      f"VSWR {(1 + rho) / (1 - rho):.3f}:1, return loss {-20 * math.log10(rho):.2f} dB")
+
+phi = math.acos(-rho)                  # where the normalised conductance becomes 1
+d = min(((theta - p) / (4.0 * math.pi)) % 0.5 for p in (phi, -phi))
+g_d = g * cmath.exp(-4j * math.pi * d)
+y = (1.0 - g_d) / (1.0 + g_d)
+b = -y.imag
+ell = (math.atan2(-1.0, b) / (2.0 * math.pi)) % 0.5
+
+print(f"the g = 1 crossings sit at +/-{math.degrees(phi):.2f} deg")
+print(f"stub distance d = {d:.6f} wavelengths, where y = {y.real:.4f} {y.imag:+.4f}j")
+print(f"the stub must add b = {b:+.4f}, so a shorted stub is {ell:.6f} wavelengths")
+
+y_total = y + 1j * b
+print(f"residual |Gamma| = {abs((1.0 - y_total) / (1.0 + y_total)):.2e}")
+
+lam_mm = 300.0 / math.sqrt(3.2)        # 50 ohm microstrip, effective permittivity 3.2
+print(f"at 1 GHz that is {d * lam_mm:.2f} mm of line and a {ell * lam_mm:.2f} mm stub")
+```
+
+The crossings are at $\pm 132.59^\circ$; the nearer one is $0.081431$ wavelengths
+away; the admittance there is $1.0000 + j1.8385$, so the stub must supply $-1.8385$;
+and a shorted stub of $0.079286$ wavelengths does it. The residual reflection is
+$2\times 10^{-16}$, which is the arithmetic running out rather than the match running
+out. On microstrip of effective permittivity 3.2 the wavelength at 1 GHz is 167.7 mm,
+and the two lengths come to 13.66 mm and 13.30 mm — the copper on the board.
+
+That residual is the only honest test. Nothing about the construction can be checked by
+eye, which is why the lab makes `matched_gamma` a deliverable and then uses it to grade
+`single_stub`: the design is verified by pushing the load through the network it
+designed and seeing nothing come back.
+
+One number in that trace connects to the derivation *The transformer and the stub*.
+That derivation ends at $x = (S-1)/\sqrt{S}$, the reactance left over on the
+$r = 1$ circle, and for $S = 5.187$ it gives $1.8385$ — the magnitude of the
+susceptance found here on the $g = 1$ circle. The two circles are reflections of each
+other through the origin, so the leftover has the same size on both; only its role
+changes, from a reactance to cancel in series to a susceptance to cancel in shunt.
+
+## The other route, and why it needs a real load
+
+The quarter-wave transformer reaches the same place by moving the line's impedance
+instead of adding an element. From module 1, half a turn of the $\Gamma$ plane is
+$\Gamma \to -\Gamma$, and under $z = (1 + \Gamma)/(1 - \Gamma)$ that swaps the
+numerator and the denominator, so $z \to 1/z$. Un-normalising against a section of
+impedance $Z_1$,
+
+$$Z_{in} = \frac{Z_1^2}{Z_L}$$
+
+and choosing $Z_1$ so that $Z_{in} = Z_0$ gives $Z_1 = \sqrt{Z_0 Z_L}$, the geometric
+mean rather than the arithmetic one. A 200 Ω load wants a 100 Ω section, not a 125 Ω
+one.
+
+```python
+z0 = 50.0
+for zl in (200.0, 100.0, 12.5):
+    gl = (zl - z0) / (zl + z0)
+    gq = -gl                                 # half a turn of the Gamma plane
+    z_in = z0 * (1 + gq) / (1 - gq)
+    print(f"{zl:6.1f} ohm: Gamma {gl:+.4f} -> {gq:+.4f} -> Z = {z_in.real:.3f} ohm, "
+          f"and Z0^2/ZL = {z0 * z0 / zl:.3f}")
+```
+
+The three rows give 12.500, 25.000 and 200.000 ohms against the same three values from
+$Z_0^2/Z_L$, and the last row is the second one run backwards — inversion is its own
+inverse.
+
+The restriction follows from the same formula. $\sqrt{Z_0 Z_L}$ has to be a
+characteristic impedance, and the characteristic impedance of any low-loss line is
+real, so $Z_L$ must be real too. The transistor above is $25 - j60$ and there is no
+section to be built. The standard repair is to spend a length of line first, rotating
+until the locus crosses the real axis — which happens at a voltage minimum or maximum —
+and to apply the transformer to the resistance found there. That is the same two-move
+structure again, with a different second move.
+
+## The mistake: matching on the circle that is drawn
+
+The sandbox *Rotating onto the unity-resistance circle* shows the construction on an
+impedance chart, because that is what an impedance chart can draw: rotate until the
+bright dot reaches the $r = 1$ circle, read off $50 + jX$, and cancel $X$. That is
+correct, and the element that cancels a series reactance is a *series* one.
+
+What people build is a shunt stub, because a shunt stub is a finger of copper and a
+via, and breaking a microstrip line to insert a series element is a different kind of
+afternoon. Doing the visible construction and then building the convenient element is
+the error, and it is quiet: the network looks right, the lengths are plausible, and the
+match is merely poor rather than absent.
+
+```python
+import math
+
+for label, s in (("the sandbox load", 1.9000), ("this driver", 5.1872)):
+    x = (s - 1.0) / math.sqrt(s)             # the leftover on the r = 1 circle
+    left = x * x / (2.0 + x * x)             # after a SHUNT stub cancels its susceptance
+    print(f"{label:>16}: S = {s:.4f}, x = {x:.4f} -> a shunt stub there leaves "
+          f"|Gamma| = {left:.4f}, {-20 * math.log10(left):.2f} dB return loss")
+```
+
+At the $r = 1$ plane the impedance is $1 + jx$, so the admittance is
+$(1 - jx)/(1 + x^2)$ and the conductance is $1/(1 + x^2)$, which is not 1 unless $x$
+is zero. A shunt stub can zero the susceptance and cannot touch that conductance, so
+what survives is $|\Gamma| = x^2/(2 + x^2)$. For the sandbox's mild load that is
+0.1757, a 15.1 dB return loss that looks like a working match on a scalar analyser.
+For the driver it is 0.6283 against the 0.6768 it started with — the two rectangles of
+copper have bought 0.6 dB, and the board fails.
+
+The reason this is tempting rather than careless is that the impedance chart is the one
+in front of you and the $r = 1$ circle is the one you can find without labels. The
+$g = 1$ circle is the same circle rotated half a turn, so the two constructions differ
+by exactly $0.25$ wavelengths of line — a difference that looks like a sign convention
+and is not one. The check that catches it costs nothing: convert to admittance at the
+chosen plane and confirm the real part is 1 before sizing the stub. The lab's
+`single_stub` does that on the line above the one that computes `b`.
+
+## Where this stops holding
+
+**One frequency.** Both networks are exact at the frequency for which the lengths were
+computed and nowhere else. The stub's susceptance drifts as $-\cot 2\pi\ell r$ while
+the line to it rotates as $e^{-4\pi j d r}$, and the two drifts do not cancel. Module 4
+measures what that costs; the answer for this driver is a few per cent of bandwidth.
+
+**The junction is not a point.** A microstrip tee has a discontinuity capacitance of
+roughly 0.1 pF and an effective reference-plane shift of a fraction of a millimetre.
+At 1 GHz that capacitance is 1.6 kΩ against the 50 Ω line and is ignorable; at 10 GHz
+it is 160 Ω and moves the design. The two lengths above are a starting point for a
+solver, not a manufacturing drawing.
+
+**The section has to exist.** $\sqrt{Z_0 Z_L}$ is a number, and a line of that
+impedance is a width. On 1.6 mm FR-4 a 100 Ω line is about 0.3 mm wide, where etch
+tolerance is a percent of the impedance; a 16 Ω line is 25 mm wide, which is a patch
+antenna rather than a transmission line. Large impedance ratios run out of realisable
+sections before they run out of algebra.
+
+**One stub adjusts one load.** The single-stub design chooses $d$ to suit the load, so
+a different load needs the line cut to a different length. The double-stub tuner fixes
+the spacing and adjusts two lengths instead, which is what makes it a laboratory
+instrument — and it pays for the fixed spacing with a forbidden region of loads it
+cannot reach at all, because two susceptances at a fixed separation cannot land every
+point of the disc on the centre.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "Rotating onto the unity-resistance circle",
                 "visualiser": "smith",
@@ -1213,6 +2071,475 @@ assert abs(matched_gamma(_zl, 50.0, _d, _physical_b)) < 1e-7, \
                 "Multi-section transformers: binomial for a maximally flat response, Chebyshev for equal ripple across a wider band.",
                 "The Bode–Fano limit: the integral of $\\ln(1/|\\Gamma|)$ over all frequency is bounded by the load's own $RC$, so bandwidth is a budget and not an engineering choice.",
             ],
+            "read": [
+                {
+                    "title": "One hundred and seventy-one megahertz, decided before anything was built",
+                    "minutes": 17,
+                    "body": r'''
+On the analyser is a board carrying a 200 Ω film resistor fed through a quarter-wave
+section of 100 Ω microstrip, cut to be a quarter wave at 1.000 GHz. Swept from 800 MHz
+to 1200 MHz, the return-loss trace is a V with its point off the bottom of the screen.
+The marker reads 24.6 dB at 950 MHz, 20.0 dB at 914 MHz, and 18.7 dB at 900 MHz. Above
+the design frequency the same numbers appear at 1050, 1086 and 1100 MHz. The 20 dB band
+is 171 MHz wide, which is 17.1 per cent of the design frequency.
+
+Now etch a second board with the section trimmed to a tenth of a millimetre and the
+resistor selected to 0.1 per cent. The point of the V goes lower. The 171 MHz does not
+move.
+
+That is the fact this module is about. The depth of the null is workmanship. The width
+of the band was decided by the ratio 200:50 before anyone chose a substrate.
+
+## The response of a single section, exactly
+
+The section has impedance $Z_1 = \sqrt{Z_0Z_L}$ and electrical length
+$\theta = (\pi/2)r$, where $r = f/f_0$, because a line that is a quarter wave at $f_0$
+is $r$ quarter waves at $f$. Put it into the line equation with $t = \tan\theta$:
+
+$$Z_{in} = Z_1\frac{Z_L + jZ_1t}{Z_1 + jZ_Lt}
+\quad\Longrightarrow\quad
+\Gamma = \frac{Z_1(Z_L - Z_0) + jt(Z_1^2 - Z_0Z_L)}{Z_1(Z_L + Z_0) + jt(Z_1^2 + Z_0Z_L)}$$
+
+The design choice $Z_1^2 = Z_0Z_L$ annihilates the $jt$ term in the *numerator* and
+nowhere else. That single cancellation is the match: at every frequency the numerator
+is a constant, and only the denominator moves. Dividing through by
+$Z_1 = \sqrt{Z_0Z_L}$,
+
+$$\Gamma(\theta) = \frac{Z_L - Z_0}{(Z_L + Z_0) + 2jt\sqrt{Z_0Z_L}},
+\qquad
+|\Gamma| = \frac{|Z_L - Z_0|}{\sqrt{(Z_L + Z_0)^2 + 4t^2 Z_0Z_L}}$$
+
+At $f_0$ the tangent is infinite and $|\Gamma|$ is zero. At dc and at $2f_0$ the tangent
+is zero and $|\Gamma|$ is the bare mismatch, because a section of zero or half a
+wavelength transforms nothing. The response is symmetric about $r = 1$ and repeats every
+$2f_0$.
+
+```python
+import math
+
+z0, zl, f0 = 50.0, 200.0, 1.000e9
+
+
+def gamma_one_section(r):
+    """|Gamma| of a single quarter-wave section at relative frequency r = f/f0."""
+    t = math.tan((math.pi / 2.0) * r)
+    return abs(zl - z0) / math.sqrt((zl + z0) ** 2 + 4.0 * t * t * z0 * zl)
+
+
+for f_mhz in (900.0, 914.4, 950.0, 1000.0, 1050.0, 1085.6, 1100.0):
+    m = gamma_one_section(f_mhz * 1e6 / f0)
+    rl = "infinite" if m < 1e-12 else f"{-20 * math.log10(m):6.2f} dB"
+    print(f"{f_mhz:7.1f} MHz: |Gamma| = {m:.5f}   return loss {rl}")
+```
+
+The seven rows are the seven marker readings, symmetric about 1000 MHz, with 914.4 and
+1085.6 MHz landing on 20.00 dB.
+
+## Where 171 megahertz comes from
+
+Solve $|\Gamma| = \Gamma_m$ for the band edge. Using $\sec^2\theta = 1 + t^2$ to fold
+the constant into the trigonometry,
+
+$$|\Gamma|^2 = \frac{(Z_L - Z_0)^2}{(Z_L - Z_0)^2 + 4Z_0Z_L\sec^2\theta}
+\quad\Longrightarrow\quad
+\cos\theta_m = \frac{\Gamma_m}{\sqrt{1 - \Gamma_m^2}}\cdot
+\frac{2\sqrt{Z_0Z_L}}{|Z_L - Z_0|}$$
+
+Since $\theta = (\pi/2)r$, the lower edge is $r_m = 2\theta_m/\pi$, the upper edge is
+$2 - r_m$ by symmetry, and the fractional bandwidth is their difference:
+
+$$\frac{\Delta f}{f_0} = 2 - \frac{4}{\pi}\theta_m$$
+
+```python
+import math
+
+z0, zl, g_max = 50.0, 200.0, 0.1
+
+c = g_max / math.sqrt(1.0 - g_max ** 2) * 2.0 * math.sqrt(z0 * zl) / abs(zl - z0)
+theta_m = math.acos(c)
+print(f"cos(theta_m) = {c:.6f}, theta_m = {theta_m:.6f} rad")
+print(f"lower edge r = {2.0 * theta_m / math.pi:.6f}, upper edge "
+      f"r = {2.0 - 2.0 * theta_m / math.pi:.6f}")
+print(f"fractional bandwidth = {2 - (4 / math.pi) * theta_m:.10f}")
+
+c2 = g_max / math.sqrt(1.0 - g_max ** 2) * 2.0 * math.sqrt(50.0 * 100.0) / 50.0
+print(f"the same section on a 2:1 step instead: "
+      f"{2 - (4 / math.pi) * math.acos(c2):.6f}")
+```
+
+It prints a fractional bandwidth of `0.1711353386`, which is the number the lab
+*Measure what a match costs in bandwidth* asserts to six decimal places against a
+bisection that never touches this formula. The two agree because they are the same
+response measured two ways, and the lab is arranged so that the closed form is
+available to check the search rather than to replace it.
+
+The second line is the point of the whole module. Halve the impedance step, from 4:1 to
+2:1, and the band more than doubles, to 36.7 per cent. Nothing in either calculation
+mentions a substrate, a tolerance, a length or a loss. Only $Z_L/Z_0$ and $\Gamma_m$
+appear, and $\Gamma_m$ is what *you* declared acceptable.
+
+The sandbox *Sweeping length is sweeping frequency* is the same statement with the
+algebra removed: a fixed piece of line is a different fraction of a wavelength at every
+frequency, so sweeping its length control is sweeping frequency, and the bright dot
+makes one circuit at constant radius. A line moves the phase of a mismatch across the
+band and never its size, so whatever widens a band has to come from the elements added.
+
+## The same rule with lumped parts
+
+The circuit exercise *An L-match, and the bandwidth it costs* matches the same 4:1 step
+at 100 MHz with an inductor and a capacitor. The derivation *Node Q, and where the
+bandwidth goes* extracts its single figure of merit,
+$Q = \sqrt{R_L/R_0 - 1} = \sqrt{3} = 1.732$, from which $X_C = R_L/Q = 115.5\ \Omega$
+and $X_L = QR_0 = 86.6\ \Omega$, giving 13.78 pF and 137.83 nH.
+
+The rule of thumb attached to that $Q$ is a fractional bandwidth of $1/Q$, here 57.7 per
+cent — against 17.1 per cent for the transformer on the same 4:1 step. Before concluding
+that lumped parts are three times better, ask what each number was measured at. The
+$1/Q$ estimate is a half-power width. Measured the way the transformer was measured, at
+$|\Gamma| \le 0.1$, the L-match holds from 93.1 MHz to 106.5 MHz, a fractional bandwidth
+of 13.4 per cent — narrower than the transformer, not wider. At the VSWR-2 level
+($|\Gamma| \le 1/3$) it spans 48.6 per cent, which is what the $1/Q$ estimate was
+reaching for and still 16 per cent short of it.
+
+A bandwidth figure without a $\Gamma_m$ beside it compares nothing, and the two networks
+above differ by a factor of four depending on which level is chosen.
+
+## Buying width with sections
+
+An $n$-section transformer has $n+1$ interfaces. When each reflection is small they add
+with the phase each has accumulated, and the total is
+
+$$\Gamma(\theta) \approx \Gamma_0 + \Gamma_1e^{-2j\theta} + \cdots + \Gamma_ne^{-2jn\theta}$$
+
+a polynomial in $e^{-2j\theta}$ whose coefficients are yours to choose. Choosing them
+proportional to the binomial coefficients makes the polynomial a perfect power:
+
+$$\Gamma(\theta) = A\left(1 + e^{-2j\theta}\right)^n = A\,2^ne^{-jn\theta}\cos^n\theta$$
+
+which has an $n$-fold zero at $\theta = \pi/2$ — flat at $f_0$ to as many derivatives as
+there are sections. Setting $\theta = 0$ fixes $A$: the sum of the reflections must come
+to the whole step, and with $\Gamma_k \approx \tfrac{1}{2}\ln(Z_{k+1}/Z_k)$ for a small
+step, $A2^n = \tfrac{1}{2}\ln(Z_L/Z_0)$. Substituting back,
+
+$$\ln\frac{Z_{k+1}}{Z_k} = 2\Gamma_k = 2AC^n_k = 2^{-n}\binom{n}{k}\ln\frac{Z_L}{Z_0}$$
+
+which is the design rule the lab states and asks you to implement. For $n = 1$ it gives
+$\ln(Z_1/Z_0) = \tfrac{1}{2}\ln(Z_L/Z_0)$, so $Z_1 = \sqrt{Z_0Z_L}$, and the quarter-wave
+transformer is the one-section member of the family.
+
+```python
+import cmath
+import math
+
+
+def binomial(z_from, z_to, n):
+    total = math.log(z_to / z_from)
+    z, out = z_from, []
+    for k in range(n):
+        z *= math.exp(2.0 ** (-n) * math.comb(n, k) * total)
+        out.append(z)
+    return out
+
+
+def cascade(z_from, sections, z_to, r):
+    """The exact |Gamma| of the cascade, folding the load back section by section."""
+    theta = (math.pi / 2.0) * r
+    z = complex(z_to)
+    for zs in reversed(sections):
+        g = (z - zs) / (z + zs) * cmath.exp(-2j * theta)
+        z = zs * (1.0 + g) / (1.0 - g)
+    return abs((z - z_from) / (z + z_from))
+
+
+for n in (1, 2, 3):
+    s = binomial(50.0, 100.0, n)
+    a = 2.0 ** (-n - 1) * math.log(2.0)
+    approx = (2 ** n) * a * abs(math.cos(math.pi / 4.0)) ** n
+    exact = cascade(50.0, s, 100.0, 0.5)
+    print(f"n={n}: sections {[round(v, 4) for v in s]}")
+    print(f"     at r=0.5 the small-reflection form gives {approx:.6f}, "
+          f"the exact cascade {exact:.6f} ({100 * (approx / exact - 1):+.1f}%)")
+
+a = 2.0 ** (-2) * math.log(4.0)                     # the same estimate on a 4:1 step
+approx = 2.0 * a * abs(math.cos(math.pi / 4.0))
+exact = cascade(50.0, binomial(50.0, 200.0, 1), 200.0, 0.5)
+print(f"one section on a 4:1 step: {approx:.6f} against {exact:.6f} "
+      f"({100 * (approx / exact - 1):+.1f}%)")
+```
+
+Two sections on a 2:1 step are 59.4604 Ω and 84.0896 Ω, three are 54.5254, 70.7107 and
+91.7004 — the middle one of three being the single-section answer, which is the binomial
+symmetry showing through. The approximation is within about one per cent of the exact
+cascade for a 2:1 step. On the 4:1 step of the board at the top it predicts 0.490 where
+the truth is 0.469, an error of 4.6 per cent, which is the theory being used well
+outside where it was derived.
+
+## The mistake: expecting care to buy width
+
+The instinct that better workmanship gives better performance is right nearly
+everywhere in engineering, and here it is right about the wrong quantity.
+
+```python
+import math
+
+z0, zl = 50.0, 200.0
+
+
+def gamma_z1(z1, r):
+    t = math.tan((math.pi / 2.0) * r)
+    z_in = complex(z1) * (zl + 1j * z1 * t) / (z1 + 1j * zl * t)
+    return abs((z_in - z0) / (z_in + z0))
+
+
+def edge(z1, outside, inside):
+    f_out = gamma_z1(z1, outside) - 0.1
+    for _ in range(100):
+        mid = 0.5 * (outside + inside)
+        f_mid = gamma_z1(z1, mid) - 0.1
+        if (f_mid < 0.0) == (f_out < 0.0):
+            outside, f_out = mid, f_mid
+        else:
+            inside = mid
+    return 0.5 * (outside + inside)
+
+
+for err in (0.02, 0.01, 0.005):
+    z1 = 100.0 * (1.0 + err)
+    lo, hi = edge(z1, 1e-6, 1.0), edge(z1, 2.0, 1.0)
+    print(f"Z1 out by {err * 100:.1f}%: the null at f0 is {-20 * math.log10(gamma_z1(z1, 1.0)):5.1f} dB, "
+          f"the 20 dB band is {hi - lo:.6f}")
+```
+
+Tightening the section impedance from 2 per cent to 0.5 per cent takes the null from
+34.1 dB to 46.0 dB — twelve decibels, visible from across the room on a sweep. Over the
+same improvement the 20 dB bandwidth moves from 0.167819 to 0.170927, a change of under
+two per cent, and it is asymptoting on the 0.171135 that the ideal section gives.
+
+The trap is that the quantity which responds to care is the one the eye is drawn to. A
+deepening null looks like a network getting better, and it is getting better at one
+frequency, which is the frequency nobody is worried about. The specification that fails
+is at the band edge, and at the band edge the response is dominated by
+$\cos\theta$ — pure geometry, untouched by tolerance. When a match is too narrow, the
+answer is another section or a smaller impedance ratio, and never another afternoon with
+the etch tank.
+
+## The bound underneath all of it
+
+Sections cost length, loss and money, so it is worth knowing where the buying stops.
+Bode and Fano showed that for a load of resistance $R$ shunted by capacitance $C$, any
+lossless matching network whatever obeys
+
+$$\int_0^\infty \ln\frac{1}{|\Gamma(\omega)|}\,d\omega \le \frac{\pi}{RC}$$
+
+The derivation is a contour integral over $\ln(1/\Gamma)$, which is analytic in the
+right half plane for a passive network, and it is left to the reading list. Its
+consequence takes one line. Spend the entire budget on a flat $|\Gamma| = \Gamma_m$
+across a band $\Delta\omega$ and nothing outside it, and
+$\Delta\omega\ln(1/\Gamma_m) \le \pi/RC$:
+
+```python
+import math
+
+for c_pf in (10.0, 2.0):
+    rc = 50.0 * c_pf * 1e-12
+    for g_m in (0.1, 0.2):
+        df = 1.0 / (2.0 * rc * math.log(1.0 / g_m))
+        print(f"{c_pf:4.1f} pF across 50 ohm at |Gamma| <= {g_m}: "
+              f"no network exceeds {df / 1e6:.0f} MHz")
+```
+
+Ten picofarads across 50 Ω — an unremarkable transistor input — cannot be matched to
+20 dB over more than 434 MHz by any network of any complexity, and relaxing the target
+to 14 dB buys 621 MHz rather than the tenfold improvement optimism suggests. Halving the
+capacitance doubles both figures, which is why the useful lever is the load rather than
+the network. Bandwidth is a budget the load hands you; matching decides how it is spent.
+
+## Where this stops holding
+
+**Small-reflection theory.** The section impedances above came from a first-order sum
+that assumes each interface reflects a little. The quarter-wave inversions telescope
+exactly at $f_0$ however large the step, so the match at the design frequency survives —
+the lab asserts $|\Gamma| < 10^{-9}$ there for one, two and three sections. What does
+not survive is the claim of maximal flatness: on a 4:1 step the predicted skirt is
+already 4.6 per cent from the truth, and an exact synthesis puts the section impedances
+somewhere slightly different.
+
+**$1/Q$ is an estimate.** The node-$Q$ result treats a two-element match as a
+singly-loaded resonance, which it is only near the peak and only for $Q$ large enough
+that the response is symmetric in $\ln f$. At $Q = 1.73$ neither holds well, and the
+measured 48.6 per cent against the predicted 57.7 per cent is the error you should
+expect from it, not a fault in the arithmetic.
+
+**Lossless everywhere.** Every response here conserves power. A resistive component in
+the network flattens $|\Gamma|$ across the whole band at once and escapes the Bode–Fano
+bound by not being the kind of network it constrains — at the cost of throwing away the
+signal, which is why a padded amplifier is the broadband match of last resort and
+sometimes the right answer.
+
+**One resonance in the load.** The bound above was quoted for a parallel $RC$. A load
+with an inductance in it, or a second resonance in band, has its own bound of a
+different shape, and an antenna near two resonances can beat the single-$RC$ figure
+because it was never that load.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "What a band costs, and who decided it",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A quarter-wave transformer matching 200 Ω to 50 Ω holds 20 dB return loss over 17.1 per cent of its design frequency. Which change to the board would widen that band?",
+                        "opts": [
+                            "Feeding the same load from a 100 Ω system instead of a 50 Ω one",
+                            "Trimming the section's impedance to a tenth of the tolerance it has now",
+                            "Choosing a substrate with lower loss, so the section wastes less of the wave",
+                            "Making the section longer, so it spans more of a wavelength",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The bandwidth depends on $Z_L/Z_0$ and on nothing else, so halving the step from 4:1 to 2:1 takes it from 17.1 per cent to 36.7 per cent. Changing the system impedance is a genuine engineering move and is one of the very few that helps.",
+                            r"Tolerance sets the depth of the null and hardly touches the edges: going from 2 per cent to 0.5 per cent moves the null 12 dB and the 20 dB band by under two per cent. The quantity that responds to care is not the one that failed.",
+                            r"Loss lifts the whole trace slightly and makes the null shallower. It is a small effect on FR-4 at these frequencies, and it works against the band rather than for it.",
+                            r"A quarter wave at $f_0$ is what makes the two interface reflections cancel there. Any other length destroys the match at the design frequency instead of widening it.",
+                        ],
+                        "why": r"""
+The closed form is
+$\cos\theta_m = \dfrac{\Gamma_m}{\sqrt{1-\Gamma_m^2}}\cdot\dfrac{2\sqrt{Z_0Z_L}}{|Z_L-Z_0|}$,
+and the fractional bandwidth is $2 - (4/\pi)\theta_m$. The only quantities in it are the
+impedance ratio and the reflection level you declared acceptable. No substrate, length,
+tolerance or loss appears anywhere. This is why the width was fixed before the board was
+designed, and why the two levers that exist are a smaller step and more sections.
+""",
+                    },
+                    {
+                        "q": "An L-match with $Q = 1.73$ is quoted as having 58 per cent bandwidth. Measured at $|\\Gamma| \\le 0.1$ the same network holds 13 per cent. What has gone wrong?",
+                        "opts": [
+                            "Nothing has: the two figures are quoted at different reflection levels",
+                            "The $Q$ formula holds only for large ratios and breaks down at $\\sqrt{3}$",
+                            "The measurement wrongly includes the 50 Ω source resistance in the network",
+                            "The real inductor and capacitor are lossy, which narrows the response",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$1/Q$ is a half-power estimate, roughly the VSWR-2 width; 20 dB return loss is a far stricter test. The same network spans 48.6 per cent at $|\Gamma| \le 1/3$ and 13.4 per cent at $|\Gamma| \le 0.1$, and a bandwidth figure without its $\Gamma_m$ compares nothing.",
+                            r"The estimate does degrade at low $Q$, and 48.6 against 57.7 per cent is that degradation. But it is a 16 per cent discrepancy, nothing like the factor of four in the question.",
+                            r"The source resistance is what the network is matching *to*, so it belongs in any reflection measurement. Leaving it out would not define $\Gamma$ at all.",
+                            r"Component loss flattens and shallows a response, which if anything makes a band measured at a fixed $\Gamma_m$ slightly wider rather than four times narrower.",
+                        ],
+                        "why": r"""
+Bandwidth is meaningless without the level it is measured at. The $1/Q$ rule estimates
+the half-power width of a singly-loaded resonance, which corresponds to roughly
+$|\Gamma| = 1/3$, or VSWR 2:1. Measured there, the L-match spans 48.6 per cent — the
+$1/Q$ estimate of 57.7 per cent being optimistic because $Q = 1.73$ is too low for the
+resonance approximation to be tight. Measured at $|\Gamma| \le 0.1$ it spans 13.4 per
+cent. Both numbers describe the same network; only the question asked of it changed.
+""",
+                    },
+                    {
+                        "q": "Why does adding a second quarter-wave section widen the band, given that both the one-section and the two-section designs are exact at $f_0$?",
+                        "opts": [
+                            "A second interface adds a reflection to cancel against the others away from $f_0$",
+                            "Each section handles a smaller impedance step, so each reflects less at $f_0$",
+                            "Two sections in cascade are shorter individually and so drift less with frequency",
+                            "The extra section averages the load's reactance over a wider span of frequency",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"With $n$ sections the response is $\Gamma_0 + \Gamma_1 e^{-2j\theta} + \cdots + \Gamma_n e^{-2jn\theta}$, a polynomial of degree $n$ whose coefficients you set. Binomial weighting spends that freedom on an $n$-fold zero at $\theta = \pi/2$, so the response leaves zero far more slowly.",
+                            r"Each step really is smaller, but every design here is already exact at $f_0$, so there is nothing left to improve there. The gain is entirely in how the response behaves away from the design frequency.",
+                            r"The sections are each a quarter wave at $f_0$, so the cascade is *longer* rather than shorter, and every section drifts in step with the others.",
+                            r"The load in this analysis is a fixed resistance with no reactance to average, and the sections would not average it if it had any.",
+                        ],
+                        "why": r"""
+Every design in this module is exact at $f_0$, so the difference between them is
+entirely a question of derivatives. One section gives $|\Gamma| \propto |\cos\theta|$,
+which leaves zero linearly. Two give $\cos^2\theta$ and three give $\cos^3\theta$, so
+the response hugs the axis longer before rising. Concretely, on a 2:1 step at half the
+design frequency, one section leaves 0.2425, two leave 0.1741 and three leave 0.1243.
+The extra degrees of freedom are the extra interface reflections, and the binomial
+weighting is one way of spending them.
+""",
+                    },
+                    {
+                        "q": "A transistor input is 10 pF across 50 Ω. Your two-section network holds 20 dB over 300 MHz and the specification has been raised to 800 MHz. What can you tell the person who raised it?",
+                        "opts": [
+                            "The load's own $RC$ caps any lossless network at about 434 MHz at that level",
+                            "More sections will reach it, and the only question left is how many will fit",
+                            "An equal-ripple design reaches it, because ripple in band is traded for width",
+                            "The bound is written for a series $RC$, so a shunt capacitance escapes it",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$\int \ln(1/|\Gamma|)\,d\omega \le \pi/RC$ with $RC = 500$ ps. Spent entirely on a flat 20 dB band, that allows $1/(2RC\ln 10) = 434$ MHz, and no network of any complexity does better. The lever is the 10 pF, not the network.",
+                            r"Sections help right up to the bound and not past it — the integral is fixed by the load, so extra sections redistribute the budget rather than enlarge it. This is the belief the bound was written to end.",
+                            r"Equal ripple is a real and useful trade, and it is exactly the redistribution the bound already accounts for. It buys some width at a fixed $\Gamma_m$ and cannot buy 84 per cent more.",
+                            r"The parallel-$RC$ bound is the one used here, $\pi/RC$ integrated against $d\omega$; the series form integrates against $d(1/\omega)$ instead. Both exist, and picking the wrong one does not remove the constraint.",
+                        ],
+                        "why": r"""
+With $R = 50\ \Omega$ and $C = 10$ pF, $RC = 500$ ps and the whole budget is
+$\pi/RC$. Spending it as a flat $|\Gamma| = 0.1$ over a band and nothing elsewhere
+gives $\Delta f = 1/(2RC\ln 10) = 434$ MHz — the best any lossless network of any
+complexity can do, before anyone chooses a topology. Relaxing the target to 14 dB
+raises it to 621 MHz, and halving the capacitance doubles both. The productive
+conversation is about the load or the specification, and a resistive pad is the only
+thing that reaches 800 MHz, by not being a lossless network and throwing signal away
+to do it.
+""",
+                    },
+                    {
+                        "q": "Sweeping the sandbox's line-length control is the same as sweeping frequency, since a fixed length is a different fraction of a wavelength at each. What does that sweep establish about bandwidth?",
+                        "opts": [
+                            "A line moves a mismatch in phase across the band and never in magnitude",
+                            "The mismatch improves either side of the design frequency as the line detunes",
+                            "The bandwidth of any match is fixed by the length of line feeding it",
+                            "The radius of the circle shrinks with frequency, so high frequencies match better",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The bright dot makes one circuit at constant radius across the whole slider. Read as a frequency sweep, that says the reflection's phase varies across the band while $|\Gamma|$, the VSWR and the return loss hold still, so whatever widens a band has to come from the elements added.",
+                            r"Backwards, and it is the hope that makes a narrow match feel survivable. A lossless line cannot improve a mismatch at any frequency; it can only relabel where the mismatch is pointing.",
+                            r"Feed line length changes the phase at which a mismatch arrives, not the band over which the network works. Two identical amplifiers on different cable lengths have the same bandwidth.",
+                            r"The radius is $|\Gamma|$ and it is exactly what a lossless line preserves. A lossy line does shrink it, which flatters a bad load rather than matching it.",
+                        ],
+                        "why": r"""
+A line of fixed physical length is $d$ wavelengths at $f_0$ and $dr$ wavelengths at
+$f = rf_0$, so the rotation angle $4\pi dr$ is proportional to frequency and the length
+slider is a frequency axis. The dot travels a circle of constant radius, and the readout
+underneath holds at the same $|\Gamma|$, VSWR and return loss the whole way. That is the
+negative result the rest of the module is built on: since the one thing a line does is
+the one thing that does not help, everything that does help is an element that stores or
+dissipates energy, and each of those carries its own bandwidth cost.
+""",
+                    },
+                    {
+                        "q": "For the same number of sections, why does a binomial transformer give up bandwidth to a Chebyshev one?",
+                        "opts": [
+                            "It spends its freedom on flatness at $f_0$ instead of spreading it over the band",
+                            "Its sections are quarter waves at $f_0$, while the Chebyshev design detunes them",
+                            "It has fewer independent section impedances available for the same section count",
+                            "Its impedance steps are unequal, and unequal steps reflect more than even ones do",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Both designs have the same $n$ coefficients to choose. Binomial puts an $n$-fold zero at $f_0$, which is more accuracy than anyone needs at one frequency; Chebyshev accepts a ripple of $\Gamma_m$ throughout and holds it further out. The budget is the same and the spending differs.",
+                            r"Both are quarter waves at $f_0$. What differs is the weighting of the section impedances, not their lengths.",
+                            r"Both have exactly $n$ impedances to set. The Chebyshev choice is a different set of numbers, not a larger set.",
+                            r"The binomial steps really are unequal, which makes this tempting. But the Chebyshev steps are unequal too, and in any case a design is judged by the reflections its interfaces produce together rather than by any one of them.",
+                        ],
+                        "why": r"""
+Both write the response as $\Gamma(\theta) = \sum_k \Gamma_k e^{-2jk\theta}$ and both
+have $n$ coefficients to choose. Binomial chooses
+$\Gamma(\theta) \propto \cos^n\theta$, an $n$-fold zero at $f_0$ — maximally flat, and
+extravagant, since the response is already far better than required over most of the
+band. Chebyshev chooses $T_n(\sec\theta_m\cos\theta)$, which oscillates between
+$\pm\Gamma_m$ across the passband and touches the limit $n$ times instead of falling far
+below it. Holding the error at the specification everywhere rather than beating it in
+the middle is what buys the extra width, and the price is a response that is never
+exact except at $n$ isolated frequencies.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "Sweeping length is sweeping frequency",
                 "visualiser": "smith",
