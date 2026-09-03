@@ -468,8 +468,625 @@ thing back on a different sheet of paper, it is a value; build it the way the la
 `Vector2D`.
 ''',
                 },
+                {
+                    "title": "When things go wrong: exceptions",
+                    "minutes": 13,
+                    "body": r'''
+Four readings come off a sensor log and the job is to total them. It is not a hard job
+until one of the four is the word `twelve`:
+
+```python
+# raises ValueError
+readings = ["12", "7", "twelve", "3"]
+total = 0
+for text in readings:
+    total += int(text)
+print(total)
+```
+
+The last line never runs. `int("twelve")` cannot produce a number, and rather than
+inventing one it **raises** an exception: it abandons the expression it was in the
+middle of, abandons the loop around it, and abandons every function that called it,
+climbing outwards until something catches it or it reaches the top of the program. When
+nothing catches it, Python prints the traceback — the list of frames it climbed through —
+and exits with `ValueError: invalid literal for int() with base 10: 'twelve'`.
+
+Two facts are worth taking from that. The first is that an exception is not a return
+value; `total` is never assigned, because the addition never happened. The second is that
+the traceback is a *feature*: it names the exception type, the message, and the exact line
+in each frame, which is more than any error code you would have designed yourself.
+
+## Catching one thing
+
+`try` marks the code that might fail; `except` names the failure you are prepared for.
+
+```python
+readings = ["12", "7", "twelve", "3"]
+total = 0
+for text in readings:
+    try:
+        total += int(text)
+    except ValueError:
+        print("skipping", repr(text))
+print("total:", total)
+```
+
+The exception now stops climbing at the `except`, the loop carries on, and the total is
+22 over the three readings that were numbers. Notice how small the `try` block is: one
+statement, the one that can fail. Wrapping the whole loop instead would catch the same
+error and then leave the loop, so the last reading would be lost as well.
+
+Name the exception you expect. `except ValueError` catches that class and its subclasses
+and lets everything else past, which is what you want, because the errors you did not
+predict are the ones you need to see.
+
+## The full shape: `else` and `finally`
+
+A `try` statement has four parts, and the two less-used ones are about *what ran* rather
+than *what failed*:
+
+```python
+def parse(text):
+    try:
+        value = int(text)
+    except ValueError:
+        print("  except:  not a number")
+        return None
+    else:
+        print("  else:    parsed", value)
+        return value
+    finally:
+        print("  finally: done with", repr(text))
+
+
+print("parse('7')")
+print("  ->", parse("7"))
+print("parse('seven')")
+print("  ->", parse("seven"))
+```
+
+`else` runs when the `try` body finished without raising, and it exists so that the `try`
+can hold nothing but the risky line. Code that belongs after a successful parse would, if
+you put it inside the `try`, have its *own* `ValueError` caught by a handler written for
+the conversion — a real way to be told the wrong thing about where a bug is.
+
+`finally` runs whichever way the statement leaves. Read the output: the `finally` line
+prints after the `else` line and before the `-> 7`, so it runs even though `else` had
+already said `return`. That is what makes it the place for cleanup — closing a file,
+releasing a lock, putting a cursor back — and it is the machinery `with` is built on. One
+warning about it: a `return` inside a `finally` discards whatever the block was doing,
+including an exception on its way out, which turns a crash into a wrong answer.
+
+## Refusing loudly beats returning nonsense
+
+Here is a withdrawal that reports failure the way C reports it, with a value nobody can
+mistake for a balance — until they do:
+
+```python
+def withdraw(balance, amount):
+    """Return the new balance, or -1 if the withdrawal is refused."""
+    if amount <= 0 or amount > balance:
+        return -1
+    return balance - amount
+
+
+accounts = {"ada": 500, "bo": 40}
+for name in list(accounts):
+    accounts[name] = withdraw(accounts[name], 100)
+
+print(accounts)
+print("the bank now believes it holds", sum(accounts.values()), "kr")
+```
+
+Bo had 40 kr and asked for 100, so `withdraw` refuses — and the caller stores the refusal
+as a balance. The dictionary reads `{'ada': 400, 'bo': -1}` and the bank's books are out
+by 41 kr, with nothing on the screen to say so. The caller is not careless; it is doing
+what the signature invites, because `-1` has the same type as a balance and arrives
+through the same channel.
+
+Raise instead, and the refusal cannot be mistaken for an answer:
+
+```python
+def withdraw(balance, amount):
+    if amount <= 0:
+        raise ValueError("Amount must be positive")
+    if amount > balance:
+        raise ValueError(f"Insufficient funds: {balance} available, {amount} asked for")
+    return balance - amount
+
+
+accounts = {"ada": 500, "bo": 40}
+for name in list(accounts):
+    try:
+        accounts[name] = withdraw(accounts[name], 100)
+    except ValueError as err:
+        print(f"{name}: refused - {err}")
+
+print(accounts)
+print("the bank holds", sum(accounts.values()), "kr")
+```
+
+The assignment on the left of the `=` never happens for `bo`, because the right-hand side
+never produced a value. Bo keeps 40 kr, the books balance at 440, and the caller was told
+which account and why. Two rules come out of this, and the lab *A bank account that says
+no* is built on both: **validate before you change state**, so a refused call cannot have
+half-happened; and **put the reason in the message**, because `err` is the only thing the
+handler will have to work with.
+
+## The exceptions you will actually meet
+
+| Exception | Typical cause |
+|---|---|
+| `NameError` | a name that is not defined — usually a typo, or a use before the assignment |
+| `TypeError` | wrong type: `"a" + 1`, calling something that is not a function, a missing argument |
+| `ValueError` | right type, unusable value: `int("abc")`, `math.sqrt(-1)` |
+| `KeyError` | a dictionary key that is not there |
+| `IndexError` | a list index past the end |
+| `AttributeError` | `thing.method()` where `thing` has no such attribute — including a misspelt one |
+| `ZeroDivisionError` | dividing by zero |
+| `FileNotFoundError` | opening a path that does not exist |
+
+`KeyError` and `IndexError` share a base, `LookupError`; `FileNotFoundError` is one of
+several `OSError`s. Catching the base catches all of its children, which is how
+`except OSError` covers a missing file, a permission refusal and a full disk at once.
+
+## Your own exception types
+
+When the caller needs to tell *your* failure from every other failure, give it a class.
+Subclass `Exception` — never `BaseException`, which is also the ancestor of
+`KeyboardInterrupt` and `SystemExit` and would make your error catchable by handlers that
+were written to let those two through:
+
+```python
+class OutOfStock(Exception):
+    """No more of this part in the warehouse."""
+
+
+def reserve(stock, part, count):
+    if stock.get(part, 0) < count:
+        raise OutOfStock(f"{part}: {stock.get(part, 0)} left, {count} wanted")
+    stock[part] -= count
+
+
+warehouse = {"wiper blades": 2}
+try:
+    reserve(warehouse, "wiper blades", 5)
+except OutOfStock as err:
+    print("back-order:", err)
+except ValueError:
+    print("this handler never runs: OutOfStock is not a ValueError")
+
+print(isinstance(OutOfStock("x"), Exception))
+print(warehouse)
+```
+
+Handlers are tried in order and the first matching one wins, so the narrow class has to
+come before any base it inherits from. The empty body is not laziness: an exception class
+carries its meaning in its *name*, and `OutOfStock` already says everything a handler
+needs to dispatch on.
+
+## Catching too much
+
+The tempting shortcut is a handler wide enough that nothing can get past it. Watch what
+it costs:
+
+```python
+def total_price(items):
+    return sum(item["prcie"] for item in items)      # a typo, three months old
+
+
+basket = [{"price": 10}, {"price": 5}]
+try:
+    print(total_price(basket))
+except Exception:
+    print("could not total the basket")
+
+try:
+    print(total_price(basket))
+except KeyError as err:
+    print("no such field:", err)
+```
+
+The same defect is reported twice. The wide handler says the basket could not be totalled,
+which sends you looking at the basket; the narrow one prints `no such field: 'prcie'` and
+the misspelling is on the screen. A bare `except:` is wider still — it catches
+`BaseException`, so `KeyboardInterrupt` lands in it too and the program stops answering
+Ctrl-C. The rule that follows: catch the class you know how to handle, and let the rest
+climb.
+
+## Ask forgiveness, not permission
+
+Two ways to increment a counter that may not exist yet:
+
+```python
+def bump_lbyl(counts, name):
+    if name in counts:          # look before you leap
+        counts[name] += 1
+    else:
+        counts[name] = 1
+
+
+def bump_eafp(counts, name):
+    try:                        # ask forgiveness, not permission
+        counts[name] += 1
+    except KeyError:
+        counts[name] = 1
+
+
+counts = {"ada": 3}
+bump_lbyl(counts, "ada")
+bump_eafp(counts, "bo")
+print(counts)
+```
+
+Both give `{'ada': 4, 'bo': 1}`, and for a dictionary either is defensible — the `try`
+version does one lookup instead of two when the key is present, which is the common case.
+The preference stops being a matter of taste when the thing you are checking can change
+between the check and the use. `if os.path.exists(path)` followed by `open(path)` is two
+questions about a filesystem other programs are also writing to, and the file can vanish
+in the gap; `try: open(path) except FileNotFoundError:` asks once, and the answer it gets
+is the answer it acts on.
+
+## Where this stops
+
+An exception you cannot do anything about should not be caught. The lab's
+`safe_withdraw` turns a `ValueError` into `True` or `False`, and that is right *there*,
+at the edge of the program where a caller wants a yes-or-no and has no use for a message.
+Three layers down it would be wrong: the reason would be discarded at the one place that
+still knew it, and the caller would be left holding a `False` with no idea whether the
+amount was negative or the account was empty.
+
+When you catch something in order to add context and still cannot fix it, re-raise. A bare
+`raise` inside a handler sends on the exception that is already travelling, traceback
+intact:
+
+```python
+# raises ValueError
+def load_timeout(text):
+    try:
+        return int(text)
+    except ValueError:
+        print("log: timeout setting was", repr(text))
+        raise
+
+
+print(load_timeout("30"))
+load_timeout("half a minute")
+```
+
+The note is logged and the failure still reaches whoever is entitled to decide what to do
+about it — which is the whole argument of this reading, one function further out.
+''',
+                },
+                {
+                    "title": "Classes, modules and files",
+                    "minutes": 13,
+                    "body": r'''
+A program that defines everything and runs everything in one file is fine at eighty lines
+and unusable at eight hundred. This reading is about the three splits that keep it
+readable: state and behaviour into a **class**, code into **modules** across several
+files, and data out of the process altogether into a **file** — usually as JSON, which is
+how the inventory lab at the end of the course, and the capstone after it, keep anything
+between runs.
+
+## Classes: data and behaviour in one place
+
+A class is a blueprint. Each object built from it carries its own data — **attributes** —
+and shares the same **methods**:
+
+```python
+class Car:
+    wheels = 4                           # a class attribute: one copy, shared
+
+    def __init__(self, plate, km=0):     # runs when a Car is created
+        self.plate = plate               # instance attributes: this car's own data
+        self.km = km
+
+    def drive(self, distance):
+        self.km += distance
+        return self.km
+
+    def __str__(self):                   # what print() shows
+        return f"{self.plate} ({self.km} km)"
+
+
+golf = Car("AB 12345")
+polo = Car("CD 67890", km = 91000)
+golf.drive(120)
+print(golf)
+print(polo)
+print(golf.wheels, polo.wheels, Car.wheels)
+print(Car.drive(golf, 30), golf.km)
+```
+
+`wheels` is written once in the class body and read through every instance, because a
+lookup that fails on the object falls through to the class. `plate` and `km` are written
+per object inside `__init__`, so the two cars disagree about them and agree about
+`wheels`. Module 3 takes that lookup rule apart properly, including what happens the
+moment somebody assigns to `golf.wheels`.
+
+The last line is the one to sit with. `golf.drive(120)` and `Car.drive(golf, 30)` are the
+same call written two ways: the method is a plain function on the class, and the dot
+supplies the object in front of it as the first argument. That is all `self` is — the
+receiver, named explicitly, exactly as the first reading of this module described it for
+`Vector2D.dot`.
+
+`__str__` is the human-facing display and is what `print` and `str()` reach for. It is the
+sibling of the `__repr__` you wrote for `Vector2D`: define `__repr__` first, because a
+list of cars shows the reprs of its members, and add `__str__` when the display a person
+should read differs from the one a programmer should.
+
+## Modules: one file is one module
+
+Every `.py` file is a module, named after the file. Importing one gives you its contents:
+
+```python
+import math
+from random import randint
+
+print(math.sqrt(16))
+print(round(math.pi, 4))
+print(1 <= randint(1, 6) <= 6)
+```
+
+`import math` binds one name, `math`, and everything inside it is reached through the dot.
+`from random import randint` binds the function itself, which is shorter to read and
+costs you the label saying where it came from. Both forms run the module the first time
+and cache it; neither copies anything.
+
+## What `import` actually does
+
+The mechanism is worth seeing rather than believing. Here a module is written to a scratch
+folder, that folder is put on the import path, and the module is imported twice:
+
+```python
+import os
+import sys
+import tempfile
+
+source = """
+print("greet.py is running, and __name__ is", __name__)
+
+MESSAGE = "hello from greet"
+
+
+def main():
+    print(MESSAGE)
+
+
+if __name__ == "__main__":
+    main()
+"""
+
+folder = tempfile.mkdtemp()                    # a scratch directory to write into
+with open(os.path.join(folder, "greet.py"), "w") as f:
+    f.write(source)
+
+sys.path.insert(0, folder)                     # where import looks
+print("this file's __name__ is", __name__)
+import greet                                   # runs greet.py, top to bottom, once
+import greet                                   # nothing at all: already imported
+print(greet.MESSAGE)
+greet.main()
+```
+
+Three things show up in that output. `greet.py is running` appears **once**, though the
+import is written twice: the first import executes the file and files the result under
+`sys.modules["greet"]`, and every import after that is a dictionary lookup. Anything with
+a side effect at the top level of a module therefore happens once per program, at a
+moment decided by whoever imports first.
+
+Second, `__name__` inside `greet` is `"greet"`, while `__name__` in the file you are
+running is `"__main__"`. That is the whole trick behind the guard:
+
+```text
+if __name__ == "__main__":
+    main()
+```
+
+The body runs when the file is the one being executed and is skipped when the file is
+being imported. Without it, importing a module would run its demo, its prompts and its
+test data as a side effect of asking for one function out of it. With it, a file can be
+both a library and a program.
+
+Third, `hello from greet` prints twice — once through the module's `MESSAGE` and once
+through `greet.main()` — while the guarded call inside `greet.py` printed nothing at all,
+because on import `__name__` was not `"__main__"`.
+
+The habit that falls out: keep the code that *defines* things — classes, functions — in
+modules, and the code that *runs* things behind the guard in a `main.py`. The inventory
+lab is built exactly that way, with `inventory.py` for the classes and `main.py` for the
+demo, and its checks import from `inventory.py` directly.
+
+## Files
+
+`open` gives you a file object; the mode says what you may do with it.
+
+```python
+import os
+import tempfile
+
+path = os.path.join(tempfile.mkdtemp(), "notes.txt")
+
+with open(path, "w") as f:        # "w" write (truncates!), "a" append, "r" read
+    f.write("first line\n")       # write adds no newline of its own
+    f.write("second line\n")
+
+with open(path) as f:             # "r" is the default
+    for line in f:
+        print(repr(line))
+
+with open(path) as f:
+    print(f.read().splitlines())
+```
+
+Two details bite people. `"w"` truncates an existing file the instant it is opened, before
+a single byte is written, so a mistyped mode destroys the thing you meant to append to.
+And iterating a file yields lines *with* their newline still attached, which is why the
+first loop prints `'first line\n'` and why `line.strip()` appears in so much
+line-processing code.
+
+Reading a path that is not there raises, and the exception says which path:
+
+```python
+# raises FileNotFoundError
+with open("no-such-config-91827.json") as f:
+    print(f.read())
+```
+
+## What `with` is for
+
+`with` is the reason none of the blocks above call `close()`. It closes the file on the
+way out of the block whichever way the block ends — including on an exception, which is
+the case that matters, because data sitting in an unflushed buffer is lost when the
+process dies:
+
+```python
+import os
+import tempfile
+
+path = os.path.join(tempfile.mkdtemp(), "half-written.txt")
+
+try:
+    with open(path, "w") as f:
+        f.write("this much got written\n")
+        raise ValueError("something went wrong in the middle")
+except ValueError as err:
+    print("caught:", err)
+
+print("the file object is closed:", f.closed)
+with open(path) as check:
+    print(repr(check.read()))
+```
+
+The exception travelled, and the line still reached the disk. This is the `finally`
+guarantee from the previous reading, packaged: `with` calls the object's `__exit__` on the
+way out, and for a file `__exit__` flushes and closes.
+
+## JSON
+
+A dictionary of numbers and strings survives a program's death as text, and JSON is the
+format everything else can read too. Four function names, and the `s` is the whole
+distinction — `dumps` and `loads` work on **s**trings, `dump` and `load` on open files:
+
+```python
+import json
+
+data = {"ada": 90, "linus": 75, "passed": True, "notes": None}
+text = json.dumps(data, indent=2)      # object -> string
+print(text)
+print(type(text).__name__)
+
+back = json.loads(text)                # string -> object
+print(back == data)
+```
+
+`True` and `None` come back as themselves, having spent the trip as JSON's `true` and
+`null`. Straight to a file it is the pair without the `s`, and the file object is the
+second argument:
+
+```python
+import json
+import os
+import tempfile
+
+path = os.path.join(tempfile.mkdtemp(), "scores.json")
+scores = {"ada": 90, "linus": 75}
+
+with open(path, "w") as f:
+    json.dump(scores, f)               # object -> file
+
+with open(path) as f:
+    print(json.load(f))                # file -> object
+```
+
+## What JSON cannot hold
+
+JSON knows six things: strings, numbers, `true`, `false`, `null`, arrays and objects whose
+keys are strings. Everything Python has beyond that is converted on the way out and does
+not come back:
+
+```python
+import json
+
+original = {"tags": ("new", "boxed"), 1: "first", "when": {"year": 2026}}
+back = json.loads(json.dumps(original))
+print(back)
+print(type(original["tags"]).__name__, "->", type(back["tags"]).__name__)
+print(list(original), "->", list(back))
+```
+
+The tuple returns as a list and the integer key returns as the string `"1"`, because JSON
+has neither. Nothing raised, and `original == back` is false. A round trip through JSON is
+lossy, and knowing exactly what it loses is the difference between a save file that
+reloads and one that reloads *almost*.
+
+Your own classes do not get that far — they raise instead of being guessed at:
+
+```python
+# raises TypeError
+import json
+
+
+class Item:
+    def __init__(self, name, price):
+        self.name = name
+        self.price = price
+
+
+json.dumps(Item("Torch", 249.0))
+```
+
+So the conversion is yours to write, in both directions: a method that turns the object
+into a dict of JSON-legal values, and a constructor that rebuilds it from one.
+
+```python
+import json
+
+
+class Item:
+    def __init__(self, name, price):
+        self.name = name
+        self.price = price
+
+    def to_dict(self):
+        return {"name": self.name, "price": self.price}
+
+    @classmethod
+    def from_dict(cls, row):
+        return cls(row["name"], row["price"])
+
+
+text = json.dumps([Item("Torch", 249.0).to_dict(), Item("Jack", 899.0).to_dict()])
+print(text)
+again = [Item.from_dict(row) for row in json.loads(text)]
+print(type(again[0]).__name__, again[0].name, again[0].price)
+```
+
+`from_dict` is a `@classmethod`: it receives the class rather than an instance, which is
+what lets it build one, and what makes `cls(...)` build the *subclass* when a subclass
+inherits it. That is the shape of `Inventory.load(path)` in this course's inventory lab
+and of `Catalogue.load(path)` in the capstone — an alternative constructor, reading a file
+and handing back a finished object. Module 3 comes back to `@classmethod` in its own
+right.
+
+## Where this stops
+
+The formats have edges worth knowing before you meet them. JSON has no date type, so a
+timestamp goes across as a string in a format you choose and parse back yourself. Its
+numbers are doubles, so a large integer id can lose its last digits in a system that reads
+it as one. And `json.load` on a file that is corrupt, truncated or empty raises
+`JSONDecodeError` — a `ValueError` — which is a different failure from the file being
+missing and deserves a different answer, as the *Save and load with JSON* lab insists.
+
+One note about this page. In the browser the files above live in a virtual folder that is
+thrown away when you reload, so nothing you write here can touch your machine. Everything
+else — modes, buffering, the exceptions, what JSON keeps and drops — behaves exactly as it
+does on your own disk.
+''',
+                },
             ],
-            "quiz": {
+            "quiz": [{
                 "title": "Value semantics and the data model",
                 "minutes": 8,
                 "questions": [
@@ -589,7 +1206,133 @@ declare `__slots__` of its own quietly gets a `__dict__` back, taking the saving
 """,
                     },
                 ],
-            },
+            }, {
+                "title": "Errors, classes and files",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "A `try` statement's `else` branch ends with `return value`. What runs before the function actually returns?",
+                        "opts": [
+                            "Nothing further: a `return` hands back at once and abandons the statement",
+                            "The `finally` block, which runs on every way out, `return` included",
+                            "The `except` block, which is entered on the way out of any `try`",
+                            "Only the caller's next line; the `try` statement is over",
+                        ],
+                        "a": 1,
+                        "why": r"""
+`finally` always runs — that is what it is for. Trace the `parse()` example from the
+reading and the `finally:` line prints *after* the `else:` line and *before* the returned
+value reaches the caller: the return value is computed, the statement is unwound, the
+`finally` body runs, and only then does the function hand anything back. That is what
+makes it the place for cleanup, and it is exactly the guarantee `with` is built on. The
+tempting answer is that a `return` ends everything — it ends the *function's* work, but
+not the `try` statement's obligations. `except` is the answer for a different question: it
+runs only when an exception was raised and matched, so on the successful path it never
+runs at all.
+""",
+                    },
+                    {
+                        "q": "Why catch `except ValueError` rather than writing a bare `except:`?",
+                        "opts": [
+                            "A bare `except:` is a syntax error unless a class is named",
+                            "Naming the class is faster: Python can skip the handlers that do not match",
+                            "A bare `except:` also swallows the failures you did not predict, `KeyboardInterrupt` among them",
+                            "There is no difference in what gets caught — the bare form is a shorthand for `except Exception`",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Catch what you can handle, and let everything else surface so you can fix it. A bare
+`except:` matches `BaseException`, so a misspelt attribute, a `NameError` in a branch
+nobody exercised and the Ctrl-C the user pressed all land in a handler written for a bad
+number, and each of them is reported as whatever that handler says. The reading's basket
+shows the cost: `except Exception` says the basket could not be totalled, while
+`except KeyError` prints `'prcie'` and puts the typo on the screen. The near-miss worth
+knowing is that a bare `except:` is *not* the same as `except Exception:` — it is wider,
+and the two extra classes it catches are the ones asking the program to stop.
+""",
+                    },
+                    {
+                        "q": "`golf.drive(120)` is called on a `Car`. What is `self` bound to inside `drive`?",
+                        "opts": [
+                            "`Car`, the class in whose body the method was written",
+                            "The module the method was defined in",
+                            "`golf`, because the dot passes the receiver as the first argument",
+                            "Nothing yet — `self` is a convention, bound by the first assignment",
+                        ],
+                        "a": 2,
+                        "why": r"""
+`golf.drive(120)` becomes `Car.drive(golf, 120)`, and both spellings run in the reading's
+first example with the same result. A method is an ordinary function stored on the class;
+the dot is what supplies the object in front of it as the first argument. So `self` is one
+particular car, and `self.km += distance` moves that car's odometer and no other's. The
+tempting answer is the class, because that is where the `def` is written and where
+`wheels = 4` lives — but a class attribute is reached *through* `self` by falling back to
+the class when the instance has no such name, which is a lookup rule rather than a
+binding, and module 3 takes it apart.
+""",
+                    },
+                    {
+                        "q": "A `with open(path, \"w\")` block writes one line and then raises. What has become of that line?",
+                        "opts": [
+                            "It was flushed and the file closed on the way out, so it reached the disk",
+                            "It is lost: the block did not finish, so the buffer was never written",
+                            "It is rolled back: a block that raises undoes the writes it had already made",
+                            "It reaches the disk only if the exception is caught outside the block",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`with` guarantees cleanup — the same guarantee, and the same reason, as `finally`. On the
+way out of the block, for any reason at all, Python calls the file's `__exit__`, which
+flushes the buffer and closes the handle; the exception then carries on travelling. The
+reading's example proves both halves: the `ValueError` is caught outside, `f.closed` is
+`True`, and reopening the path shows the line. The tempting answer is a rollback, because
+a failed database transaction does undo its writes — a file has no such notion, and a
+half-written file is a perfectly ordinary outcome. Nor does anything depend on whether the
+exception is caught later: `__exit__` has already run by the time any outer handler sees
+it.
+""",
+                    },
+                    {
+                        "q": "What does `json.dumps(data)` do?",
+                        "opts": [
+                            "Writes `data` to a file, taking the name from the object",
+                            "Returns `data` as a JSON string, leaving files to `json.dump`",
+                            "Parses a JSON string and returns the object inside it",
+                            "Prints `data` to the console, indented so that a human can read it",
+                        ],
+                        "a": 1,
+                        "why": r"""
+`dumps` is dump-to-string; `json.dump`, without the `s`, takes an open file as its second
+argument and writes to it. The mirror pair is `loads` for a string and `load` for a file,
+so the `s` is the only thing separating four names that otherwise look interchangeable.
+The parsing answer is the tempting one, because `dumps` and `loads` are used a line apart
+in most round-trip code and the direction is easy to invert — remember it as *dump out,
+load in*. And `indent=2` only shapes the string that comes back: it is still a `str`, and
+nothing has been printed or saved until you do it.
+""",
+                    },
+                    {
+                        "q": "When is `raise ValueError(\"too big\")` the right move?",
+                        "opts": [
+                            "When a function is handed input it cannot turn into a sensible answer",
+                            "When you want a warning recorded without interrupting anything",
+                            "When you need to leave a loop early from inside a helper",
+                            "When the error should be reported to whoever happens to be watching the console",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Refusing loudly beats returning nonsense — the caller can catch it and decide, and cannot
+mistake the refusal for an answer. The reading's `withdraw` that returns `-1` makes the
+alternative concrete: the caller stores the refusal as a balance and the books go out by
+41 kr with nothing on screen to say so. Printing is the tempting answer, and it is the
+same mistake in a friendlier coat: the function has still returned something, still
+returned it to code that cannot tell refusal from success, and has now also decided that
+this program has a console worth printing to. Raising leaves both decisions where they
+belong — with the caller.
+""",
+                    },
+                ],
+            }],
             "blanks": {
                 "title": "A value type, hole by hole",
                 "minutes": 9,
@@ -784,7 +1527,7 @@ good as the two methods you wrote. Compare rank *and* suit and the same six card
 six members.
 """,
             },
-            "lab": {
+            "lab": [{
                 "title": "An immutable Vector2D",
                 "runtime": "python",
                 "minutes": 40,
@@ -1043,7 +1786,155 @@ except AttributeError:
 assert (_v.x, _v.y) == (1.0, 2.0), f"The vector changed anyway: {_v!r}"
 '''},
                 ],
-            },
+            }, {
+                "title": "A bank account that says no",
+                "runtime": "python",
+                "minutes": 16,
+                "brief": r'''
+`Vector2D` refused a *write*. This one refuses a *request*: an account that would
+rather raise than hand back a number nobody can act on.
+
+## `BankAccount(owner, balance=0)`
+
+Stores `owner` and `balance` as attributes. `balance` defaults to `0`.
+
+- `deposit(amount)` adds to the balance, and raises `ValueError` if `amount` is
+  zero or negative.
+- `withdraw(amount)` subtracts from the balance, and raises `ValueError` if
+  `amount` is zero or negative, **or** larger than the balance.
+- A refused call must leave the balance exactly where it was. Validate first,
+  then change state — never the other way round.
+- `str(account)` gives the owner, a colon, the balance to two decimals, and ` kr`:
+
+```text
+str(BankAccount("Ada", 120))  ->  "Ada: 120.00 kr"
+```
+
+## `safe_withdraw(account, amount)`
+
+The boundary function: it tries the withdrawal and answers `True` or `False`
+rather than letting the exception escape.
+
+```text
+safe_withdraw(acc, 40)    ->  True,  and the balance moves
+safe_withdraw(acc, 5000)  ->  False, and the balance does not
+```
+
+Catch `ValueError` specifically. A bare `except:` would also swallow the
+`AttributeError` you get from a typo in `account.withdrwa`, and you would spend
+an afternoon looking for a bug the computer had already found.
+''',
+                "files": [{"name": "main.py", "content": r'''
+class BankAccount:
+    def __init__(self, owner, balance=0):
+        pass
+
+    def deposit(self, amount):
+        pass
+
+    def withdraw(self, amount):
+        pass
+
+    def __str__(self):
+        pass
+
+
+def safe_withdraw(account, amount):
+    """Return True if the withdrawal succeeded, False if it was refused."""
+    pass
+
+
+acc = BankAccount("Ada", 100)
+acc.deposit(50)
+print(acc)
+print(safe_withdraw(acc, 500))
+'''}],
+                "main": "main.py",
+                "solution": [{"name": "main.py", "content": r'''
+class BankAccount:
+    def __init__(self, owner, balance=0):
+        self.owner = owner
+        self.balance = balance
+
+    def deposit(self, amount):
+        if amount <= 0:
+            raise ValueError("Deposit must be positive")
+        self.balance += amount
+
+    def withdraw(self, amount):
+        if amount <= 0:
+            raise ValueError("Withdrawal must be positive")
+        if amount > self.balance:
+            raise ValueError("Insufficient funds")
+        self.balance -= amount
+
+    def __str__(self):
+        return f"{self.owner}: {self.balance:.2f} kr"
+
+
+def safe_withdraw(account, amount):
+    """Return True if the withdrawal succeeded, False if it was refused."""
+    try:
+        account.withdraw(amount)
+        return True
+    except ValueError:
+        return False
+
+
+acc = BankAccount("Ada", 100)
+acc.deposit(50)
+print(acc)
+print(safe_withdraw(acc, 500))
+'''}],
+                "hints": [
+                    "`__init__` only stores what it was given: `self.owner = owner` and `self.balance = balance`.",
+                    "Validate before you mutate. `if amount <= 0: raise ValueError(\"...\")` comes first, so a refused call cannot have moved the balance already.",
+                    "`__str__` *returns* the string, it does not print it: `return f\"{self.owner}: {self.balance:.2f} kr\"`. The `:.2f` is what turns 120 into `120.00`.",
+                    "`safe_withdraw` wraps the call in `try` / `except ValueError` and returns `True` from the try body, `False` from the handler.",
+                ],
+                "tests": [
+                    {"name": "Stores owner and balance (with default)", "code": r'''
+_a = BankAccount("Ada", 100)
+assert _a.owner == "Ada" and _a.balance == 100, "Store owner and balance in __init__"
+assert BankAccount("Bo").balance == 0, "balance should default to 0"
+'''},
+                    {"name": "Deposits add up", "code": r'''
+_a = BankAccount("Ada", 100)
+_a.deposit(50)
+assert _a.balance == 150, f"After depositing 50 the balance is {_a.balance!r}"
+'''},
+                    {"name": "Refuses bad deposits", "code": r'''
+_a = BankAccount("Ada", 100)
+for _bad in (0, -5):
+    try:
+        _a.deposit(_bad)
+        assert False, f"deposit({_bad}) should raise ValueError"
+    except ValueError:
+        pass
+assert _a.balance == 100, "A refused deposit must not change the balance"
+'''},
+                    {"name": "Refuses overdrafts and bad withdrawals", "code": r'''
+_a = BankAccount("Ada", 100)
+for _bad in (500, 0, -1):
+    try:
+        _a.withdraw(_bad)
+        assert False, f"withdraw({_bad}) should raise ValueError"
+    except ValueError:
+        pass
+assert _a.balance == 100, "A refused withdrawal must not change the balance"
+'''},
+                    {"name": "str() formats the account", "code": r'''
+_s = str(BankAccount("Ada", 120))
+assert _s == "Ada: 120.00 kr", f"Got {_s!r}, expected: Ada: 120.00 kr"
+'''},
+                    {"name": "safe_withdraw returns True/False", "code": r'''
+_a = BankAccount("Ada", 100)
+assert safe_withdraw(_a, 40) is True and _a.balance == 60, "A valid withdrawal returns True"
+assert safe_withdraw(_a, 500) is False and _a.balance == 60, \
+    "A refused withdrawal returns False and changes nothing"
+'''},
+                ],
+            }],
         },
         # ------------------------------------------------------------ M2
         {
@@ -3619,7 +4510,7 @@ Note what was *not* copied. `half` and `both` hold references to the very same t
 neither operation touched it. Returning new containers is what makes that safe to say.
 """,
             },
-            "lab": {
+            "lab": [{
                 "title": "A Playlist that behaves like a sequence",
                 "runtime": "python",
                 "minutes": 45,
@@ -3951,7 +4842,396 @@ assert not issubclass(Playlist, list), "Playlist must contain a list, not inheri
 assert repr(_q) == "Playlist('Copy', 2 tracks)", f"repr gave {repr(_q)!r}"
 '''},
                 ],
-            },
+            }, {
+                "title": "Save and load with JSON",
+                "runtime": "python",
+                "minutes": 12,
+                "brief": r'''
+A `Playlist` that vanishes when the program ends is a demonstration, not a
+program. Persistence is the last piece, and for a dictionary of plain values it
+is two functions.
+
+## What to write
+
+**`save_scores(path, scores)`** writes the dictionary to the file at `path` as
+JSON.
+
+**`load_scores(path)`** reads that file and returns the dictionary. If the file
+does not exist, it returns an empty dictionary rather than crashing.
+
+```text
+save_scores("scores.json", {"ada": 90})
+load_scores("scores.json")     ->  {"ada": 90}
+load_scores("nope.json")       ->  {}
+```
+
+## The two decisions
+
+Use `json.dump` / `json.load` — the pair without the `s`, which take a *file
+object* — inside a `with` block, so the file is closed whether the write
+finishes or raises halfway through.
+
+The missing file is the interesting half. Asking `os.path.exists(path)` first is
+the wrong shape: the answer can be stale by the line after you get it, and it
+does not help when the path exists but cannot be opened. Try the open and handle
+the failure — `except FileNotFoundError`, not a bare `except:`, so a permission
+error or a corrupt file still reaches you instead of being reported as "no
+scores yet".
+''',
+                "files": [{"name": "main.py", "content": r'''
+import json
+
+
+def save_scores(path, scores):
+    """Write the scores dict to path as JSON."""
+    pass
+
+
+def load_scores(path):
+    """Read scores from path. Missing file -> {}."""
+    pass
+
+
+save_scores("scores.json", {"ada": 90, "linus": 75})
+print(load_scores("scores.json"))
+print(load_scores("does-not-exist.json"))
+'''}],
+                "main": "main.py",
+                "solution": [{"name": "main.py", "content": r'''
+import json
+
+
+def save_scores(path, scores):
+    """Write the scores dict to path as JSON."""
+    with open(path, "w") as f:
+        json.dump(scores, f)
+
+
+def load_scores(path):
+    """Read scores from path. Missing file -> {}."""
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+
+save_scores("scores.json", {"ada": 90, "linus": 75})
+print(load_scores("scores.json"))
+print(load_scores("does-not-exist.json"))
+'''}],
+                "hints": [
+                    "Writing is one line inside a `with`: `with open(path, \"w\") as f: json.dump(scores, f)`. The `\"w\"` mode creates the file, or truncates it if it is already there.",
+                    "`json.dump` takes the object *and* the file; `json.dumps` takes only the object and hands back a string. Passing the file to `dumps` is a `TypeError`.",
+                    "Reading is `json.load(f)` — and the whole `with` goes inside `try` / `except FileNotFoundError`, whose handler returns `{}`.",
+                ],
+                "tests": [
+                    {"name": "Round-trips a dict", "code": r'''
+save_scores("t1.json", {"ada": 90, "linus": 75})
+assert load_scores("t1.json") == {"ada": 90, "linus": 75}, \
+    "load_scores should return exactly what save_scores wrote"
+'''},
+                    {"name": "Writes real JSON", "code": r'''
+import json as _json
+save_scores("t2.json", {"x": 1})
+with open("t2.json") as _f:
+    assert _json.load(_f) == {"x": 1}, "The file should contain plain JSON"
+'''},
+                    {"name": "Missing file gives {}", "code": r'''
+assert load_scores("definitely-missing-42.json") == {}, \
+    "A missing file should give {} — catch FileNotFoundError"
+'''},
+                    {"name": "Numbers stay numbers", "code": r'''
+save_scores("t3.json", {"a": 1})
+_v = load_scores("t3.json")["a"]
+assert _v == 1 and isinstance(_v, int), "JSON keeps ints as ints — no str() conversions needed"
+'''},
+                    {"name": "A real error still gets through", "code": r'''
+with open("t4.json", "w") as _f:
+    _f.write("{not json at all")
+try:
+    load_scores("t4.json")
+    assert False, "A corrupt file is not a missing file — it must not be swallowed"
+except FileNotFoundError:
+    assert False, "A corrupt file raises JSONDecodeError, not FileNotFoundError"
+except ValueError:
+    pass
+'''},
+                ],
+            }, {
+                "title": "Project: inventory manager",
+                "runtime": "python",
+                "minutes": 45,
+                "brief": r'''
+Everything in the course so far, in one program: a small inventory system split
+across two files. `inventory.py` holds the logic; `main.py` is a demo script that
+uses it. The checks import from `inventory.py`, so that is where the classes go.
+
+## `Item(name, price, quantity)`
+
+A class with those three attributes and nothing else. It is a value the
+`Inventory` holds — composition, not inheritance.
+
+## `Inventory()`
+
+The container. It keeps its items in `self.items`, a dict from name to `Item`,
+and every method below is a few lines once that shape is in place.
+
+- `add(item)` — adds the item. If an item of that name is already there,
+  increase its quantity instead of storing a duplicate.
+- `remove(name, quantity)` — reduces that item's quantity. Raise `KeyError` for
+  an unknown name and `ValueError` when there is not enough stock; a refused
+  call must change nothing. When the quantity reaches 0, drop the item entirely.
+- `find(query)` — case-insensitive substring search on the name, returning a
+  list of items sorted by name.
+- `total_value()` — the sum of `price * quantity` over every item.
+- `low_stock(threshold=5)` — the items with `quantity < threshold`, sorted by
+  name.
+- `save(path)` — writes every item to a JSON file.
+- `Inventory.load(path)` — a **`@classmethod`** returning a new `Inventory` read
+  from that file. `cls()` rather than `Inventory()`, so a subclass loads as
+  itself.
+- `report()` — a multi-line string, one line per item sorted by name, and a last
+  line containing `Total:` and the total value.
+
+## Suggested order
+
+Get `Item`, `add` and `find` working first, then `remove`, then the two
+calculations, then `save` / `load`, then `report`. The checks are ordered the
+same way, so run them after every step and read the first failure.
+
+Two things worth noticing as you go. An `Item` is not JSON, so `save` has to
+turn each one into a plain dict and `load` has to turn it back — the same
+`to_dict` / `from_dict` pair the capstone needs. And `add` already merges by
+name, which means `load` gets the merging for free by calling `add` per row
+rather than writing to `self.items` itself.
+''',
+                "files": [
+                    {"name": "inventory.py", "content": r'''
+import json
+
+
+class Item:
+    def __init__(self, name, price, quantity):
+        pass
+
+
+class Inventory:
+    def __init__(self):
+        self.items = {}   # name -> Item
+
+    def add(self, item):
+        pass
+
+    def remove(self, name, quantity):
+        pass
+
+    def find(self, query):
+        pass
+
+    def total_value(self):
+        pass
+
+    def low_stock(self, threshold=5):
+        pass
+
+    def save(self, path):
+        pass
+
+    @classmethod
+    def load(cls, path):
+        pass
+
+    def report(self):
+        pass
+'''},
+                    {"name": "main.py", "content": r'''
+from inventory import Inventory, Item
+
+inv = Inventory()
+inv.add(Item("Wiper blades", 120.0, 8))
+inv.add(Item("Jack", 899.0, 2))
+inv.add(Item("Torch", 249.0, 4))
+
+print(inv.report())
+'''},
+                ],
+                "main": "main.py",
+                "solution": [
+                    {"name": "inventory.py", "content": r'''
+import json
+
+
+class Item:
+    def __init__(self, name, price, quantity):
+        self.name = name
+        self.price = price
+        self.quantity = quantity
+
+
+class Inventory:
+    def __init__(self):
+        self.items = {}   # name -> Item
+
+    def add(self, item):
+        existing = self.items.get(item.name)
+        if existing:
+            existing.quantity += item.quantity
+        else:
+            self.items[item.name] = item
+
+    def remove(self, name, quantity):
+        if name not in self.items:
+            raise KeyError(name)
+        item = self.items[name]
+        if quantity > item.quantity:
+            raise ValueError(f"Only {item.quantity} {name} in stock")
+        item.quantity -= quantity
+        if item.quantity == 0:
+            del self.items[name]
+
+    def find(self, query):
+        q = query.lower()
+        hits = [item for item in self.items.values() if q in item.name.lower()]
+        return sorted(hits, key=lambda item: item.name)
+
+    def total_value(self):
+        return sum(item.price * item.quantity for item in self.items.values())
+
+    def low_stock(self, threshold=5):
+        hits = [item for item in self.items.values() if item.quantity < threshold]
+        return sorted(hits, key=lambda item: item.name)
+
+    def save(self, path):
+        data = [
+            {"name": i.name, "price": i.price, "quantity": i.quantity}
+            for i in self.items.values()
+        ]
+        with open(path, "w") as f:
+            json.dump(data, f)
+
+    @classmethod
+    def load(cls, path):
+        inv = cls()
+        with open(path) as f:
+            for row in json.load(f):
+                inv.add(Item(row["name"], row["price"], row["quantity"]))
+        return inv
+
+    def report(self):
+        lines = [f"{'Item':<20}{'Qty':>5}{'Price':>10}"]
+        for item in sorted(self.items.values(), key=lambda i: i.name):
+            lines.append(f"{item.name:<20}{item.quantity:>5}{item.price:>10.2f}")
+        lines.append(f"Total: {self.total_value():.2f}")
+        return "\n".join(lines)
+'''},
+                    {"name": "main.py", "content": r'''
+from inventory import Inventory, Item
+
+inv = Inventory()
+inv.add(Item("Wiper blades", 120.0, 8))
+inv.add(Item("Jack", 899.0, 2))
+inv.add(Item("Torch", 249.0, 4))
+
+print(inv.report())
+inv.save("stock.json")
+again = Inventory.load("stock.json")
+print("Reloaded value:", again.total_value())
+'''},
+                ],
+                "hints": [
+                    "Keep `self.items` as a dict keyed by name. `add`, the duplicate merge and `remove` all become two or three lines once lookup by name is free.",
+                    "`find`: `q = query.lower()`, then a comprehension over `self.items.values()` keeping the items where `q in item.name.lower()`, then `sorted(..., key=lambda i: i.name)`.",
+                    "`remove` must validate both failures *before* subtracting, or a refused call will already have moved the stock: `raise KeyError(name)` for the unknown name, `raise ValueError(...)` when the quantity asked for is larger than the stock.",
+                    "`save` builds a list of plain dicts and `json.dump`s it. `load` starts from `cls()` and calls `add()` on each row — the merging then comes free.",
+                    "`report`: build a list of lines and join them with a newline. `f\"{item.name:<20}\"` pads left-aligned to 20 characters, `{item.price:>10.2f}` right-aligns to 10 with two decimals.",
+                ],
+                "tests": [
+                    {"name": "Item stores its three attributes", "code": r'''
+from inventory import Item
+_i = Item("Torch", 249.0, 4)
+assert _i.name == "Torch" and _i.price == 249.0 and _i.quantity == 4, \
+    "Item should keep name, price and quantity"
+'''},
+                    {"name": "add() merges duplicates by name", "code": r'''
+from inventory import Inventory, Item
+_inv = Inventory()
+_inv.add(Item("Torch", 249.0, 2))
+_inv.add(Item("Torch", 249.0, 3))
+_found = _inv.find("torch")
+assert len(_found) == 1 and _found[0].quantity == 5, \
+    "Adding the same name twice should merge quantities"
+'''},
+                    {"name": "find() is case-insensitive and sorted", "code": r'''
+from inventory import Inventory, Item
+_inv = Inventory()
+_inv.add(Item("Wiper blades", 120.0, 8))
+_inv.add(Item("Wheel jack", 899.0, 2))
+_inv.add(Item("Torch", 249.0, 4))
+_names = [i.name for i in _inv.find("w")]
+assert _names == ["Wheel jack", "Wiper blades"], f"find('w') gave {_names!r}"
+assert [i.name for i in _inv.find("TORCH")] == ["Torch"], "The search should ignore case"
+'''},
+                    {"name": "remove() reduces, drops at zero", "code": r'''
+from inventory import Inventory, Item
+_inv = Inventory()
+_inv.add(Item("Torch", 249.0, 4))
+_inv.remove("Torch", 3)
+assert _inv.find("Torch")[0].quantity == 1, "remove should subtract the quantity"
+_inv.remove("Torch", 1)
+assert _inv.find("Torch") == [], "Quantity 0 should remove the item entirely"
+'''},
+                    {"name": "remove() raises the right errors", "code": r'''
+from inventory import Inventory, Item
+_inv = Inventory()
+_inv.add(Item("Torch", 249.0, 2))
+try:
+    _inv.remove("Ghost", 1)
+    assert False, "Unknown name should raise KeyError"
+except KeyError:
+    pass
+try:
+    _inv.remove("Torch", 5)
+    assert False, "Removing more than the stock should raise ValueError"
+except ValueError:
+    pass
+assert _inv.find("Torch")[0].quantity == 2, "A refused remove must change nothing"
+'''},
+                    {"name": "total_value() and low_stock()", "code": r'''
+from inventory import Inventory, Item
+_inv = Inventory()
+_inv.add(Item("Wiper blades", 120.0, 8))
+_inv.add(Item("Jack", 899.0, 2))
+_inv.add(Item("Torch", 249.0, 4))
+assert abs(_inv.total_value() - 3754.0) < 1e-6, \
+    f"total_value gave {_inv.total_value()!r}, expected 3754.0"
+assert [i.name for i in _inv.low_stock()] == ["Jack", "Torch"], "Default threshold 5, sorted by name"
+assert [i.name for i in _inv.low_stock(3)] == ["Jack"], "The threshold parameter should be respected"
+'''},
+                    {"name": "save() / Inventory.load() round-trip", "code": r'''
+from inventory import Inventory, Item
+_inv = Inventory()
+_inv.add(Item("Torch", 249.0, 4))
+_inv.add(Item("Jack", 899.0, 2))
+_inv.save("inv-test.json")
+_loaded = Inventory.load("inv-test.json")
+assert abs(_loaded.total_value() - _inv.total_value()) < 1e-6, \
+    "The loaded inventory should match what was saved"
+assert [i.name for i in _loaded.find("")] == ["Jack", "Torch"], \
+    "load is a classmethod returning a new Inventory"
+'''},
+                    {"name": "report() lists items and the total", "code": r'''
+from inventory import Inventory, Item
+_inv = Inventory()
+_inv.add(Item("Torch", 249.0, 4))
+_inv.add(Item("Jack", 899.0, 2))
+_rep = _inv.report()
+assert isinstance(_rep, str) and "Torch" in _rep and "Jack" in _rep and "Total" in _rep, \
+    "report() returns a string with every item and a Total line"
+assert _rep.index("Jack") < _rep.index("Torch"), "Items should appear sorted by name"
+'''},
+                ],
+            }],
         },
     ],
     # ---------------------------------------------------------------- capstone

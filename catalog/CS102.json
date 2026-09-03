@@ -47,81 +47,165 @@
      "title": "Two floats and no identity: what makes a value a value",
      "minutes": 14,
      "body": "Draw a displacement on a squared map: three squares east, four squares north. Hand the\nmap to a friend and ask them to draw the same displacement on a map of their own. There\nare now two drawings, and there is still one displacement. Nobody would call the friend's\narrow a *different* arrow because it sits on a different sheet: it points the same way\nand runs the same length, and that is everything an arrow is.\n\nA bank account is the other kind of thing. Two accounts holding exactly a hundred euros\neach are two accounts, and a deposit into one leaves the other where it was. They are\ntold apart by *which one they are*, not by what they hold.\n\nPython's default is the bank-account kind. Every object is given an identity when it is\nmade, and until you say otherwise `==` compares identities and nothing else:\n\n```python\nclass Vector2D:\n    def __init__(self, x, y):\n        self.x = float(x)\n        self.y = float(y)\n\n\na = Vector2D(3, 4)\nb = Vector2D(3, 4)\nprint(a == b)        # False\nprint(a is b)        # False\nprint(len({a, b}))   # 2\n```\n\nTwo arrows drawn identically, and Python holds that they are different. That is right for\nan account and wrong for an arrow, and this module is about telling Python which of the\ntwo you are building. The lab, *An immutable Vector2D*, builds the arrow: a value with no\nidentity of its own, that compares by its components, works as a dictionary key, does\narithmetic with the ordinary operators, and cannot be changed once it exists.\n\n## What `Vector2D(3, 4)` actually does\n\nTwo things happen at construction, and only the second is yours. `Vector2D(3, 4)` first\ncalls `Vector2D.__new__`, which allocates a blank object. Then it calls `__init__` with\nthat blank object as its first argument, and `__init__` fills the blanks in. The blank\nobject is what `self` is: the receiver of the call, passed explicitly because Python\nhides nothing — Java hides the same binding as `this`. `a.dot(b)` and\n`Vector2D.dot(a, b)` are one call written two ways:\n\n```python\nclass Vector2D:\n    def __init__(self, x, y):\n        self.x = float(x)\n        self.y = float(y)\n\n    def dot(self, other):\n        return self.x * other.x + self.y * other.y\n\n\na = Vector2D(3, 4)\nb = Vector2D(-1, 2)\nprint(a.dot(b))              # -3.0 + 8.0 = 5.0\nprint(Vector2D.dot(a, b))    # the same call, spelled out\n```\n\nBecause `__init__` is an initialiser and not a constructor, it must return `None`. The\nobject already exists by the time it runs, and there is nothing for it to hand back.\nPython enforces this rather than trusting you:\n\n```python\n# raises TypeError\nclass Broken:\n    def __init__(self, x):\n        self.x = x\n        return self\n\n\nBroken(1)\n```\n\nThe message is `__init__() should return None, not 'Broken'`, and it is the language\nstating the division of labour: `__new__` makes, `__init__` fills.\n\n## Equality by value\n\nTo make two identical arrows equal, define `__eq__`. The first version anyone writes\ncompares the components and stops there, `self.x == other.x and self.y == other.y`, and\nfor two vectors it is right. Now ask a question that does not involve another vector.\n`Vector2D(3, 4) == (3, 4)` reaches that body with `other` bound to a tuple, a tuple has\nno `.x`, and the comparison raises `AttributeError`. That looks like an edge case until you notice where `==` gets\ncalled without your knowledge: `v in [1, 2, 3]` compares `v` with `1`, and `list.index`\nand `list.remove` do the same. An equality that crashes on the wrong type breaks\ncontainers you never intended to put the vector in.\n\nThe fix is not `return False`. It is `return NotImplemented`, and the reason is the\nprotocol behind `==`. Python asks the left operand first: `Vector2D.__eq__(v, (3, 4))`.\nIf that returns `NotImplemented` — which means *I have no opinion* — Python turns round\nand asks the right operand, `tuple.__eq__((3, 4), v)`. When that declines too, Python\nfalls back to comparing identity, which gives `False`, and `!=` is derived from the same\nanswer for free. Returning `False` directly gives the same result today and takes away\nthe other operand's turn: a class that *does* know how to compare itself with a vector\nnever gets asked.\n\n```python\nclass Vector2D:\n    def __init__(self, x, y):\n        self.x = float(x)\n        self.y = float(y)\n\n    def __eq__(self, other):\n        if not isinstance(other, Vector2D):\n            return NotImplemented\n        return self.x == other.x and self.y == other.y\n\n\nv = Vector2D(3, 4)\nprint(v == (3, 4))            # False, and no exception\nprint(v != \"nope\")            # True\nprint(v in [1, \"two\", v])     # True: the == against 1 and \"two\" declined politely\n```\n\n## The hash has to agree, and Python will not let you forget\n\nPut the new class in a set and something unexpected happens:\n\n```python\n# raises TypeError\nclass Vector2D:\n    def __init__(self, x, y):\n        self.x = float(x)\n        self.y = float(y)\n\n    def __eq__(self, other):\n        if not isinstance(other, Vector2D):\n            return NotImplemented\n        return self.x == other.x and self.y == other.y\n\n\nprint(Vector2D.__hash__)      # None\n{Vector2D(3, 4)}\n```\n\nDefine `__eq__` and leave `__hash__` alone, and Python sets `__hash__` to `None` for you:\nthe instances stop being hashable. That looks officious until you see what a set does\nwith a hash. A set does not compare a new member against every existing one; that would\nmake membership linear. It calls `hash()` on the candidate, uses\nthe result to choose a bucket, and only compares with `==` against what is already in\nthat bucket. So two objects that `==` calls equal but that hash differently land in\ndifferent buckets, never meet, and the set keeps both. The inherited hash is built from\nidentity, so leaving it in place beside a value-based `__eq__` would produce exactly\nthat: a set holding two equal vectors. Rather than let it rot quietly, the language\nbreaks loudly.\n\nThe rule follows from the mechanism: **equal objects must hash equally**. The converse is\nnot required — unequal objects may share a hash and merely share a bucket — but the\nforward direction is the whole contract. The way to honour it is to hash the fields\n`__eq__` compares, and a tuple does the work:\n\n```python\nclass Vector2D:\n    def __init__(self, x, y):\n        self.x = float(x)\n        self.y = float(y)\n\n    def __eq__(self, other):\n        if not isinstance(other, Vector2D):\n            return NotImplemented\n        return self.x == other.x and self.y == other.y\n\n    def __hash__(self):\n        return hash((self.x, self.y))\n\n\nbag = {Vector2D(1, 2), Vector2D(1, 2), Vector2D(0, 0)}\nprint(len(bag))                                     # 2\nlookup = {Vector2D(1, 2): \"here\"}\nprint(lookup[Vector2D(1, 2)])                       # here\nprint(hash(Vector2D(1, 2)) == hash((1.0, 2.0)))     # True\n```\n\nA tuple's hash is computed from its members' hashes, so two tuples with equal members\nhash equally, so two vectors with equal components hash equally. The contract is met by\nconstruction. The module's numeric exercise is this trap made concrete: a `Card` whose\n`__eq__` and `__hash__` mention `rank` alone, so six cards in three ranks make a set of\nthree. The set never looks at your attributes; it calls the two methods you wrote and\nbelieves them.\n\n## Arithmetic, and how a refusal travels\n\n`a + b` is not a special form. Python evaluates it as `type(a).__add__(a, b)`, and if\nthat returns `NotImplemented` it tries the reflected method on the other side,\n`type(b).__radd__(b, a)`. If both decline, Python raises `TypeError: unsupported operand\ntype(s) for +: 'Vector2D' and 'int'`, naming both types.\n\nThe reflected method is what makes `2 * v` work. Trace it: the left operand is an `int`,\nso Python asks `int.__mul__(2, v)` first. `int` has never heard of a vector and returns\n`NotImplemented`. Only then does Python ask `Vector2D.__rmul__(v, 2)`, and notice the\nargument order: the vector arrives as `self` and the `2` as the argument, swapped\nrelative to how the expression was written. Instrument both hooks and watch:\n\n```python\nclass Vector2D:\n    def __init__(self, x, y):\n        self.x = float(x)\n        self.y = float(y)\n\n    def __repr__(self):\n        return f\"Vector2D({self.x!r}, {self.y!r})\"\n\n    def __mul__(self, scalar):\n        print(\"  __mul__ asked with\", scalar)\n        if isinstance(scalar, bool) or not isinstance(scalar, (int, float)):\n            return NotImplemented\n        return Vector2D(self.x * scalar, self.y * scalar)\n\n    def __rmul__(self, scalar):\n        print(\"  __rmul__ asked with\", scalar)\n        return self.__mul__(scalar)\n\n\nv = Vector2D(3, 4)\nprint(\"v * 2\")\nprint(v * 2)\nprint(\"2 * v\")\nprint(2 * v)\n```\n\n`v * 2` calls `__mul__` once. `2 * v` prints `__rmul__` first, because `int` had already\ndeclined, and then `__mul__`, because `__rmul__` delegates. For a scalar the delegation\nis right: scaling commutes, so the swapped operands make no difference. For matrix\nmultiplication the same delegation would be a bug, which is worth remembering the day\nyou overload `@`.\n\nThe mistake people make here is `raise NotImplementedError`. It is tempting because the\ntwo names differ by a suffix and both seem to say *not supported*. They do not.\n`NotImplemented` is a value, returned, meaning *ask someone else*; `NotImplementedError`\nis an exception, raised, meaning *a subclass was supposed to fill this in*. Raising it\naborts the reflected lookup, so `2 * v` never reaches `__rmul__`, and it reports the\nwrong problem. `return False` is worse in a quieter way: `v + 5` then evaluates to\n`False`, and nothing tells you.\n\nOne guard in that block deserves a sentence. `isinstance(True, int)` is `True`, because\n`bool` is a subclass of `int`. Without the explicit `bool` check, `True * v` would scale\nthe vector by one and `False * v` would collapse it to zero, silently.\n\n## A repr that reads back\n\nPrint the vector above and you get `Vector2D(3.0, 4.0)`, because the block defined\n`__repr__`. Leave it out and you get `<__main__.Vector2D object at 0x...>`, which names\nthe type and the identity — the two facts a value type is trying not to have. The\nconvention for `__repr__` is that it should look like the expression that would rebuild\nthe object, so that `eval(repr(v)) == v`:\n\n```python\nclass Vector2D:\n    def __init__(self, x, y):\n        self.x = float(x)\n        self.y = float(y)\n\n    def __repr__(self):\n        return f\"Vector2D({self.x!r}, {self.y!r})\"\n\n    def __eq__(self, other):\n        if not isinstance(other, Vector2D):\n            return NotImplemented\n        return self.x == other.x and self.y == other.y\n\n    def __hash__(self):\n        return hash((self.x, self.y))\n\n\nv = Vector2D(3, 4)\nprint(repr(v))                 # Vector2D(3.0, 4.0)\nprint(eval(repr(v)) == v)      # True\nprint([v, Vector2D(0, 1)])     # a list shows the reprs of its members\n```\n\nThe `!r` inside the f-string asks each component for *its* repr, which is why `3` comes\nback as `3.0`: the stored value is a float, and the repr says so. `__str__` is the\nhuman-facing form, and with none defined, `print(v)` falls back to `__repr__`. The\nreverse does not hold — define only `__str__` and a list of vectors prints as angle\nbrackets, because a container shows the reprs of its members and never their strs.\nWrite `__repr__` first; add `__str__` when a genuinely different display is wanted.\n\n## Making it stay put\n\nEverything so far assumed the components do not change. That assumption is\nload-bearing. Hash a mutable object by its fields, put it in a set, and change a field:\n\n```python\nclass Point:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\n    def __eq__(self, other):\n        return isinstance(other, Point) and (self.x, self.y) == (other.x, other.y)\n\n    def __hash__(self):\n        return hash((self.x, self.y))\n\n\np = Point(1, 2)\nbag = {p}\np.x = 5\nprint(p in bag)      # False\nprint(len(bag))      # 1\n```\n\nThe point is in the set — `len` says so — and the set cannot find it, because it was\nfiled under the hash of `(1, 2)` and now hashes to something else. Nothing raised. This is\nwhy every hashable built-in is immutable, and why the lab insists a `Vector2D` never\nchanges after construction.\n\nPython offers three strengths of immutability. The weakest is a naming convention: call\nthe attribute `_x`, and readers understand they are not to write to it. Nothing enforces\nit. Next, `__slots__ = (\"x\", \"y\")` replaces the per-instance dictionary with two fixed\ndescriptors, so `v.z = 1` raises `AttributeError` — a typo caught, and memory saved. What\nslots do *not* do is stop `v.x = 9`, which is an ordinary write to a slot that exists.\nReal immutability needs the third step: override `__setattr__` and `__delattr__` to\nrefuse.\n\nThat creates a problem inside `__init__`. The line `self.x = float(x)` is not a bare\nstore; Python evaluates it as `type(self).__setattr__(self, \"x\", float(x))`, and by the\ntime `__init__` runs, your refusing guard is already installed:\n\n```python\n# raises AttributeError\nclass Vector2D:\n    __slots__ = (\"x\", \"y\")\n\n    def __init__(self, x, y):\n        self.x = float(x)      # goes through the guard below\n        self.y = float(y)\n\n    def __setattr__(self, name, value):\n        raise AttributeError(\"Vector2D is immutable\")\n\n\nVector2D(3, 4)\n```\n\nThe guard refuses its own constructor. The way past is to name the machinery the guard\nstands in front of: `object.__setattr__(self, \"x\", float(x))` performs the plain store\nwithout consulting your override. That is the one line in the class entitled to step\naround the rule, and `__init__` is the only place it should appear:\n\n```python\nclass Vector2D:\n    __slots__ = (\"x\", \"y\")\n\n    def __init__(self, x, y):\n        object.__setattr__(self, \"x\", float(x))\n        object.__setattr__(self, \"y\", float(y))\n\n    def __setattr__(self, name, value):\n        raise AttributeError(\"Vector2D is immutable\")\n\n    def __delattr__(self, name):\n        raise AttributeError(\"Vector2D is immutable\")\n\n\nv = Vector2D(3, 4)\nprint(v.x, v.y)      # 3.0 4.0\ntry:\n    v.x = 9\nexcept AttributeError as e:\n    print(\"refused:\", e)\ntry:\n    del v.y\nexcept AttributeError as e:\n    print(\"refused:\", e)\nprint(v.x, v.y)      # 3.0 4.0, untouched\n```\n\n`AttributeError` is the right exception, because it is what Python itself raises for a\nwrite it cannot perform — a property with no setter, an attribute on a tuple. Matching it\nmeans `except AttributeError` around a write behaves the same whether an object defends\nitself by hand or with `@property`.\n\n## Where value semantics stops holding\n\nA value type inherits its components' idea of equality, warts included. The components\nhere are floats, and float arithmetic rounds:\n\n```python\nclass Vector2D:\n    def __init__(self, x, y):\n        self.x = float(x)\n        self.y = float(y)\n\n    def __eq__(self, other):\n        if not isinstance(other, Vector2D):\n            return NotImplemented\n        return self.x == other.x and self.y == other.y\n\n    def __add__(self, other):\n        if not isinstance(other, Vector2D):\n            return NotImplemented\n        return Vector2D(self.x + other.x, self.y + other.y)\n\n\ntotal = Vector2D(0.1, 0) + Vector2D(0.2, 0)\nprint(total == Vector2D(0.3, 0))     # False\nprint(total.x)                       # 0.30000000000000004\n```\n\nTwo vectors a physicist would call equal are not equal to `==`, and no `__eq__` you write\ncan fix that without breaking the hash contract, because a tolerance is not transitive:\nif $a$ is within $\\varepsilon$ of $b$ and $b$ within $\\varepsilon$ of $c$, nothing puts\n$a$ within $\\varepsilon$ of $c$, so \"equal\" objects would no longer be guaranteed the\nsame hash. This is why the lab's tests compare `magnitude()` with `abs(got - 5.0) <\n1e-12` and use exact `==` only where the arithmetic is exact. A value type gives you *the\ncomponents' equality*, not a geometric one.\n\nThe other boundary is the one this reading opened with. Anything whose history matters —\nan account, a player, a connection — should keep identity equality; give it a value-based\n`__eq__` and two different accounts with the same balance become interchangeable to\nevery container in the program. Ask which kind of thing it is before writing a single\ndunder. If you can hand it to a friend and get the same\nthing back on a different sheet of paper, it is a value; build it the way the lab builds\n`Vector2D`."
+    },
+    {
+     "title": "When things go wrong: exceptions",
+     "minutes": 13,
+     "body": "Four readings come off a sensor log and the job is to total them. It is not a hard job\nuntil one of the four is the word `twelve`:\n\n```python\n# raises ValueError\nreadings = [\"12\", \"7\", \"twelve\", \"3\"]\ntotal = 0\nfor text in readings:\n    total += int(text)\nprint(total)\n```\n\nThe last line never runs. `int(\"twelve\")` cannot produce a number, and rather than\ninventing one it **raises** an exception: it abandons the expression it was in the\nmiddle of, abandons the loop around it, and abandons every function that called it,\nclimbing outwards until something catches it or it reaches the top of the program. When\nnothing catches it, Python prints the traceback — the list of frames it climbed through —\nand exits with `ValueError: invalid literal for int() with base 10: 'twelve'`.\n\nTwo facts are worth taking from that. The first is that an exception is not a return\nvalue; `total` is never assigned, because the addition never happened. The second is that\nthe traceback is a *feature*: it names the exception type, the message, and the exact line\nin each frame, which is more than any error code you would have designed yourself.\n\n## Catching one thing\n\n`try` marks the code that might fail; `except` names the failure you are prepared for.\n\n```python\nreadings = [\"12\", \"7\", \"twelve\", \"3\"]\ntotal = 0\nfor text in readings:\n    try:\n        total += int(text)\n    except ValueError:\n        print(\"skipping\", repr(text))\nprint(\"total:\", total)\n```\n\nThe exception now stops climbing at the `except`, the loop carries on, and the total is\n22 over the three readings that were numbers. Notice how small the `try` block is: one\nstatement, the one that can fail. Wrapping the whole loop instead would catch the same\nerror and then leave the loop, so the last reading would be lost as well.\n\nName the exception you expect. `except ValueError` catches that class and its subclasses\nand lets everything else past, which is what you want, because the errors you did not\npredict are the ones you need to see.\n\n## The full shape: `else` and `finally`\n\nA `try` statement has four parts, and the two less-used ones are about *what ran* rather\nthan *what failed*:\n\n```python\ndef parse(text):\n    try:\n        value = int(text)\n    except ValueError:\n        print(\"  except:  not a number\")\n        return None\n    else:\n        print(\"  else:    parsed\", value)\n        return value\n    finally:\n        print(\"  finally: done with\", repr(text))\n\n\nprint(\"parse('7')\")\nprint(\"  ->\", parse(\"7\"))\nprint(\"parse('seven')\")\nprint(\"  ->\", parse(\"seven\"))\n```\n\n`else` runs when the `try` body finished without raising, and it exists so that the `try`\ncan hold nothing but the risky line. Code that belongs after a successful parse would, if\nyou put it inside the `try`, have its *own* `ValueError` caught by a handler written for\nthe conversion — a real way to be told the wrong thing about where a bug is.\n\n`finally` runs whichever way the statement leaves. Read the output: the `finally` line\nprints after the `else` line and before the `-> 7`, so it runs even though `else` had\nalready said `return`. That is what makes it the place for cleanup — closing a file,\nreleasing a lock, putting a cursor back — and it is the machinery `with` is built on. One\nwarning about it: a `return` inside a `finally` discards whatever the block was doing,\nincluding an exception on its way out, which turns a crash into a wrong answer.\n\n## Refusing loudly beats returning nonsense\n\nHere is a withdrawal that reports failure the way C reports it, with a value nobody can\nmistake for a balance — until they do:\n\n```python\ndef withdraw(balance, amount):\n    \"\"\"Return the new balance, or -1 if the withdrawal is refused.\"\"\"\n    if amount <= 0 or amount > balance:\n        return -1\n    return balance - amount\n\n\naccounts = {\"ada\": 500, \"bo\": 40}\nfor name in list(accounts):\n    accounts[name] = withdraw(accounts[name], 100)\n\nprint(accounts)\nprint(\"the bank now believes it holds\", sum(accounts.values()), \"kr\")\n```\n\nBo had 40 kr and asked for 100, so `withdraw` refuses — and the caller stores the refusal\nas a balance. The dictionary reads `{'ada': 400, 'bo': -1}` and the bank's books are out\nby 41 kr, with nothing on the screen to say so. The caller is not careless; it is doing\nwhat the signature invites, because `-1` has the same type as a balance and arrives\nthrough the same channel.\n\nRaise instead, and the refusal cannot be mistaken for an answer:\n\n```python\ndef withdraw(balance, amount):\n    if amount <= 0:\n        raise ValueError(\"Amount must be positive\")\n    if amount > balance:\n        raise ValueError(f\"Insufficient funds: {balance} available, {amount} asked for\")\n    return balance - amount\n\n\naccounts = {\"ada\": 500, \"bo\": 40}\nfor name in list(accounts):\n    try:\n        accounts[name] = withdraw(accounts[name], 100)\n    except ValueError as err:\n        print(f\"{name}: refused - {err}\")\n\nprint(accounts)\nprint(\"the bank holds\", sum(accounts.values()), \"kr\")\n```\n\nThe assignment on the left of the `=` never happens for `bo`, because the right-hand side\nnever produced a value. Bo keeps 40 kr, the books balance at 440, and the caller was told\nwhich account and why. Two rules come out of this, and the lab *A bank account that says\nno* is built on both: **validate before you change state**, so a refused call cannot have\nhalf-happened; and **put the reason in the message**, because `err` is the only thing the\nhandler will have to work with.\n\n## The exceptions you will actually meet\n\n| Exception | Typical cause |\n|---|---|\n| `NameError` | a name that is not defined — usually a typo, or a use before the assignment |\n| `TypeError` | wrong type: `\"a\" + 1`, calling something that is not a function, a missing argument |\n| `ValueError` | right type, unusable value: `int(\"abc\")`, `math.sqrt(-1)` |\n| `KeyError` | a dictionary key that is not there |\n| `IndexError` | a list index past the end |\n| `AttributeError` | `thing.method()` where `thing` has no such attribute — including a misspelt one |\n| `ZeroDivisionError` | dividing by zero |\n| `FileNotFoundError` | opening a path that does not exist |\n\n`KeyError` and `IndexError` share a base, `LookupError`; `FileNotFoundError` is one of\nseveral `OSError`s. Catching the base catches all of its children, which is how\n`except OSError` covers a missing file, a permission refusal and a full disk at once.\n\n## Your own exception types\n\nWhen the caller needs to tell *your* failure from every other failure, give it a class.\nSubclass `Exception` — never `BaseException`, which is also the ancestor of\n`KeyboardInterrupt` and `SystemExit` and would make your error catchable by handlers that\nwere written to let those two through:\n\n```python\nclass OutOfStock(Exception):\n    \"\"\"No more of this part in the warehouse.\"\"\"\n\n\ndef reserve(stock, part, count):\n    if stock.get(part, 0) < count:\n        raise OutOfStock(f\"{part}: {stock.get(part, 0)} left, {count} wanted\")\n    stock[part] -= count\n\n\nwarehouse = {\"wiper blades\": 2}\ntry:\n    reserve(warehouse, \"wiper blades\", 5)\nexcept OutOfStock as err:\n    print(\"back-order:\", err)\nexcept ValueError:\n    print(\"this handler never runs: OutOfStock is not a ValueError\")\n\nprint(isinstance(OutOfStock(\"x\"), Exception))\nprint(warehouse)\n```\n\nHandlers are tried in order and the first matching one wins, so the narrow class has to\ncome before any base it inherits from. The empty body is not laziness: an exception class\ncarries its meaning in its *name*, and `OutOfStock` already says everything a handler\nneeds to dispatch on.\n\n## Catching too much\n\nThe tempting shortcut is a handler wide enough that nothing can get past it. Watch what\nit costs:\n\n```python\ndef total_price(items):\n    return sum(item[\"prcie\"] for item in items)      # a typo, three months old\n\n\nbasket = [{\"price\": 10}, {\"price\": 5}]\ntry:\n    print(total_price(basket))\nexcept Exception:\n    print(\"could not total the basket\")\n\ntry:\n    print(total_price(basket))\nexcept KeyError as err:\n    print(\"no such field:\", err)\n```\n\nThe same defect is reported twice. The wide handler says the basket could not be totalled,\nwhich sends you looking at the basket; the narrow one prints `no such field: 'prcie'` and\nthe misspelling is on the screen. A bare `except:` is wider still — it catches\n`BaseException`, so `KeyboardInterrupt` lands in it too and the program stops answering\nCtrl-C. The rule that follows: catch the class you know how to handle, and let the rest\nclimb.\n\n## Ask forgiveness, not permission\n\nTwo ways to increment a counter that may not exist yet:\n\n```python\ndef bump_lbyl(counts, name):\n    if name in counts:          # look before you leap\n        counts[name] += 1\n    else:\n        counts[name] = 1\n\n\ndef bump_eafp(counts, name):\n    try:                        # ask forgiveness, not permission\n        counts[name] += 1\n    except KeyError:\n        counts[name] = 1\n\n\ncounts = {\"ada\": 3}\nbump_lbyl(counts, \"ada\")\nbump_eafp(counts, \"bo\")\nprint(counts)\n```\n\nBoth give `{'ada': 4, 'bo': 1}`, and for a dictionary either is defensible — the `try`\nversion does one lookup instead of two when the key is present, which is the common case.\nThe preference stops being a matter of taste when the thing you are checking can change\nbetween the check and the use. `if os.path.exists(path)` followed by `open(path)` is two\nquestions about a filesystem other programs are also writing to, and the file can vanish\nin the gap; `try: open(path) except FileNotFoundError:` asks once, and the answer it gets\nis the answer it acts on.\n\n## Where this stops\n\nAn exception you cannot do anything about should not be caught. The lab's\n`safe_withdraw` turns a `ValueError` into `True` or `False`, and that is right *there*,\nat the edge of the program where a caller wants a yes-or-no and has no use for a message.\nThree layers down it would be wrong: the reason would be discarded at the one place that\nstill knew it, and the caller would be left holding a `False` with no idea whether the\namount was negative or the account was empty.\n\nWhen you catch something in order to add context and still cannot fix it, re-raise. A bare\n`raise` inside a handler sends on the exception that is already travelling, traceback\nintact:\n\n```python\n# raises ValueError\ndef load_timeout(text):\n    try:\n        return int(text)\n    except ValueError:\n        print(\"log: timeout setting was\", repr(text))\n        raise\n\n\nprint(load_timeout(\"30\"))\nload_timeout(\"half a minute\")\n```\n\nThe note is logged and the failure still reaches whoever is entitled to decide what to do\nabout it — which is the whole argument of this reading, one function further out."
+    },
+    {
+     "title": "Classes, modules and files",
+     "minutes": 13,
+     "body": "A program that defines everything and runs everything in one file is fine at eighty lines\nand unusable at eight hundred. This reading is about the three splits that keep it\nreadable: state and behaviour into a **class**, code into **modules** across several\nfiles, and data out of the process altogether into a **file** — usually as JSON, which is\nhow the inventory lab at the end of the course, and the capstone after it, keep anything\nbetween runs.\n\n## Classes: data and behaviour in one place\n\nA class is a blueprint. Each object built from it carries its own data — **attributes** —\nand shares the same **methods**:\n\n```python\nclass Car:\n    wheels = 4                           # a class attribute: one copy, shared\n\n    def __init__(self, plate, km=0):     # runs when a Car is created\n        self.plate = plate               # instance attributes: this car's own data\n        self.km = km\n\n    def drive(self, distance):\n        self.km += distance\n        return self.km\n\n    def __str__(self):                   # what print() shows\n        return f\"{self.plate} ({self.km} km)\"\n\n\ngolf = Car(\"AB 12345\")\npolo = Car(\"CD 67890\", km = 91000)\ngolf.drive(120)\nprint(golf)\nprint(polo)\nprint(golf.wheels, polo.wheels, Car.wheels)\nprint(Car.drive(golf, 30), golf.km)\n```\n\n`wheels` is written once in the class body and read through every instance, because a\nlookup that fails on the object falls through to the class. `plate` and `km` are written\nper object inside `__init__`, so the two cars disagree about them and agree about\n`wheels`. Module 3 takes that lookup rule apart properly, including what happens the\nmoment somebody assigns to `golf.wheels`.\n\nThe last line is the one to sit with. `golf.drive(120)` and `Car.drive(golf, 30)` are the\nsame call written two ways: the method is a plain function on the class, and the dot\nsupplies the object in front of it as the first argument. That is all `self` is — the\nreceiver, named explicitly, exactly as the first reading of this module described it for\n`Vector2D.dot`.\n\n`__str__` is the human-facing display and is what `print` and `str()` reach for. It is the\nsibling of the `__repr__` you wrote for `Vector2D`: define `__repr__` first, because a\nlist of cars shows the reprs of its members, and add `__str__` when the display a person\nshould read differs from the one a programmer should.\n\n## Modules: one file is one module\n\nEvery `.py` file is a module, named after the file. Importing one gives you its contents:\n\n```python\nimport math\nfrom random import randint\n\nprint(math.sqrt(16))\nprint(round(math.pi, 4))\nprint(1 <= randint(1, 6) <= 6)\n```\n\n`import math` binds one name, `math`, and everything inside it is reached through the dot.\n`from random import randint` binds the function itself, which is shorter to read and\ncosts you the label saying where it came from. Both forms run the module the first time\nand cache it; neither copies anything.\n\n## What `import` actually does\n\nThe mechanism is worth seeing rather than believing. Here a module is written to a scratch\nfolder, that folder is put on the import path, and the module is imported twice:\n\n```python\nimport os\nimport sys\nimport tempfile\n\nsource = \"\"\"\nprint(\"greet.py is running, and __name__ is\", __name__)\n\nMESSAGE = \"hello from greet\"\n\n\ndef main():\n    print(MESSAGE)\n\n\nif __name__ == \"__main__\":\n    main()\n\"\"\"\n\nfolder = tempfile.mkdtemp()                    # a scratch directory to write into\nwith open(os.path.join(folder, \"greet.py\"), \"w\") as f:\n    f.write(source)\n\nsys.path.insert(0, folder)                     # where import looks\nprint(\"this file's __name__ is\", __name__)\nimport greet                                   # runs greet.py, top to bottom, once\nimport greet                                   # nothing at all: already imported\nprint(greet.MESSAGE)\ngreet.main()\n```\n\nThree things show up in that output. `greet.py is running` appears **once**, though the\nimport is written twice: the first import executes the file and files the result under\n`sys.modules[\"greet\"]`, and every import after that is a dictionary lookup. Anything with\na side effect at the top level of a module therefore happens once per program, at a\nmoment decided by whoever imports first.\n\nSecond, `__name__` inside `greet` is `\"greet\"`, while `__name__` in the file you are\nrunning is `\"__main__\"`. That is the whole trick behind the guard:\n\n```text\nif __name__ == \"__main__\":\n    main()\n```\n\nThe body runs when the file is the one being executed and is skipped when the file is\nbeing imported. Without it, importing a module would run its demo, its prompts and its\ntest data as a side effect of asking for one function out of it. With it, a file can be\nboth a library and a program.\n\nThird, `hello from greet` prints twice — once through the module's `MESSAGE` and once\nthrough `greet.main()` — while the guarded call inside `greet.py` printed nothing at all,\nbecause on import `__name__` was not `\"__main__\"`.\n\nThe habit that falls out: keep the code that *defines* things — classes, functions — in\nmodules, and the code that *runs* things behind the guard in a `main.py`. The inventory\nlab is built exactly that way, with `inventory.py` for the classes and `main.py` for the\ndemo, and its checks import from `inventory.py` directly.\n\n## Files\n\n`open` gives you a file object; the mode says what you may do with it.\n\n```python\nimport os\nimport tempfile\n\npath = os.path.join(tempfile.mkdtemp(), \"notes.txt\")\n\nwith open(path, \"w\") as f:        # \"w\" write (truncates!), \"a\" append, \"r\" read\n    f.write(\"first line\\n\")       # write adds no newline of its own\n    f.write(\"second line\\n\")\n\nwith open(path) as f:             # \"r\" is the default\n    for line in f:\n        print(repr(line))\n\nwith open(path) as f:\n    print(f.read().splitlines())\n```\n\nTwo details bite people. `\"w\"` truncates an existing file the instant it is opened, before\na single byte is written, so a mistyped mode destroys the thing you meant to append to.\nAnd iterating a file yields lines *with* their newline still attached, which is why the\nfirst loop prints `'first line\\n'` and why `line.strip()` appears in so much\nline-processing code.\n\nReading a path that is not there raises, and the exception says which path:\n\n```python\n# raises FileNotFoundError\nwith open(\"no-such-config-91827.json\") as f:\n    print(f.read())\n```\n\n## What `with` is for\n\n`with` is the reason none of the blocks above call `close()`. It closes the file on the\nway out of the block whichever way the block ends — including on an exception, which is\nthe case that matters, because data sitting in an unflushed buffer is lost when the\nprocess dies:\n\n```python\nimport os\nimport tempfile\n\npath = os.path.join(tempfile.mkdtemp(), \"half-written.txt\")\n\ntry:\n    with open(path, \"w\") as f:\n        f.write(\"this much got written\\n\")\n        raise ValueError(\"something went wrong in the middle\")\nexcept ValueError as err:\n    print(\"caught:\", err)\n\nprint(\"the file object is closed:\", f.closed)\nwith open(path) as check:\n    print(repr(check.read()))\n```\n\nThe exception travelled, and the line still reached the disk. This is the `finally`\nguarantee from the previous reading, packaged: `with` calls the object's `__exit__` on the\nway out, and for a file `__exit__` flushes and closes.\n\n## JSON\n\nA dictionary of numbers and strings survives a program's death as text, and JSON is the\nformat everything else can read too. Four function names, and the `s` is the whole\ndistinction — `dumps` and `loads` work on **s**trings, `dump` and `load` on open files:\n\n```python\nimport json\n\ndata = {\"ada\": 90, \"linus\": 75, \"passed\": True, \"notes\": None}\ntext = json.dumps(data, indent=2)      # object -> string\nprint(text)\nprint(type(text).__name__)\n\nback = json.loads(text)                # string -> object\nprint(back == data)\n```\n\n`True` and `None` come back as themselves, having spent the trip as JSON's `true` and\n`null`. Straight to a file it is the pair without the `s`, and the file object is the\nsecond argument:\n\n```python\nimport json\nimport os\nimport tempfile\n\npath = os.path.join(tempfile.mkdtemp(), \"scores.json\")\nscores = {\"ada\": 90, \"linus\": 75}\n\nwith open(path, \"w\") as f:\n    json.dump(scores, f)               # object -> file\n\nwith open(path) as f:\n    print(json.load(f))                # file -> object\n```\n\n## What JSON cannot hold\n\nJSON knows six things: strings, numbers, `true`, `false`, `null`, arrays and objects whose\nkeys are strings. Everything Python has beyond that is converted on the way out and does\nnot come back:\n\n```python\nimport json\n\noriginal = {\"tags\": (\"new\", \"boxed\"), 1: \"first\", \"when\": {\"year\": 2026}}\nback = json.loads(json.dumps(original))\nprint(back)\nprint(type(original[\"tags\"]).__name__, \"->\", type(back[\"tags\"]).__name__)\nprint(list(original), \"->\", list(back))\n```\n\nThe tuple returns as a list and the integer key returns as the string `\"1\"`, because JSON\nhas neither. Nothing raised, and `original == back` is false. A round trip through JSON is\nlossy, and knowing exactly what it loses is the difference between a save file that\nreloads and one that reloads *almost*.\n\nYour own classes do not get that far — they raise instead of being guessed at:\n\n```python\n# raises TypeError\nimport json\n\n\nclass Item:\n    def __init__(self, name, price):\n        self.name = name\n        self.price = price\n\n\njson.dumps(Item(\"Torch\", 249.0))\n```\n\nSo the conversion is yours to write, in both directions: a method that turns the object\ninto a dict of JSON-legal values, and a constructor that rebuilds it from one.\n\n```python\nimport json\n\n\nclass Item:\n    def __init__(self, name, price):\n        self.name = name\n        self.price = price\n\n    def to_dict(self):\n        return {\"name\": self.name, \"price\": self.price}\n\n    @classmethod\n    def from_dict(cls, row):\n        return cls(row[\"name\"], row[\"price\"])\n\n\ntext = json.dumps([Item(\"Torch\", 249.0).to_dict(), Item(\"Jack\", 899.0).to_dict()])\nprint(text)\nagain = [Item.from_dict(row) for row in json.loads(text)]\nprint(type(again[0]).__name__, again[0].name, again[0].price)\n```\n\n`from_dict` is a `@classmethod`: it receives the class rather than an instance, which is\nwhat lets it build one, and what makes `cls(...)` build the *subclass* when a subclass\ninherits it. That is the shape of `Inventory.load(path)` in this course's inventory lab\nand of `Catalogue.load(path)` in the capstone — an alternative constructor, reading a file\nand handing back a finished object. Module 3 comes back to `@classmethod` in its own\nright.\n\n## Where this stops\n\nThe formats have edges worth knowing before you meet them. JSON has no date type, so a\ntimestamp goes across as a string in a format you choose and parse back yourself. Its\nnumbers are doubles, so a large integer id can lose its last digits in a system that reads\nit as one. And `json.load` on a file that is corrupt, truncated or empty raises\n`JSONDecodeError` — a `ValueError` — which is a different failure from the file being\nmissing and deserves a different answer, as the *Save and load with JSON* lab insists.\n\nOne note about this page. In the browser the files above live in a virtual folder that is\nthrown away when you reload, so nothing you write here can touch your machine. Everything\nelse — modes, buffering, the exceptions, what JSON keeps and drops — behaves exactly as it\ndoes on your own disk."
     }
    ],
    "sandbox": null,
-   "quiz": {
-    "title": "Value semantics and the data model",
-    "minutes": 8,
-    "questions": [
-     {
-      "q": "`Vector2D(3, 4)` is evaluated. What is `__init__`'s part in it?",
-      "opts": [
-       "It creates the object and returns it to the caller",
-       "It is handed an object that already exists, fills in its state, and returns `None`",
-       "It runs only when the class defines no `__new__`",
-       "It reserves the memory, and Python fills in the attributes afterwards"
-      ],
-      "a": 1,
-      "why": "Two things happen and only the second one is `__init__`. `Vector2D.__new__` allocates\nthe object; `__init__` is then handed that object as `self` and initialises it. It must\nreturn `None` — returning anything else is a `TypeError`, which is the language saying\nplainly that this is an initialiser and not a constructor. The distinction is invisible\nuntil it is not: `__new__` is the hook you need for a class that interns its instances,\nor that subclasses an immutable built-in like `tuple`, because by the time `__init__`\nruns the value is already fixed."
-     },
-     {
-      "q": "A class defines `__eq__` and leaves `__hash__` alone. What does `hash(obj)` do?",
-      "opts": [
-       "Falls back to the identity hash inherited from `object`",
-       "Returns `0` — legal, but it turns every dict into a linked list",
-       "Raises `TypeError`: defining `__eq__` sets `__hash__` to `None`",
-       "Raises `AttributeError`, because the method is missing"
-      ],
-      "a": 2,
-      "why": "Python puts `__hash__ = None` in the class for you when `__eq__` is defined and\n`__hash__` is not, and instances become unhashable — no sets, no dict keys. That looks\nofficious until you see the alternative: the inherited hash is based on identity, so two\nobjects your new `__eq__` calls equal would land in different buckets, and a dict would\ncheerfully hold both. Rather than let that rot quietly, the language breaks loudly. Write\n`__hash__` alongside `__eq__` over the same fields, or accept that the type is not\nhashable — which is the right answer for anything mutable."
-     },
-     {
-      "q": "`Vector2D.__add__` is handed an `int`. What should it return?",
-      "opts": [
-       "`NotImplemented`, so Python can ask the other operand and then raise `TypeError` itself",
-       "`False`, since the addition did not happen",
-       "`None`, which Python reads as a refusal",
-       "It should `raise NotImplementedError`"
-      ],
-      "a": 0,
-      "why": "`NotImplemented` is a singleton meaning *I decline — ask someone else*. Python then tries\n`int.__radd__`, and when that declines too it raises `TypeError: unsupported operand\ntype(s)`, a message naming both types and far better than anything you would have\nwritten. The refusals that are not refusals: `False` makes `v + 5` evaluate to `False`,\n`None` makes it `None`, and `NotImplementedError` is a real exception meant for an\nabstract method a subclass forgot — raising it aborts the reflected-operand machinery and\nreports the wrong problem entirely."
-     },
-     {
-      "q": "A class defines `__repr__` and no `__str__`. What does `print(obj)` show?",
-      "opts": [
-       "`<Vector2D object at 0x7f...>`",
-       "An empty line",
-       "`TypeError`",
-       "Whatever `__repr__` returns — `__str__` falls back to it"
-      ],
-      "a": 3,
-      "why": "`object.__str__` calls `__repr__`, so one good repr covers printing as well. The reverse\ndoes not hold: define only `__str__` and `repr(v)` stays the angle-bracket default —\nwhich is what you will see *inside a list*, because a container displays the reprs of its\nelements and never their strs. That asymmetry is the reason for the usual advice: write\n`__repr__` first, and add `__str__` only when a human-facing form genuinely differs from\nthe programmer-facing one."
-     },
-     {
-      "q": "`2 * v`, where `v` is a `Vector2D`. How does Python reach your code?",
-      "opts": [
-       "It rewrites the expression as `v * 2` and calls `__mul__`",
-       "It asks `int.__mul__(2, v)` first, is told `NotImplemented`, then calls `Vector2D.__rmul__(v, 2)`",
-       "It calls `Vector2D.__mul__(v, 2)` directly, because the operands are different types",
-       "It raises `TypeError` — the left operand decides, and `int` cannot multiply a vector"
-      ],
-      "a": 1,
-      "why": "The left operand is asked first. `int` has no idea what a vector is, returns\n`NotImplemented`, and only then does the right operand get its reflected hook. There is\none documented exception, and it is not this case: when the right operand's type is a\n*proper subclass* of the left's and overrides the reflected method, Python tries the\nsubclass's `__rmul__` before the base's `__mul__`, so a subclass can always override an\noperator it inherited. `int` and `Vector2D` are unrelated types, so the ordinary order\nholds here. Nothing is rewritten either: `__rmul__` is a separate method, and it\nreceives the vector as `self` and the\n`2` as the argument, so the operands arrive swapped. Delegating it straight to `__mul__`\nis right for a scalar, where the product commutes — for matrix multiplication that same\ndelegation would be a bug, and that is the case worth remembering."
-     },
-     {
-      "q": "`__slots__ = ('x', 'y')` is added to a class. What does it actually do?",
-      "opts": [
-       "Makes the instances immutable",
-       "Makes `x` and `y` read-only",
-       "Replaces the per-instance `__dict__` with two fixed descriptors, so any other attribute raises `AttributeError`",
-       "Stops the class being subclassed"
-      ],
-      "a": 2,
-      "why": "Slots trade flexibility for memory and for catching typos: there is no instance\ndictionary, so `v.z = 1` fails where it would silently have worked. What slots do *not*\ndo is stop `v.x = 9` — that is an ordinary write to a slot descriptor, which is exactly\nwhy the lab has to refuse it in `__setattr__` as well. And a subclass that does not\ndeclare `__slots__` of its own quietly gets a `__dict__` back, taking the saving with it."
-     }
-    ]
-   },
+   "quiz": [
+    {
+     "title": "Value semantics and the data model",
+     "minutes": 8,
+     "questions": [
+      {
+       "q": "`Vector2D(3, 4)` is evaluated. What is `__init__`'s part in it?",
+       "opts": [
+        "It creates the object and returns it to the caller",
+        "It is handed an object that already exists, fills in its state, and returns `None`",
+        "It runs only when the class defines no `__new__`",
+        "It reserves the memory, and Python fills in the attributes afterwards"
+       ],
+       "a": 1,
+       "why": "Two things happen and only the second one is `__init__`. `Vector2D.__new__` allocates\nthe object; `__init__` is then handed that object as `self` and initialises it. It must\nreturn `None` — returning anything else is a `TypeError`, which is the language saying\nplainly that this is an initialiser and not a constructor. The distinction is invisible\nuntil it is not: `__new__` is the hook you need for a class that interns its instances,\nor that subclasses an immutable built-in like `tuple`, because by the time `__init__`\nruns the value is already fixed."
+      },
+      {
+       "q": "A class defines `__eq__` and leaves `__hash__` alone. What does `hash(obj)` do?",
+       "opts": [
+        "Falls back to the identity hash inherited from `object`",
+        "Returns `0` — legal, but it turns every dict into a linked list",
+        "Raises `TypeError`: defining `__eq__` sets `__hash__` to `None`",
+        "Raises `AttributeError`, because the method is missing"
+       ],
+       "a": 2,
+       "why": "Python puts `__hash__ = None` in the class for you when `__eq__` is defined and\n`__hash__` is not, and instances become unhashable — no sets, no dict keys. That looks\nofficious until you see the alternative: the inherited hash is based on identity, so two\nobjects your new `__eq__` calls equal would land in different buckets, and a dict would\ncheerfully hold both. Rather than let that rot quietly, the language breaks loudly. Write\n`__hash__` alongside `__eq__` over the same fields, or accept that the type is not\nhashable — which is the right answer for anything mutable."
+      },
+      {
+       "q": "`Vector2D.__add__` is handed an `int`. What should it return?",
+       "opts": [
+        "`NotImplemented`, so Python can ask the other operand and then raise `TypeError` itself",
+        "`False`, since the addition did not happen",
+        "`None`, which Python reads as a refusal",
+        "It should `raise NotImplementedError`"
+       ],
+       "a": 0,
+       "why": "`NotImplemented` is a singleton meaning *I decline — ask someone else*. Python then tries\n`int.__radd__`, and when that declines too it raises `TypeError: unsupported operand\ntype(s)`, a message naming both types and far better than anything you would have\nwritten. The refusals that are not refusals: `False` makes `v + 5` evaluate to `False`,\n`None` makes it `None`, and `NotImplementedError` is a real exception meant for an\nabstract method a subclass forgot — raising it aborts the reflected-operand machinery and\nreports the wrong problem entirely."
+      },
+      {
+       "q": "A class defines `__repr__` and no `__str__`. What does `print(obj)` show?",
+       "opts": [
+        "`<Vector2D object at 0x7f...>`",
+        "An empty line",
+        "`TypeError`",
+        "Whatever `__repr__` returns — `__str__` falls back to it"
+       ],
+       "a": 3,
+       "why": "`object.__str__` calls `__repr__`, so one good repr covers printing as well. The reverse\ndoes not hold: define only `__str__` and `repr(v)` stays the angle-bracket default —\nwhich is what you will see *inside a list*, because a container displays the reprs of its\nelements and never their strs. That asymmetry is the reason for the usual advice: write\n`__repr__` first, and add `__str__` only when a human-facing form genuinely differs from\nthe programmer-facing one."
+      },
+      {
+       "q": "`2 * v`, where `v` is a `Vector2D`. How does Python reach your code?",
+       "opts": [
+        "It rewrites the expression as `v * 2` and calls `__mul__`",
+        "It asks `int.__mul__(2, v)` first, is told `NotImplemented`, then calls `Vector2D.__rmul__(v, 2)`",
+        "It calls `Vector2D.__mul__(v, 2)` directly, because the operands are different types",
+        "It raises `TypeError` — the left operand decides, and `int` cannot multiply a vector"
+       ],
+       "a": 1,
+       "why": "The left operand is asked first. `int` has no idea what a vector is, returns\n`NotImplemented`, and only then does the right operand get its reflected hook. There is\none documented exception, and it is not this case: when the right operand's type is a\n*proper subclass* of the left's and overrides the reflected method, Python tries the\nsubclass's `__rmul__` before the base's `__mul__`, so a subclass can always override an\noperator it inherited. `int` and `Vector2D` are unrelated types, so the ordinary order\nholds here. Nothing is rewritten either: `__rmul__` is a separate method, and it\nreceives the vector as `self` and the\n`2` as the argument, so the operands arrive swapped. Delegating it straight to `__mul__`\nis right for a scalar, where the product commutes — for matrix multiplication that same\ndelegation would be a bug, and that is the case worth remembering."
+      },
+      {
+       "q": "`__slots__ = ('x', 'y')` is added to a class. What does it actually do?",
+       "opts": [
+        "Makes the instances immutable",
+        "Makes `x` and `y` read-only",
+        "Replaces the per-instance `__dict__` with two fixed descriptors, so any other attribute raises `AttributeError`",
+        "Stops the class being subclassed"
+       ],
+       "a": 2,
+       "why": "Slots trade flexibility for memory and for catching typos: there is no instance\ndictionary, so `v.z = 1` fails where it would silently have worked. What slots do *not*\ndo is stop `v.x = 9` — that is an ordinary write to a slot descriptor, which is exactly\nwhy the lab has to refuse it in `__setattr__` as well. And a subclass that does not\ndeclare `__slots__` of its own quietly gets a `__dict__` back, taking the saving with it."
+      }
+     ]
+    },
+    {
+     "title": "Errors, classes and files",
+     "minutes": 7,
+     "questions": [
+      {
+       "q": "A `try` statement's `else` branch ends with `return value`. What runs before the function actually returns?",
+       "opts": [
+        "Nothing further: a `return` hands back at once and abandons the statement",
+        "The `finally` block, which runs on every way out, `return` included",
+        "The `except` block, which is entered on the way out of any `try`",
+        "Only the caller's next line; the `try` statement is over"
+       ],
+       "a": 1,
+       "why": "`finally` always runs — that is what it is for. Trace the `parse()` example from the\nreading and the `finally:` line prints *after* the `else:` line and *before* the returned\nvalue reaches the caller: the return value is computed, the statement is unwound, the\n`finally` body runs, and only then does the function hand anything back. That is what\nmakes it the place for cleanup, and it is exactly the guarantee `with` is built on. The\ntempting answer is that a `return` ends everything — it ends the *function's* work, but\nnot the `try` statement's obligations. `except` is the answer for a different question: it\nruns only when an exception was raised and matched, so on the successful path it never\nruns at all."
+      },
+      {
+       "q": "Why catch `except ValueError` rather than writing a bare `except:`?",
+       "opts": [
+        "A bare `except:` is a syntax error unless a class is named",
+        "Naming the class is faster: Python can skip the handlers that do not match",
+        "A bare `except:` also swallows the failures you did not predict, `KeyboardInterrupt` among them",
+        "There is no difference in what gets caught — the bare form is a shorthand for `except Exception`"
+       ],
+       "a": 2,
+       "why": "Catch what you can handle, and let everything else surface so you can fix it. A bare\n`except:` matches `BaseException`, so a misspelt attribute, a `NameError` in a branch\nnobody exercised and the Ctrl-C the user pressed all land in a handler written for a bad\nnumber, and each of them is reported as whatever that handler says. The reading's basket\nshows the cost: `except Exception` says the basket could not be totalled, while\n`except KeyError` prints `'prcie'` and puts the typo on the screen. The near-miss worth\nknowing is that a bare `except:` is *not* the same as `except Exception:` — it is wider,\nand the two extra classes it catches are the ones asking the program to stop."
+      },
+      {
+       "q": "`golf.drive(120)` is called on a `Car`. What is `self` bound to inside `drive`?",
+       "opts": [
+        "`Car`, the class in whose body the method was written",
+        "The module the method was defined in",
+        "`golf`, because the dot passes the receiver as the first argument",
+        "Nothing yet — `self` is a convention, bound by the first assignment"
+       ],
+       "a": 2,
+       "why": "`golf.drive(120)` becomes `Car.drive(golf, 120)`, and both spellings run in the reading's\nfirst example with the same result. A method is an ordinary function stored on the class;\nthe dot is what supplies the object in front of it as the first argument. So `self` is one\nparticular car, and `self.km += distance` moves that car's odometer and no other's. The\ntempting answer is the class, because that is where the `def` is written and where\n`wheels = 4` lives — but a class attribute is reached *through* `self` by falling back to\nthe class when the instance has no such name, which is a lookup rule rather than a\nbinding, and module 3 takes it apart."
+      },
+      {
+       "q": "A `with open(path, \"w\")` block writes one line and then raises. What has become of that line?",
+       "opts": [
+        "It was flushed and the file closed on the way out, so it reached the disk",
+        "It is lost: the block did not finish, so the buffer was never written",
+        "It is rolled back: a block that raises undoes the writes it had already made",
+        "It reaches the disk only if the exception is caught outside the block"
+       ],
+       "a": 0,
+       "why": "`with` guarantees cleanup — the same guarantee, and the same reason, as `finally`. On the\nway out of the block, for any reason at all, Python calls the file's `__exit__`, which\nflushes the buffer and closes the handle; the exception then carries on travelling. The\nreading's example proves both halves: the `ValueError` is caught outside, `f.closed` is\n`True`, and reopening the path shows the line. The tempting answer is a rollback, because\na failed database transaction does undo its writes — a file has no such notion, and a\nhalf-written file is a perfectly ordinary outcome. Nor does anything depend on whether the\nexception is caught later: `__exit__` has already run by the time any outer handler sees\nit."
+      },
+      {
+       "q": "What does `json.dumps(data)` do?",
+       "opts": [
+        "Writes `data` to a file, taking the name from the object",
+        "Returns `data` as a JSON string, leaving files to `json.dump`",
+        "Parses a JSON string and returns the object inside it",
+        "Prints `data` to the console, indented so that a human can read it"
+       ],
+       "a": 1,
+       "why": "`dumps` is dump-to-string; `json.dump`, without the `s`, takes an open file as its second\nargument and writes to it. The mirror pair is `loads` for a string and `load` for a file,\nso the `s` is the only thing separating four names that otherwise look interchangeable.\nThe parsing answer is the tempting one, because `dumps` and `loads` are used a line apart\nin most round-trip code and the direction is easy to invert — remember it as *dump out,\nload in*. And `indent=2` only shapes the string that comes back: it is still a `str`, and\nnothing has been printed or saved until you do it."
+      },
+      {
+       "q": "When is `raise ValueError(\"too big\")` the right move?",
+       "opts": [
+        "When a function is handed input it cannot turn into a sensible answer",
+        "When you want a warning recorded without interrupting anything",
+        "When you need to leave a loop early from inside a helper",
+        "When the error should be reported to whoever happens to be watching the console"
+       ],
+       "a": 0,
+       "why": "Refusing loudly beats returning nonsense — the caller can catch it and decide, and cannot\nmistake the refusal for an answer. The reading's `withdraw` that returns `-1` makes the\nalternative concrete: the caller stores the refusal as a balance and the books go out by\n41 kr with nothing on screen to say so. Printing is the tempting answer, and it is the\nsame mistake in a friendlier coat: the function has still returned something, still\nreturned it to code that cannot tell refusal from success, and has now also decided that\nthis program has a console worth printing to. Raising leaves both decisions where they\nbelong — with the caller."
+      }
+     ]
+    }
+   ],
    "blanks": {
     "title": "A value type, hole by hole",
     "minutes": 9,
@@ -261,65 +345,118 @@
    "tune": null,
    "build": null,
    "derive": null,
-   "lab": {
-    "title": "An immutable Vector2D",
-    "runtime": "python",
-    "minutes": 40,
-    "brief": "Build `Vector2D` — a *value* type. Two vectors with the same components are\ninterchangeable, and no vector ever changes after construction.\n\n## Construction and display\n\n`Vector2D(x, y)` stores both components **as floats** in `self.x` and `self.y`.\n\n```text\nrepr(Vector2D(3, 4))  ->  \"Vector2D(3.0, 4.0)\"\n```\n\nThe repr must round-trip: `eval(repr(v)) == v`.\n\n## Value semantics\n\n- `__eq__` — equal when both components are equal. Comparing with anything that\n  is not a `Vector2D` returns `NotImplemented`, so `Vector2D(1, 2) == (1, 2)`\n  is simply `False`.\n- `__hash__` — hash the `(x, y)` pair, so vectors work as set members and dict\n  keys. Defining `__eq__` without `__hash__` makes the class unhashable.\n\n## Arithmetic\n\n- `__add__`, `__sub__` — vector plus/minus vector.\n- `__mul__` and `__rmul__` — vector times a real scalar, on either side.\n- `__neg__` — `-v`.\n- Anything else returns `NotImplemented`, which Python turns into a `TypeError`.\n  So `v + 5` and `v * w` both raise `TypeError`.\n\n## Geometry\n\n- `dot(other)` — the scalar product.\n- `magnitude()` — the Euclidean length. `Vector2D(3, 4).magnitude()` is `5.0`.\n\n## Immutability\n\nAssigning to an attribute must raise `AttributeError`, and so must deleting one:\n\n```text\nv = Vector2D(1, 2)\nv.x = 9        ->  AttributeError\ndel v.y        ->  AttributeError\n```\n\nOverride `__setattr__` and `__delattr__` to refuse — which means `__init__`\ncannot use `self.x = ...` either. Reach past your own guard with\n`object.__setattr__(self, \"x\", float(x))`.",
-    "files": [
-     {
-      "name": "main.py",
-      "content": "import math\n\n\nclass Vector2D:\n    \"\"\"An immutable 2-D vector with value semantics.\"\"\"\n\n    __slots__ = (\"x\", \"y\")\n\n    def __init__(self, x, y):\n        # store both components as floats WITHOUT using self.x = ...\n        pass\n\n    def __setattr__(self, name, value):\n        # refuse every attribute write\n        pass\n\n    def __delattr__(self, name):\n        # refuse every attribute deletion\n        pass\n\n    def __repr__(self):\n        pass\n\n    def __eq__(self, other):\n        pass\n\n    def __hash__(self):\n        pass\n\n    def __add__(self, other):\n        pass\n\n    def __sub__(self, other):\n        pass\n\n    def __mul__(self, scalar):\n        pass\n\n    def __rmul__(self, scalar):\n        pass\n\n    def __neg__(self):\n        pass\n\n    def dot(self, other):\n        \"\"\"The scalar product of two vectors.\"\"\"\n        pass\n\n    def magnitude(self):\n        \"\"\"Euclidean length.\"\"\"\n        pass\n\n\na = Vector2D(3, 4)\nb = Vector2D(-1, 2)\nprint(\"a         =\", repr(a))\nprint(\"a + b     =\", a + b)\nprint(\"2 * a     =\", 2 * a)\nprint(\"a . b     =\", a.dot(b))\nprint(\"|a|       =\", a.magnitude())\n"
-     }
-    ],
-    "main": "main.py",
-    "solution": [
-     {
-      "name": "main.py",
-      "content": "import math\n\n\nclass Vector2D:\n    \"\"\"An immutable 2-D vector with value semantics.\"\"\"\n\n    __slots__ = (\"x\", \"y\")\n\n    def __init__(self, x, y):\n        object.__setattr__(self, \"x\", float(x))\n        object.__setattr__(self, \"y\", float(y))\n\n    def __setattr__(self, name, value):\n        raise AttributeError(\"Vector2D is immutable\")\n\n    def __delattr__(self, name):\n        raise AttributeError(\"Vector2D is immutable\")\n\n    def __repr__(self):\n        return f\"Vector2D({self.x!r}, {self.y!r})\"\n\n    def __eq__(self, other):\n        if not isinstance(other, Vector2D):\n            return NotImplemented\n        return self.x == other.x and self.y == other.y\n\n    def __hash__(self):\n        return hash((self.x, self.y))\n\n    def __add__(self, other):\n        if not isinstance(other, Vector2D):\n            return NotImplemented\n        return Vector2D(self.x + other.x, self.y + other.y)\n\n    def __sub__(self, other):\n        if not isinstance(other, Vector2D):\n            return NotImplemented\n        return Vector2D(self.x - other.x, self.y - other.y)\n\n    def __mul__(self, scalar):\n        if isinstance(scalar, bool) or not isinstance(scalar, (int, float)):\n            return NotImplemented\n        return Vector2D(self.x * scalar, self.y * scalar)\n\n    def __rmul__(self, scalar):\n        return self.__mul__(scalar)\n\n    def __neg__(self):\n        return Vector2D(-self.x, -self.y)\n\n    def dot(self, other):\n        \"\"\"The scalar product of two vectors.\"\"\"\n        return self.x * other.x + self.y * other.y\n\n    def magnitude(self):\n        \"\"\"Euclidean length.\"\"\"\n        return math.hypot(self.x, self.y)\n\n\na = Vector2D(3, 4)\nb = Vector2D(-1, 2)\nprint(\"a         =\", repr(a))\nprint(\"a + b     =\", a + b)\nprint(\"2 * a     =\", 2 * a)\nprint(\"a . b     =\", a.dot(b))\nprint(\"|a|       =\", a.magnitude())\n"
-     }
-    ],
-    "hints": [
-     "`__init__` runs *after* your `__setattr__` guard is installed, so `self.x = x` inside it hits the guard. Use `object.__setattr__(self, \"x\", float(x))`.",
-     "`__repr__` should print the components with `!r`: `f\"Vector2D({self.x!r}, {self.y!r})\"`. Because they are floats, `3` comes back as `3.0`.",
-     "In `__eq__` and `__add__`, `return NotImplemented` (the singleton) for a wrong operand type — do not `raise NotImplementedError`, and do not return `False`.",
-     "`__rmul__` handles `2 * v`. It can simply delegate: `return self.__mul__(scalar)`."
-    ],
-    "tests": [
-     {
-      "name": "Construction, float coercion and repr",
-      "code": "_v = Vector2D(3, 4)\nassert isinstance(_v.x, float) and isinstance(_v.y, float), \\\n    f\"components are {type(_v.x).__name__}/{type(_v.y).__name__}, expected float/float\"\nassert (_v.x, _v.y) == (3.0, 4.0), f\"components are {(_v.x, _v.y)!r}, expected (3.0, 4.0)\"\n_r = repr(_v)\nassert _r == \"Vector2D(3.0, 4.0)\", f\"repr gave {_r!r}, expected 'Vector2D(3.0, 4.0)'\"\nassert eval(_r) == _v, \"repr should round-trip through eval\""
-     },
-     {
-      "name": "Equality is by value, not identity",
-      "code": "assert Vector2D(1, 2) == Vector2D(1.0, 2.0), \"Equal components mean equal vectors\"\nassert Vector2D(1, 2) != Vector2D(1, 3), \"Different components mean different vectors\"\nassert not (Vector2D(1, 2) == (1, 2)), \"A tuple is not a Vector2D — comparison is False, not a crash\"\nassert Vector2D(1, 2) != \"nope\", \"Comparison against unrelated types must not raise\""
-     },
-     {
-      "name": "Hashing agrees with equality",
-      "code": "_s = {Vector2D(1, 2), Vector2D(1, 2), Vector2D(0, 0)}\nassert len(_s) == 2, f\"set of three vectors (two equal) has {len(_s)} members, expected 2\"\n_d = {Vector2D(1, 2): \"here\"}\nassert _d[Vector2D(1, 2)] == \"here\", \"An equal vector should find the same dict entry\"\nassert hash(Vector2D(1, 2)) == hash(Vector2D(1, 2)), \"Equal vectors must hash equally\""
-     },
-     {
-      "name": "Addition, subtraction and negation",
-      "code": "_got = Vector2D(3, 4) + Vector2D(-1, 2)\nassert _got == Vector2D(2, 6), f\"(3,4)+(-1,2) gave {_got!r}, expected Vector2D(2.0, 6.0)\"\n_got = Vector2D(3, 4) - Vector2D(-1, 2)\nassert _got == Vector2D(4, 2), f\"(3,4)-(-1,2) gave {_got!r}, expected Vector2D(4.0, 2.0)\"\nassert -Vector2D(3, -4) == Vector2D(-3, 4), f\"-(3,-4) gave {(-Vector2D(3, -4))!r}\"\n_zero = Vector2D(0, 0)\nassert _zero + _zero == _zero, \"The zero vector is its own identity\""
-     },
-     {
-      "name": "Scalar multiplication on both sides",
-      "code": "assert Vector2D(3, 4) * 2 == Vector2D(6, 8), f\"v*2 gave {(Vector2D(3, 4) * 2)!r}\"\nassert 2 * Vector2D(3, 4) == Vector2D(6, 8), \"2*v needs __rmul__\"\nassert Vector2D(3, 4) * 0.5 == Vector2D(1.5, 2.0), \"Float scalars work too\"\nassert Vector2D(3, 4) * 0 == Vector2D(0, 0), \"Scaling by zero collapses the vector\""
-     },
-     {
-      "name": "Unsupported operands raise TypeError",
-      "code": "for _expr in [\"Vector2D(1, 2) + 5\", \"Vector2D(1, 2) - 'x'\", \"Vector2D(1, 2) * Vector2D(1, 2)\"]:\n    try:\n        eval(_expr)\n        assert False, f\"{_expr} should raise TypeError — return NotImplemented for bad operands\"\n    except TypeError:\n        pass"
-     },
-     {
-      "name": "dot and magnitude",
-      "code": "_got = Vector2D(3, 4).dot(Vector2D(1, 2))\nassert abs(_got - 11.0) < 1e-12, f\"(3,4).dot((1,2)) gave {_got!r}, expected 11.0\"\n_got = Vector2D(3, 4).magnitude()\nassert abs(_got - 5.0) < 1e-12, f\"|(3,4)| gave {_got!r}, expected 5.0\"\nassert Vector2D(0, 0).magnitude() == 0.0, \"The zero vector has zero length\"\nassert abs(Vector2D(1, 1).magnitude() - 2 ** 0.5) < 1e-12, \"|(1,1)| is sqrt(2)\""
-     },
-     {
-      "name": "Instances are immutable",
-      "code": "_v = Vector2D(1, 2)\ntry:\n    _v.x = 9\n    assert False, \"Assigning to v.x should raise AttributeError\"\nexcept AttributeError:\n    pass\ntry:\n    del _v.y\n    assert False, \"Deleting v.y should raise AttributeError\"\nexcept AttributeError:\n    pass\nassert (_v.x, _v.y) == (1.0, 2.0), f\"The vector changed anyway: {_v!r}\""
-     }
-    ]
-   }
+   "lab": [
+    {
+     "title": "An immutable Vector2D",
+     "runtime": "python",
+     "minutes": 40,
+     "brief": "Build `Vector2D` — a *value* type. Two vectors with the same components are\ninterchangeable, and no vector ever changes after construction.\n\n## Construction and display\n\n`Vector2D(x, y)` stores both components **as floats** in `self.x` and `self.y`.\n\n```text\nrepr(Vector2D(3, 4))  ->  \"Vector2D(3.0, 4.0)\"\n```\n\nThe repr must round-trip: `eval(repr(v)) == v`.\n\n## Value semantics\n\n- `__eq__` — equal when both components are equal. Comparing with anything that\n  is not a `Vector2D` returns `NotImplemented`, so `Vector2D(1, 2) == (1, 2)`\n  is simply `False`.\n- `__hash__` — hash the `(x, y)` pair, so vectors work as set members and dict\n  keys. Defining `__eq__` without `__hash__` makes the class unhashable.\n\n## Arithmetic\n\n- `__add__`, `__sub__` — vector plus/minus vector.\n- `__mul__` and `__rmul__` — vector times a real scalar, on either side.\n- `__neg__` — `-v`.\n- Anything else returns `NotImplemented`, which Python turns into a `TypeError`.\n  So `v + 5` and `v * w` both raise `TypeError`.\n\n## Geometry\n\n- `dot(other)` — the scalar product.\n- `magnitude()` — the Euclidean length. `Vector2D(3, 4).magnitude()` is `5.0`.\n\n## Immutability\n\nAssigning to an attribute must raise `AttributeError`, and so must deleting one:\n\n```text\nv = Vector2D(1, 2)\nv.x = 9        ->  AttributeError\ndel v.y        ->  AttributeError\n```\n\nOverride `__setattr__` and `__delattr__` to refuse — which means `__init__`\ncannot use `self.x = ...` either. Reach past your own guard with\n`object.__setattr__(self, \"x\", float(x))`.",
+     "files": [
+      {
+       "name": "main.py",
+       "content": "import math\n\n\nclass Vector2D:\n    \"\"\"An immutable 2-D vector with value semantics.\"\"\"\n\n    __slots__ = (\"x\", \"y\")\n\n    def __init__(self, x, y):\n        # store both components as floats WITHOUT using self.x = ...\n        pass\n\n    def __setattr__(self, name, value):\n        # refuse every attribute write\n        pass\n\n    def __delattr__(self, name):\n        # refuse every attribute deletion\n        pass\n\n    def __repr__(self):\n        pass\n\n    def __eq__(self, other):\n        pass\n\n    def __hash__(self):\n        pass\n\n    def __add__(self, other):\n        pass\n\n    def __sub__(self, other):\n        pass\n\n    def __mul__(self, scalar):\n        pass\n\n    def __rmul__(self, scalar):\n        pass\n\n    def __neg__(self):\n        pass\n\n    def dot(self, other):\n        \"\"\"The scalar product of two vectors.\"\"\"\n        pass\n\n    def magnitude(self):\n        \"\"\"Euclidean length.\"\"\"\n        pass\n\n\na = Vector2D(3, 4)\nb = Vector2D(-1, 2)\nprint(\"a         =\", repr(a))\nprint(\"a + b     =\", a + b)\nprint(\"2 * a     =\", 2 * a)\nprint(\"a . b     =\", a.dot(b))\nprint(\"|a|       =\", a.magnitude())\n"
+      }
+     ],
+     "main": "main.py",
+     "solution": [
+      {
+       "name": "main.py",
+       "content": "import math\n\n\nclass Vector2D:\n    \"\"\"An immutable 2-D vector with value semantics.\"\"\"\n\n    __slots__ = (\"x\", \"y\")\n\n    def __init__(self, x, y):\n        object.__setattr__(self, \"x\", float(x))\n        object.__setattr__(self, \"y\", float(y))\n\n    def __setattr__(self, name, value):\n        raise AttributeError(\"Vector2D is immutable\")\n\n    def __delattr__(self, name):\n        raise AttributeError(\"Vector2D is immutable\")\n\n    def __repr__(self):\n        return f\"Vector2D({self.x!r}, {self.y!r})\"\n\n    def __eq__(self, other):\n        if not isinstance(other, Vector2D):\n            return NotImplemented\n        return self.x == other.x and self.y == other.y\n\n    def __hash__(self):\n        return hash((self.x, self.y))\n\n    def __add__(self, other):\n        if not isinstance(other, Vector2D):\n            return NotImplemented\n        return Vector2D(self.x + other.x, self.y + other.y)\n\n    def __sub__(self, other):\n        if not isinstance(other, Vector2D):\n            return NotImplemented\n        return Vector2D(self.x - other.x, self.y - other.y)\n\n    def __mul__(self, scalar):\n        if isinstance(scalar, bool) or not isinstance(scalar, (int, float)):\n            return NotImplemented\n        return Vector2D(self.x * scalar, self.y * scalar)\n\n    def __rmul__(self, scalar):\n        return self.__mul__(scalar)\n\n    def __neg__(self):\n        return Vector2D(-self.x, -self.y)\n\n    def dot(self, other):\n        \"\"\"The scalar product of two vectors.\"\"\"\n        return self.x * other.x + self.y * other.y\n\n    def magnitude(self):\n        \"\"\"Euclidean length.\"\"\"\n        return math.hypot(self.x, self.y)\n\n\na = Vector2D(3, 4)\nb = Vector2D(-1, 2)\nprint(\"a         =\", repr(a))\nprint(\"a + b     =\", a + b)\nprint(\"2 * a     =\", 2 * a)\nprint(\"a . b     =\", a.dot(b))\nprint(\"|a|       =\", a.magnitude())\n"
+      }
+     ],
+     "hints": [
+      "`__init__` runs *after* your `__setattr__` guard is installed, so `self.x = x` inside it hits the guard. Use `object.__setattr__(self, \"x\", float(x))`.",
+      "`__repr__` should print the components with `!r`: `f\"Vector2D({self.x!r}, {self.y!r})\"`. Because they are floats, `3` comes back as `3.0`.",
+      "In `__eq__` and `__add__`, `return NotImplemented` (the singleton) for a wrong operand type — do not `raise NotImplementedError`, and do not return `False`.",
+      "`__rmul__` handles `2 * v`. It can simply delegate: `return self.__mul__(scalar)`."
+     ],
+     "tests": [
+      {
+       "name": "Construction, float coercion and repr",
+       "code": "_v = Vector2D(3, 4)\nassert isinstance(_v.x, float) and isinstance(_v.y, float), \\\n    f\"components are {type(_v.x).__name__}/{type(_v.y).__name__}, expected float/float\"\nassert (_v.x, _v.y) == (3.0, 4.0), f\"components are {(_v.x, _v.y)!r}, expected (3.0, 4.0)\"\n_r = repr(_v)\nassert _r == \"Vector2D(3.0, 4.0)\", f\"repr gave {_r!r}, expected 'Vector2D(3.0, 4.0)'\"\nassert eval(_r) == _v, \"repr should round-trip through eval\""
+      },
+      {
+       "name": "Equality is by value, not identity",
+       "code": "assert Vector2D(1, 2) == Vector2D(1.0, 2.0), \"Equal components mean equal vectors\"\nassert Vector2D(1, 2) != Vector2D(1, 3), \"Different components mean different vectors\"\nassert not (Vector2D(1, 2) == (1, 2)), \"A tuple is not a Vector2D — comparison is False, not a crash\"\nassert Vector2D(1, 2) != \"nope\", \"Comparison against unrelated types must not raise\""
+      },
+      {
+       "name": "Hashing agrees with equality",
+       "code": "_s = {Vector2D(1, 2), Vector2D(1, 2), Vector2D(0, 0)}\nassert len(_s) == 2, f\"set of three vectors (two equal) has {len(_s)} members, expected 2\"\n_d = {Vector2D(1, 2): \"here\"}\nassert _d[Vector2D(1, 2)] == \"here\", \"An equal vector should find the same dict entry\"\nassert hash(Vector2D(1, 2)) == hash(Vector2D(1, 2)), \"Equal vectors must hash equally\""
+      },
+      {
+       "name": "Addition, subtraction and negation",
+       "code": "_got = Vector2D(3, 4) + Vector2D(-1, 2)\nassert _got == Vector2D(2, 6), f\"(3,4)+(-1,2) gave {_got!r}, expected Vector2D(2.0, 6.0)\"\n_got = Vector2D(3, 4) - Vector2D(-1, 2)\nassert _got == Vector2D(4, 2), f\"(3,4)-(-1,2) gave {_got!r}, expected Vector2D(4.0, 2.0)\"\nassert -Vector2D(3, -4) == Vector2D(-3, 4), f\"-(3,-4) gave {(-Vector2D(3, -4))!r}\"\n_zero = Vector2D(0, 0)\nassert _zero + _zero == _zero, \"The zero vector is its own identity\""
+      },
+      {
+       "name": "Scalar multiplication on both sides",
+       "code": "assert Vector2D(3, 4) * 2 == Vector2D(6, 8), f\"v*2 gave {(Vector2D(3, 4) * 2)!r}\"\nassert 2 * Vector2D(3, 4) == Vector2D(6, 8), \"2*v needs __rmul__\"\nassert Vector2D(3, 4) * 0.5 == Vector2D(1.5, 2.0), \"Float scalars work too\"\nassert Vector2D(3, 4) * 0 == Vector2D(0, 0), \"Scaling by zero collapses the vector\""
+      },
+      {
+       "name": "Unsupported operands raise TypeError",
+       "code": "for _expr in [\"Vector2D(1, 2) + 5\", \"Vector2D(1, 2) - 'x'\", \"Vector2D(1, 2) * Vector2D(1, 2)\"]:\n    try:\n        eval(_expr)\n        assert False, f\"{_expr} should raise TypeError — return NotImplemented for bad operands\"\n    except TypeError:\n        pass"
+      },
+      {
+       "name": "dot and magnitude",
+       "code": "_got = Vector2D(3, 4).dot(Vector2D(1, 2))\nassert abs(_got - 11.0) < 1e-12, f\"(3,4).dot((1,2)) gave {_got!r}, expected 11.0\"\n_got = Vector2D(3, 4).magnitude()\nassert abs(_got - 5.0) < 1e-12, f\"|(3,4)| gave {_got!r}, expected 5.0\"\nassert Vector2D(0, 0).magnitude() == 0.0, \"The zero vector has zero length\"\nassert abs(Vector2D(1, 1).magnitude() - 2 ** 0.5) < 1e-12, \"|(1,1)| is sqrt(2)\""
+      },
+      {
+       "name": "Instances are immutable",
+       "code": "_v = Vector2D(1, 2)\ntry:\n    _v.x = 9\n    assert False, \"Assigning to v.x should raise AttributeError\"\nexcept AttributeError:\n    pass\ntry:\n    del _v.y\n    assert False, \"Deleting v.y should raise AttributeError\"\nexcept AttributeError:\n    pass\nassert (_v.x, _v.y) == (1.0, 2.0), f\"The vector changed anyway: {_v!r}\""
+      }
+     ]
+    },
+    {
+     "title": "A bank account that says no",
+     "runtime": "python",
+     "minutes": 16,
+     "brief": "`Vector2D` refused a *write*. This one refuses a *request*: an account that would\nrather raise than hand back a number nobody can act on.\n\n## `BankAccount(owner, balance=0)`\n\nStores `owner` and `balance` as attributes. `balance` defaults to `0`.\n\n- `deposit(amount)` adds to the balance, and raises `ValueError` if `amount` is\n  zero or negative.\n- `withdraw(amount)` subtracts from the balance, and raises `ValueError` if\n  `amount` is zero or negative, **or** larger than the balance.\n- A refused call must leave the balance exactly where it was. Validate first,\n  then change state — never the other way round.\n- `str(account)` gives the owner, a colon, the balance to two decimals, and ` kr`:\n\n```text\nstr(BankAccount(\"Ada\", 120))  ->  \"Ada: 120.00 kr\"\n```\n\n## `safe_withdraw(account, amount)`\n\nThe boundary function: it tries the withdrawal and answers `True` or `False`\nrather than letting the exception escape.\n\n```text\nsafe_withdraw(acc, 40)    ->  True,  and the balance moves\nsafe_withdraw(acc, 5000)  ->  False, and the balance does not\n```\n\nCatch `ValueError` specifically. A bare `except:` would also swallow the\n`AttributeError` you get from a typo in `account.withdrwa`, and you would spend\nan afternoon looking for a bug the computer had already found.",
+     "files": [
+      {
+       "name": "main.py",
+       "content": "class BankAccount:\n    def __init__(self, owner, balance=0):\n        pass\n\n    def deposit(self, amount):\n        pass\n\n    def withdraw(self, amount):\n        pass\n\n    def __str__(self):\n        pass\n\n\ndef safe_withdraw(account, amount):\n    \"\"\"Return True if the withdrawal succeeded, False if it was refused.\"\"\"\n    pass\n\n\nacc = BankAccount(\"Ada\", 100)\nacc.deposit(50)\nprint(acc)\nprint(safe_withdraw(acc, 500))\n"
+      }
+     ],
+     "main": "main.py",
+     "solution": [
+      {
+       "name": "main.py",
+       "content": "class BankAccount:\n    def __init__(self, owner, balance=0):\n        self.owner = owner\n        self.balance = balance\n\n    def deposit(self, amount):\n        if amount <= 0:\n            raise ValueError(\"Deposit must be positive\")\n        self.balance += amount\n\n    def withdraw(self, amount):\n        if amount <= 0:\n            raise ValueError(\"Withdrawal must be positive\")\n        if amount > self.balance:\n            raise ValueError(\"Insufficient funds\")\n        self.balance -= amount\n\n    def __str__(self):\n        return f\"{self.owner}: {self.balance:.2f} kr\"\n\n\ndef safe_withdraw(account, amount):\n    \"\"\"Return True if the withdrawal succeeded, False if it was refused.\"\"\"\n    try:\n        account.withdraw(amount)\n        return True\n    except ValueError:\n        return False\n\n\nacc = BankAccount(\"Ada\", 100)\nacc.deposit(50)\nprint(acc)\nprint(safe_withdraw(acc, 500))\n"
+      }
+     ],
+     "hints": [
+      "`__init__` only stores what it was given: `self.owner = owner` and `self.balance = balance`.",
+      "Validate before you mutate. `if amount <= 0: raise ValueError(\"...\")` comes first, so a refused call cannot have moved the balance already.",
+      "`__str__` *returns* the string, it does not print it: `return f\"{self.owner}: {self.balance:.2f} kr\"`. The `:.2f` is what turns 120 into `120.00`.",
+      "`safe_withdraw` wraps the call in `try` / `except ValueError` and returns `True` from the try body, `False` from the handler."
+     ],
+     "tests": [
+      {
+       "name": "Stores owner and balance (with default)",
+       "code": "_a = BankAccount(\"Ada\", 100)\nassert _a.owner == \"Ada\" and _a.balance == 100, \"Store owner and balance in __init__\"\nassert BankAccount(\"Bo\").balance == 0, \"balance should default to 0\""
+      },
+      {
+       "name": "Deposits add up",
+       "code": "_a = BankAccount(\"Ada\", 100)\n_a.deposit(50)\nassert _a.balance == 150, f\"After depositing 50 the balance is {_a.balance!r}\""
+      },
+      {
+       "name": "Refuses bad deposits",
+       "code": "_a = BankAccount(\"Ada\", 100)\nfor _bad in (0, -5):\n    try:\n        _a.deposit(_bad)\n        assert False, f\"deposit({_bad}) should raise ValueError\"\n    except ValueError:\n        pass\nassert _a.balance == 100, \"A refused deposit must not change the balance\""
+      },
+      {
+       "name": "Refuses overdrafts and bad withdrawals",
+       "code": "_a = BankAccount(\"Ada\", 100)\nfor _bad in (500, 0, -1):\n    try:\n        _a.withdraw(_bad)\n        assert False, f\"withdraw({_bad}) should raise ValueError\"\n    except ValueError:\n        pass\nassert _a.balance == 100, \"A refused withdrawal must not change the balance\""
+      },
+      {
+       "name": "str() formats the account",
+       "code": "_s = str(BankAccount(\"Ada\", 120))\nassert _s == \"Ada: 120.00 kr\", f\"Got {_s!r}, expected: Ada: 120.00 kr\""
+      },
+      {
+       "name": "safe_withdraw returns True/False",
+       "code": "_a = BankAccount(\"Ada\", 100)\nassert safe_withdraw(_a, 40) is True and _a.balance == 60, \"A valid withdrawal returns True\"\nassert safe_withdraw(_a, 500) is False and _a.balance == 60, \\\n    \"A refused withdrawal returns False and changes nothing\""
+      }
+     ]
+    }
+   ]
   },
   {
    "title": "Inheritance, abstraction and polymorphism",
@@ -1114,65 +1251,181 @@
    "tune": null,
    "build": null,
    "derive": null,
-   "lab": {
-    "title": "A Playlist that behaves like a sequence",
-    "runtime": "python",
-    "minutes": 45,
-    "brief": "Two classes. `Track` is a value; `Playlist` **contains** tracks — it does not\ninherit from `list`.\n\n## `Track(title, artist, seconds)`\n\n- `title` and `artist` must be non-empty strings (stored stripped);\n  `seconds` must be a positive `int`. Anything else is a `ValueError`.\n- `duration` is a **property** formatting the length as `minutes:seconds`\n  with the seconds zero-padded to two digits:\n\n```text\nTrack(\"Blue Train\", \"John Coltrane\", 617).duration  ->  \"10:17\"\nTrack(\"Short\", \"Someone\", 59).duration              ->  \"0:59\"\n```\n\n- `__eq__` compares title and artist case-insensitively; `__hash__` agrees.\n- `__repr__` -> `\"Track('Blue Train', 'John Coltrane', 617)\"`.\n\n## `Playlist(name)`\n\nHolds tracks in insertion order in a private list.\n\n- `add(track)` — appends and returns the playlist, so calls chain.\n- `remove(title)` — drops the first track with that title (case-insensitive);\n  `ValueError` when nothing matches.\n- `__len__`, and `__iter__` yielding tracks in order.\n- `__getitem__` — an `int` gives a `Track` (negative indices included, and an\n  out-of-range index raises `IndexError`); a **slice gives a new `Playlist`**\n  with the same name.\n- `__contains__` — accepts a `Track` *or* a title string (case-insensitive).\n  Anything else is simply `False`, never an exception.\n- `__add__` — concatenation into a new playlist named `\"A + B\"`.\n- `__repr__` -> `\"Playlist('Jazz', 3 tracks)\"`.\n- `total_seconds()`, and `total_duration()` in the same `m:ss` format.\n- `by_artist(artist)` — a new `Playlist` named `artist`, case-insensitive.\n\nNeither class may subclass `list`.",
-    "files": [
-     {
-      "name": "main.py",
-      "content": "class Track:\n    \"\"\"One recording: what it is, who made it, how long it runs.\"\"\"\n\n    def __init__(self, title, artist, seconds):\n        pass\n\n    @property\n    def duration(self):\n        \"\"\"Length as m:ss.\"\"\"\n        pass\n\n    def __eq__(self, other):\n        pass\n\n    def __hash__(self):\n        pass\n\n    def __repr__(self):\n        pass\n\n\nclass Playlist:\n    \"\"\"An ordered collection of tracks. It *has* tracks; it is not a list.\"\"\"\n\n    def __init__(self, name):\n        self.name = name\n        self._tracks = []\n\n    def add(self, track):\n        \"\"\"Append a track and return self.\"\"\"\n        pass\n\n    def remove(self, title):\n        \"\"\"Drop the first track with this title, or raise ValueError.\"\"\"\n        pass\n\n    def __len__(self):\n        pass\n\n    def __iter__(self):\n        pass\n\n    def __getitem__(self, key):\n        pass\n\n    def __contains__(self, item):\n        pass\n\n    def __add__(self, other):\n        pass\n\n    def __repr__(self):\n        pass\n\n    def total_seconds(self):\n        pass\n\n    def total_duration(self):\n        \"\"\"The whole playlist as m:ss.\"\"\"\n        pass\n\n    def by_artist(self, artist):\n        \"\"\"A new Playlist of this artist's tracks.\"\"\"\n        pass\n\n\njazz = Playlist(\"Jazz\")\njazz.add(Track(\"Blue Train\", \"John Coltrane\", 617))\njazz.add(Track(\"So What\", \"Miles Davis\", 545))\njazz.add(Track(\"Take Five\", \"Dave Brubeck\", 324))\n\nprint(jazz, \"runs\", jazz.total_duration())\nfor track in jazz:\n    print(\" \", track.title, track.duration)\nprint(\"Miles in the list?\", \"So What\" in jazz)\n"
-     }
-    ],
-    "main": "main.py",
-    "solution": [
-     {
-      "name": "main.py",
-      "content": "class Track:\n    \"\"\"One recording: what it is, who made it, how long it runs.\"\"\"\n\n    def __init__(self, title, artist, seconds):\n        if not isinstance(title, str) or not title.strip():\n            raise ValueError(\"title must be a non-empty string\")\n        if not isinstance(artist, str) or not artist.strip():\n            raise ValueError(\"artist must be a non-empty string\")\n        if isinstance(seconds, bool) or not isinstance(seconds, int) or seconds <= 0:\n            raise ValueError(\"seconds must be a positive integer\")\n        self.title = title.strip()\n        self.artist = artist.strip()\n        self.seconds = seconds\n\n    @property\n    def duration(self):\n        \"\"\"Length as m:ss.\"\"\"\n        return f\"{self.seconds // 60}:{self.seconds % 60:02d}\"\n\n    def __eq__(self, other):\n        if not isinstance(other, Track):\n            return NotImplemented\n        return (self.title.lower(), self.artist.lower()) == (other.title.lower(), other.artist.lower())\n\n    def __hash__(self):\n        return hash((self.title.lower(), self.artist.lower()))\n\n    def __repr__(self):\n        return f\"Track({self.title!r}, {self.artist!r}, {self.seconds})\"\n\n\nclass Playlist:\n    \"\"\"An ordered collection of tracks. It *has* tracks; it is not a list.\"\"\"\n\n    def __init__(self, name):\n        self.name = name\n        self._tracks = []\n\n    def add(self, track):\n        \"\"\"Append a track and return self.\"\"\"\n        if not isinstance(track, Track):\n            raise TypeError(\"only Track objects can be added\")\n        self._tracks.append(track)\n        return self\n\n    def remove(self, title):\n        \"\"\"Drop the first track with this title, or raise ValueError.\"\"\"\n        wanted = str(title).strip().lower()\n        for index, track in enumerate(self._tracks):\n            if track.title.lower() == wanted:\n                return self._tracks.pop(index)\n        raise ValueError(f\"no track titled {title!r}\")\n\n    def __len__(self):\n        return len(self._tracks)\n\n    def __iter__(self):\n        return iter(self._tracks)\n\n    def __getitem__(self, key):\n        if isinstance(key, slice):\n            sliced = Playlist(self.name)\n            for track in self._tracks[key]:\n                sliced.add(track)\n            return sliced\n        return self._tracks[key]\n\n    def __contains__(self, item):\n        if isinstance(item, Track):\n            return any(track == item for track in self._tracks)\n        if isinstance(item, str):\n            wanted = item.strip().lower()\n            return any(track.title.lower() == wanted for track in self._tracks)\n        return False\n\n    def __add__(self, other):\n        if not isinstance(other, Playlist):\n            return NotImplemented\n        joined = Playlist(f\"{self.name} + {other.name}\")\n        for track in list(self) + list(other):\n            joined.add(track)\n        return joined\n\n    def __repr__(self):\n        return f\"Playlist({self.name!r}, {len(self)} tracks)\"\n\n    def total_seconds(self):\n        return sum(track.seconds for track in self._tracks)\n\n    def total_duration(self):\n        \"\"\"The whole playlist as m:ss.\"\"\"\n        total = self.total_seconds()\n        return f\"{total // 60}:{total % 60:02d}\"\n\n    def by_artist(self, artist):\n        \"\"\"A new Playlist of this artist's tracks.\"\"\"\n        wanted = str(artist).strip().lower()\n        found = Playlist(artist)\n        for track in self._tracks:\n            if track.artist.lower() == wanted:\n                found.add(track)\n        return found\n\n\njazz = Playlist(\"Jazz\")\njazz.add(Track(\"Blue Train\", \"John Coltrane\", 617))\njazz.add(Track(\"So What\", \"Miles Davis\", 545))\njazz.add(Track(\"Take Five\", \"Dave Brubeck\", 324))\n\nprint(jazz, \"runs\", jazz.total_duration())\nfor track in jazz:\n    print(\" \", track.title, track.duration)\nprint(\"Miles in the list?\", \"So What\" in jazz)\n"
-     }
-    ],
-    "hints": [
-     "`duration` formats with two pieces: `f\"{self.seconds // 60}:{self.seconds % 60:02d}\"`. The `02d` is what turns 5 into `05`.",
-     "`__iter__` needs an iterator, not a list: `return iter(self._tracks)`. Returning the list itself makes `iter(playlist)` fail.",
-     "In `__getitem__`, test `isinstance(key, slice)` first. `self._tracks[key]` already handles negative indices and raises `IndexError` for you.",
-     "`__contains__` gets whatever the user wrote after `in`. Branch on `isinstance(item, Track)` and `isinstance(item, str)`, and return `False` for everything else rather than raising."
-    ],
-    "tests": [
-     {
-      "name": "Track validation and duration",
-      "code": "_t = Track(\"  Blue Train \", \" John Coltrane \", 617)\nassert _t.title == \"Blue Train\", f\"title is {_t.title!r}, expected 'Blue Train'\"\nassert _t.artist == \"John Coltrane\", f\"artist is {_t.artist!r}\"\nassert _t.duration == \"10:17\", f\"duration is {_t.duration!r}, expected '10:17'\"\nassert Track(\"Short\", \"Someone\", 59).duration == \"0:59\", \"seconds are padded to two digits\"\nassert Track(\"Long\", \"Someone\", 3600).duration == \"60:00\", \"minutes are not wrapped at 60\"\nassert repr(_t) == \"Track('Blue Train', 'John Coltrane', 617)\", f\"repr gave {repr(_t)!r}\""
-     },
-     {
-      "name": "Track rejects bad input",
-      "code": "for _bad in [(\"\", \"A\", 10), (\"  \", \"A\", 10), (\"T\", \"\", 10), (\"T\", \"A\", 0),\n             (\"T\", \"A\", -5), (\"T\", \"A\", 10.5), (\"T\", \"A\", \"10\"), (None, \"A\", 10)]:\n    try:\n        Track(*_bad)\n        assert False, f\"Track{_bad!r} should raise ValueError\"\n    except ValueError:\n        pass"
-     },
-     {
-      "name": "Track equality is by title and artist",
-      "code": "assert Track(\"So What\", \"Miles Davis\", 545) == Track(\"so what\", \"MILES DAVIS\", 999), \\\n    \"equality is case-insensitive on title and artist, and ignores length\"\nassert Track(\"So What\", \"Miles Davis\", 545) != Track(\"So What\", \"Bill Evans\", 545), \\\n    \"a different artist is a different track\"\nassert not (Track(\"A\", \"B\", 10) == \"A\"), \"comparison with a string must be False, not a crash\"\nassert len({Track(\"A\", \"B\", 10), Track(\"a\", \"b\", 20)}) == 1, \"equal tracks must hash equally\""
-     },
-     {
-      "name": "len, iteration and indexing",
-      "code": "_p = Playlist(\"Jazz\")\nassert len(_p) == 0, f\"a new playlist has len {len(_p)}, expected 0\"\nassert not _p, \"an empty playlist should be falsy — that comes free with __len__\"\n_t1 = Track(\"Blue Train\", \"John Coltrane\", 617)\n_t2 = Track(\"So What\", \"Miles Davis\", 545)\n_t3 = Track(\"Take Five\", \"Dave Brubeck\", 324)\nassert _p.add(_t1) is _p, \"add should return the playlist so calls chain\"\n_p.add(_t2).add(_t3)\nassert len(_p) == 3, f\"len is {len(_p)}, expected 3\"\nassert [t.title for t in _p] == [\"Blue Train\", \"So What\", \"Take Five\"], \\\n    f\"iteration gave {[t.title for t in _p]!r}\"\nassert _p[0] is _t1 and _p[-1] is _t3, \"int indexing should reach the underlying tracks\"\ntry:\n    _p[99]\n    assert False, \"an out-of-range index should raise IndexError\"\nexcept IndexError:\n    pass"
-     },
-     {
-      "name": "Slicing returns a Playlist",
-      "code": "_s = _p[0:2]\nassert isinstance(_s, Playlist), f\"a slice gave {type(_s).__name__}, expected Playlist\"\nassert len(_s) == 2 and _s.name == \"Jazz\", f\"the slice is {_s!r}\"\nassert [t.title for t in _s] == [\"Blue Train\", \"So What\"], f\"slice holds {[t.title for t in _s]!r}\"\nassert len(_p) == 3, \"slicing must not disturb the original\"\nassert len(_p[10:20]) == 0, \"an empty slice gives an empty playlist, not an error\""
-     },
-     {
-      "name": "Membership accepts a Track or a title",
-      "code": "assert \"blue train\" in _p, \"a title string should be found, case-insensitively\"\nassert Track(\"So What\", \"Miles Davis\", 1) in _p, \"an equal Track should be found\"\nassert \"Nothing Here\" not in _p, \"an unknown title is not a member\"\nassert 42 not in _p, \"a nonsense operand should be False, not an exception\"\nassert Track(\"Ghost\", \"Nobody\", 10) not in _p, \"an unrelated track is not a member\""
-     },
-     {
-      "name": "Totals, filtering and concatenation",
-      "code": "assert _p.total_seconds() == 1486, f\"total_seconds gave {_p.total_seconds()!r}, expected 1486\"\nassert _p.total_duration() == \"24:46\", f\"total_duration gave {_p.total_duration()!r}, expected '24:46'\"\nassert Playlist(\"Empty\").total_duration() == \"0:00\", \"an empty playlist runs 0:00\"\n_miles = _p.by_artist(\"miles davis\")\nassert isinstance(_miles, Playlist) and len(_miles) == 1, f\"by_artist gave {_miles!r}\"\nassert _miles[0].title == \"So What\", f\"by_artist picked {_miles[0]!r}\"\nassert len(_p.by_artist(\"Nobody\")) == 0, \"an unknown artist gives an empty playlist\"\n_other = Playlist(\"Blues\").add(Track(\"Stormy Monday\", \"T-Bone Walker\", 400))\n_both = _p + _other\nassert len(_both) == 4 and _both.name == \"Jazz + Blues\", f\"concatenation gave {_both!r}\"\nassert len(_p) == 3 and len(_other) == 1, \"__add__ must not mutate its operands\""
-     },
-     {
-      "name": "remove, and composition over inheritance",
-      "code": "_q = Playlist(\"Copy\")\nfor _t in _p:\n    _q.add(_t)\n_gone = _q.remove(\"SO WHAT\")\nassert _gone.title == \"So What\", f\"remove returned {_gone!r}\"\nassert len(_q) == 2 and \"So What\" not in _q, f\"after removal the playlist is {list(_q)!r}\"\ntry:\n    _q.remove(\"Not There\")\n    assert False, \"removing an absent title should raise ValueError\"\nexcept ValueError:\n    pass\nassert not issubclass(Playlist, list), \"Playlist must contain a list, not inherit from one\"\nassert repr(_q) == \"Playlist('Copy', 2 tracks)\", f\"repr gave {repr(_q)!r}\""
-     }
-    ]
-   }
+   "lab": [
+    {
+     "title": "A Playlist that behaves like a sequence",
+     "runtime": "python",
+     "minutes": 45,
+     "brief": "Two classes. `Track` is a value; `Playlist` **contains** tracks — it does not\ninherit from `list`.\n\n## `Track(title, artist, seconds)`\n\n- `title` and `artist` must be non-empty strings (stored stripped);\n  `seconds` must be a positive `int`. Anything else is a `ValueError`.\n- `duration` is a **property** formatting the length as `minutes:seconds`\n  with the seconds zero-padded to two digits:\n\n```text\nTrack(\"Blue Train\", \"John Coltrane\", 617).duration  ->  \"10:17\"\nTrack(\"Short\", \"Someone\", 59).duration              ->  \"0:59\"\n```\n\n- `__eq__` compares title and artist case-insensitively; `__hash__` agrees.\n- `__repr__` -> `\"Track('Blue Train', 'John Coltrane', 617)\"`.\n\n## `Playlist(name)`\n\nHolds tracks in insertion order in a private list.\n\n- `add(track)` — appends and returns the playlist, so calls chain.\n- `remove(title)` — drops the first track with that title (case-insensitive);\n  `ValueError` when nothing matches.\n- `__len__`, and `__iter__` yielding tracks in order.\n- `__getitem__` — an `int` gives a `Track` (negative indices included, and an\n  out-of-range index raises `IndexError`); a **slice gives a new `Playlist`**\n  with the same name.\n- `__contains__` — accepts a `Track` *or* a title string (case-insensitive).\n  Anything else is simply `False`, never an exception.\n- `__add__` — concatenation into a new playlist named `\"A + B\"`.\n- `__repr__` -> `\"Playlist('Jazz', 3 tracks)\"`.\n- `total_seconds()`, and `total_duration()` in the same `m:ss` format.\n- `by_artist(artist)` — a new `Playlist` named `artist`, case-insensitive.\n\nNeither class may subclass `list`.",
+     "files": [
+      {
+       "name": "main.py",
+       "content": "class Track:\n    \"\"\"One recording: what it is, who made it, how long it runs.\"\"\"\n\n    def __init__(self, title, artist, seconds):\n        pass\n\n    @property\n    def duration(self):\n        \"\"\"Length as m:ss.\"\"\"\n        pass\n\n    def __eq__(self, other):\n        pass\n\n    def __hash__(self):\n        pass\n\n    def __repr__(self):\n        pass\n\n\nclass Playlist:\n    \"\"\"An ordered collection of tracks. It *has* tracks; it is not a list.\"\"\"\n\n    def __init__(self, name):\n        self.name = name\n        self._tracks = []\n\n    def add(self, track):\n        \"\"\"Append a track and return self.\"\"\"\n        pass\n\n    def remove(self, title):\n        \"\"\"Drop the first track with this title, or raise ValueError.\"\"\"\n        pass\n\n    def __len__(self):\n        pass\n\n    def __iter__(self):\n        pass\n\n    def __getitem__(self, key):\n        pass\n\n    def __contains__(self, item):\n        pass\n\n    def __add__(self, other):\n        pass\n\n    def __repr__(self):\n        pass\n\n    def total_seconds(self):\n        pass\n\n    def total_duration(self):\n        \"\"\"The whole playlist as m:ss.\"\"\"\n        pass\n\n    def by_artist(self, artist):\n        \"\"\"A new Playlist of this artist's tracks.\"\"\"\n        pass\n\n\njazz = Playlist(\"Jazz\")\njazz.add(Track(\"Blue Train\", \"John Coltrane\", 617))\njazz.add(Track(\"So What\", \"Miles Davis\", 545))\njazz.add(Track(\"Take Five\", \"Dave Brubeck\", 324))\n\nprint(jazz, \"runs\", jazz.total_duration())\nfor track in jazz:\n    print(\" \", track.title, track.duration)\nprint(\"Miles in the list?\", \"So What\" in jazz)\n"
+      }
+     ],
+     "main": "main.py",
+     "solution": [
+      {
+       "name": "main.py",
+       "content": "class Track:\n    \"\"\"One recording: what it is, who made it, how long it runs.\"\"\"\n\n    def __init__(self, title, artist, seconds):\n        if not isinstance(title, str) or not title.strip():\n            raise ValueError(\"title must be a non-empty string\")\n        if not isinstance(artist, str) or not artist.strip():\n            raise ValueError(\"artist must be a non-empty string\")\n        if isinstance(seconds, bool) or not isinstance(seconds, int) or seconds <= 0:\n            raise ValueError(\"seconds must be a positive integer\")\n        self.title = title.strip()\n        self.artist = artist.strip()\n        self.seconds = seconds\n\n    @property\n    def duration(self):\n        \"\"\"Length as m:ss.\"\"\"\n        return f\"{self.seconds // 60}:{self.seconds % 60:02d}\"\n\n    def __eq__(self, other):\n        if not isinstance(other, Track):\n            return NotImplemented\n        return (self.title.lower(), self.artist.lower()) == (other.title.lower(), other.artist.lower())\n\n    def __hash__(self):\n        return hash((self.title.lower(), self.artist.lower()))\n\n    def __repr__(self):\n        return f\"Track({self.title!r}, {self.artist!r}, {self.seconds})\"\n\n\nclass Playlist:\n    \"\"\"An ordered collection of tracks. It *has* tracks; it is not a list.\"\"\"\n\n    def __init__(self, name):\n        self.name = name\n        self._tracks = []\n\n    def add(self, track):\n        \"\"\"Append a track and return self.\"\"\"\n        if not isinstance(track, Track):\n            raise TypeError(\"only Track objects can be added\")\n        self._tracks.append(track)\n        return self\n\n    def remove(self, title):\n        \"\"\"Drop the first track with this title, or raise ValueError.\"\"\"\n        wanted = str(title).strip().lower()\n        for index, track in enumerate(self._tracks):\n            if track.title.lower() == wanted:\n                return self._tracks.pop(index)\n        raise ValueError(f\"no track titled {title!r}\")\n\n    def __len__(self):\n        return len(self._tracks)\n\n    def __iter__(self):\n        return iter(self._tracks)\n\n    def __getitem__(self, key):\n        if isinstance(key, slice):\n            sliced = Playlist(self.name)\n            for track in self._tracks[key]:\n                sliced.add(track)\n            return sliced\n        return self._tracks[key]\n\n    def __contains__(self, item):\n        if isinstance(item, Track):\n            return any(track == item for track in self._tracks)\n        if isinstance(item, str):\n            wanted = item.strip().lower()\n            return any(track.title.lower() == wanted for track in self._tracks)\n        return False\n\n    def __add__(self, other):\n        if not isinstance(other, Playlist):\n            return NotImplemented\n        joined = Playlist(f\"{self.name} + {other.name}\")\n        for track in list(self) + list(other):\n            joined.add(track)\n        return joined\n\n    def __repr__(self):\n        return f\"Playlist({self.name!r}, {len(self)} tracks)\"\n\n    def total_seconds(self):\n        return sum(track.seconds for track in self._tracks)\n\n    def total_duration(self):\n        \"\"\"The whole playlist as m:ss.\"\"\"\n        total = self.total_seconds()\n        return f\"{total // 60}:{total % 60:02d}\"\n\n    def by_artist(self, artist):\n        \"\"\"A new Playlist of this artist's tracks.\"\"\"\n        wanted = str(artist).strip().lower()\n        found = Playlist(artist)\n        for track in self._tracks:\n            if track.artist.lower() == wanted:\n                found.add(track)\n        return found\n\n\njazz = Playlist(\"Jazz\")\njazz.add(Track(\"Blue Train\", \"John Coltrane\", 617))\njazz.add(Track(\"So What\", \"Miles Davis\", 545))\njazz.add(Track(\"Take Five\", \"Dave Brubeck\", 324))\n\nprint(jazz, \"runs\", jazz.total_duration())\nfor track in jazz:\n    print(\" \", track.title, track.duration)\nprint(\"Miles in the list?\", \"So What\" in jazz)\n"
+      }
+     ],
+     "hints": [
+      "`duration` formats with two pieces: `f\"{self.seconds // 60}:{self.seconds % 60:02d}\"`. The `02d` is what turns 5 into `05`.",
+      "`__iter__` needs an iterator, not a list: `return iter(self._tracks)`. Returning the list itself makes `iter(playlist)` fail.",
+      "In `__getitem__`, test `isinstance(key, slice)` first. `self._tracks[key]` already handles negative indices and raises `IndexError` for you.",
+      "`__contains__` gets whatever the user wrote after `in`. Branch on `isinstance(item, Track)` and `isinstance(item, str)`, and return `False` for everything else rather than raising."
+     ],
+     "tests": [
+      {
+       "name": "Track validation and duration",
+       "code": "_t = Track(\"  Blue Train \", \" John Coltrane \", 617)\nassert _t.title == \"Blue Train\", f\"title is {_t.title!r}, expected 'Blue Train'\"\nassert _t.artist == \"John Coltrane\", f\"artist is {_t.artist!r}\"\nassert _t.duration == \"10:17\", f\"duration is {_t.duration!r}, expected '10:17'\"\nassert Track(\"Short\", \"Someone\", 59).duration == \"0:59\", \"seconds are padded to two digits\"\nassert Track(\"Long\", \"Someone\", 3600).duration == \"60:00\", \"minutes are not wrapped at 60\"\nassert repr(_t) == \"Track('Blue Train', 'John Coltrane', 617)\", f\"repr gave {repr(_t)!r}\""
+      },
+      {
+       "name": "Track rejects bad input",
+       "code": "for _bad in [(\"\", \"A\", 10), (\"  \", \"A\", 10), (\"T\", \"\", 10), (\"T\", \"A\", 0),\n             (\"T\", \"A\", -5), (\"T\", \"A\", 10.5), (\"T\", \"A\", \"10\"), (None, \"A\", 10)]:\n    try:\n        Track(*_bad)\n        assert False, f\"Track{_bad!r} should raise ValueError\"\n    except ValueError:\n        pass"
+      },
+      {
+       "name": "Track equality is by title and artist",
+       "code": "assert Track(\"So What\", \"Miles Davis\", 545) == Track(\"so what\", \"MILES DAVIS\", 999), \\\n    \"equality is case-insensitive on title and artist, and ignores length\"\nassert Track(\"So What\", \"Miles Davis\", 545) != Track(\"So What\", \"Bill Evans\", 545), \\\n    \"a different artist is a different track\"\nassert not (Track(\"A\", \"B\", 10) == \"A\"), \"comparison with a string must be False, not a crash\"\nassert len({Track(\"A\", \"B\", 10), Track(\"a\", \"b\", 20)}) == 1, \"equal tracks must hash equally\""
+      },
+      {
+       "name": "len, iteration and indexing",
+       "code": "_p = Playlist(\"Jazz\")\nassert len(_p) == 0, f\"a new playlist has len {len(_p)}, expected 0\"\nassert not _p, \"an empty playlist should be falsy — that comes free with __len__\"\n_t1 = Track(\"Blue Train\", \"John Coltrane\", 617)\n_t2 = Track(\"So What\", \"Miles Davis\", 545)\n_t3 = Track(\"Take Five\", \"Dave Brubeck\", 324)\nassert _p.add(_t1) is _p, \"add should return the playlist so calls chain\"\n_p.add(_t2).add(_t3)\nassert len(_p) == 3, f\"len is {len(_p)}, expected 3\"\nassert [t.title for t in _p] == [\"Blue Train\", \"So What\", \"Take Five\"], \\\n    f\"iteration gave {[t.title for t in _p]!r}\"\nassert _p[0] is _t1 and _p[-1] is _t3, \"int indexing should reach the underlying tracks\"\ntry:\n    _p[99]\n    assert False, \"an out-of-range index should raise IndexError\"\nexcept IndexError:\n    pass"
+      },
+      {
+       "name": "Slicing returns a Playlist",
+       "code": "_s = _p[0:2]\nassert isinstance(_s, Playlist), f\"a slice gave {type(_s).__name__}, expected Playlist\"\nassert len(_s) == 2 and _s.name == \"Jazz\", f\"the slice is {_s!r}\"\nassert [t.title for t in _s] == [\"Blue Train\", \"So What\"], f\"slice holds {[t.title for t in _s]!r}\"\nassert len(_p) == 3, \"slicing must not disturb the original\"\nassert len(_p[10:20]) == 0, \"an empty slice gives an empty playlist, not an error\""
+      },
+      {
+       "name": "Membership accepts a Track or a title",
+       "code": "assert \"blue train\" in _p, \"a title string should be found, case-insensitively\"\nassert Track(\"So What\", \"Miles Davis\", 1) in _p, \"an equal Track should be found\"\nassert \"Nothing Here\" not in _p, \"an unknown title is not a member\"\nassert 42 not in _p, \"a nonsense operand should be False, not an exception\"\nassert Track(\"Ghost\", \"Nobody\", 10) not in _p, \"an unrelated track is not a member\""
+      },
+      {
+       "name": "Totals, filtering and concatenation",
+       "code": "assert _p.total_seconds() == 1486, f\"total_seconds gave {_p.total_seconds()!r}, expected 1486\"\nassert _p.total_duration() == \"24:46\", f\"total_duration gave {_p.total_duration()!r}, expected '24:46'\"\nassert Playlist(\"Empty\").total_duration() == \"0:00\", \"an empty playlist runs 0:00\"\n_miles = _p.by_artist(\"miles davis\")\nassert isinstance(_miles, Playlist) and len(_miles) == 1, f\"by_artist gave {_miles!r}\"\nassert _miles[0].title == \"So What\", f\"by_artist picked {_miles[0]!r}\"\nassert len(_p.by_artist(\"Nobody\")) == 0, \"an unknown artist gives an empty playlist\"\n_other = Playlist(\"Blues\").add(Track(\"Stormy Monday\", \"T-Bone Walker\", 400))\n_both = _p + _other\nassert len(_both) == 4 and _both.name == \"Jazz + Blues\", f\"concatenation gave {_both!r}\"\nassert len(_p) == 3 and len(_other) == 1, \"__add__ must not mutate its operands\""
+      },
+      {
+       "name": "remove, and composition over inheritance",
+       "code": "_q = Playlist(\"Copy\")\nfor _t in _p:\n    _q.add(_t)\n_gone = _q.remove(\"SO WHAT\")\nassert _gone.title == \"So What\", f\"remove returned {_gone!r}\"\nassert len(_q) == 2 and \"So What\" not in _q, f\"after removal the playlist is {list(_q)!r}\"\ntry:\n    _q.remove(\"Not There\")\n    assert False, \"removing an absent title should raise ValueError\"\nexcept ValueError:\n    pass\nassert not issubclass(Playlist, list), \"Playlist must contain a list, not inherit from one\"\nassert repr(_q) == \"Playlist('Copy', 2 tracks)\", f\"repr gave {repr(_q)!r}\""
+      }
+     ]
+    },
+    {
+     "title": "Save and load with JSON",
+     "runtime": "python",
+     "minutes": 12,
+     "brief": "A `Playlist` that vanishes when the program ends is a demonstration, not a\nprogram. Persistence is the last piece, and for a dictionary of plain values it\nis two functions.\n\n## What to write\n\n**`save_scores(path, scores)`** writes the dictionary to the file at `path` as\nJSON.\n\n**`load_scores(path)`** reads that file and returns the dictionary. If the file\ndoes not exist, it returns an empty dictionary rather than crashing.\n\n```text\nsave_scores(\"scores.json\", {\"ada\": 90})\nload_scores(\"scores.json\")     ->  {\"ada\": 90}\nload_scores(\"nope.json\")       ->  {}\n```\n\n## The two decisions\n\nUse `json.dump` / `json.load` — the pair without the `s`, which take a *file\nobject* — inside a `with` block, so the file is closed whether the write\nfinishes or raises halfway through.\n\nThe missing file is the interesting half. Asking `os.path.exists(path)` first is\nthe wrong shape: the answer can be stale by the line after you get it, and it\ndoes not help when the path exists but cannot be opened. Try the open and handle\nthe failure — `except FileNotFoundError`, not a bare `except:`, so a permission\nerror or a corrupt file still reaches you instead of being reported as \"no\nscores yet\".",
+     "files": [
+      {
+       "name": "main.py",
+       "content": "import json\n\n\ndef save_scores(path, scores):\n    \"\"\"Write the scores dict to path as JSON.\"\"\"\n    pass\n\n\ndef load_scores(path):\n    \"\"\"Read scores from path. Missing file -> {}.\"\"\"\n    pass\n\n\nsave_scores(\"scores.json\", {\"ada\": 90, \"linus\": 75})\nprint(load_scores(\"scores.json\"))\nprint(load_scores(\"does-not-exist.json\"))\n"
+      }
+     ],
+     "main": "main.py",
+     "solution": [
+      {
+       "name": "main.py",
+       "content": "import json\n\n\ndef save_scores(path, scores):\n    \"\"\"Write the scores dict to path as JSON.\"\"\"\n    with open(path, \"w\") as f:\n        json.dump(scores, f)\n\n\ndef load_scores(path):\n    \"\"\"Read scores from path. Missing file -> {}.\"\"\"\n    try:\n        with open(path) as f:\n            return json.load(f)\n    except FileNotFoundError:\n        return {}\n\n\nsave_scores(\"scores.json\", {\"ada\": 90, \"linus\": 75})\nprint(load_scores(\"scores.json\"))\nprint(load_scores(\"does-not-exist.json\"))\n"
+      }
+     ],
+     "hints": [
+      "Writing is one line inside a `with`: `with open(path, \"w\") as f: json.dump(scores, f)`. The `\"w\"` mode creates the file, or truncates it if it is already there.",
+      "`json.dump` takes the object *and* the file; `json.dumps` takes only the object and hands back a string. Passing the file to `dumps` is a `TypeError`.",
+      "Reading is `json.load(f)` — and the whole `with` goes inside `try` / `except FileNotFoundError`, whose handler returns `{}`."
+     ],
+     "tests": [
+      {
+       "name": "Round-trips a dict",
+       "code": "save_scores(\"t1.json\", {\"ada\": 90, \"linus\": 75})\nassert load_scores(\"t1.json\") == {\"ada\": 90, \"linus\": 75}, \\\n    \"load_scores should return exactly what save_scores wrote\""
+      },
+      {
+       "name": "Writes real JSON",
+       "code": "import json as _json\nsave_scores(\"t2.json\", {\"x\": 1})\nwith open(\"t2.json\") as _f:\n    assert _json.load(_f) == {\"x\": 1}, \"The file should contain plain JSON\""
+      },
+      {
+       "name": "Missing file gives {}",
+       "code": "assert load_scores(\"definitely-missing-42.json\") == {}, \\\n    \"A missing file should give {} — catch FileNotFoundError\""
+      },
+      {
+       "name": "Numbers stay numbers",
+       "code": "save_scores(\"t3.json\", {\"a\": 1})\n_v = load_scores(\"t3.json\")[\"a\"]\nassert _v == 1 and isinstance(_v, int), \"JSON keeps ints as ints — no str() conversions needed\""
+      },
+      {
+       "name": "A real error still gets through",
+       "code": "with open(\"t4.json\", \"w\") as _f:\n    _f.write(\"{not json at all\")\ntry:\n    load_scores(\"t4.json\")\n    assert False, \"A corrupt file is not a missing file — it must not be swallowed\"\nexcept FileNotFoundError:\n    assert False, \"A corrupt file raises JSONDecodeError, not FileNotFoundError\"\nexcept ValueError:\n    pass"
+      }
+     ]
+    },
+    {
+     "title": "Project: inventory manager",
+     "runtime": "python",
+     "minutes": 45,
+     "brief": "Everything in the course so far, in one program: a small inventory system split\nacross two files. `inventory.py` holds the logic; `main.py` is a demo script that\nuses it. The checks import from `inventory.py`, so that is where the classes go.\n\n## `Item(name, price, quantity)`\n\nA class with those three attributes and nothing else. It is a value the\n`Inventory` holds — composition, not inheritance.\n\n## `Inventory()`\n\nThe container. It keeps its items in `self.items`, a dict from name to `Item`,\nand every method below is a few lines once that shape is in place.\n\n- `add(item)` — adds the item. If an item of that name is already there,\n  increase its quantity instead of storing a duplicate.\n- `remove(name, quantity)` — reduces that item's quantity. Raise `KeyError` for\n  an unknown name and `ValueError` when there is not enough stock; a refused\n  call must change nothing. When the quantity reaches 0, drop the item entirely.\n- `find(query)` — case-insensitive substring search on the name, returning a\n  list of items sorted by name.\n- `total_value()` — the sum of `price * quantity` over every item.\n- `low_stock(threshold=5)` — the items with `quantity < threshold`, sorted by\n  name.\n- `save(path)` — writes every item to a JSON file.\n- `Inventory.load(path)` — a **`@classmethod`** returning a new `Inventory` read\n  from that file. `cls()` rather than `Inventory()`, so a subclass loads as\n  itself.\n- `report()` — a multi-line string, one line per item sorted by name, and a last\n  line containing `Total:` and the total value.\n\n## Suggested order\n\nGet `Item`, `add` and `find` working first, then `remove`, then the two\ncalculations, then `save` / `load`, then `report`. The checks are ordered the\nsame way, so run them after every step and read the first failure.\n\nTwo things worth noticing as you go. An `Item` is not JSON, so `save` has to\nturn each one into a plain dict and `load` has to turn it back — the same\n`to_dict` / `from_dict` pair the capstone needs. And `add` already merges by\nname, which means `load` gets the merging for free by calling `add` per row\nrather than writing to `self.items` itself.",
+     "files": [
+      {
+       "name": "inventory.py",
+       "content": "import json\n\n\nclass Item:\n    def __init__(self, name, price, quantity):\n        pass\n\n\nclass Inventory:\n    def __init__(self):\n        self.items = {}   # name -> Item\n\n    def add(self, item):\n        pass\n\n    def remove(self, name, quantity):\n        pass\n\n    def find(self, query):\n        pass\n\n    def total_value(self):\n        pass\n\n    def low_stock(self, threshold=5):\n        pass\n\n    def save(self, path):\n        pass\n\n    @classmethod\n    def load(cls, path):\n        pass\n\n    def report(self):\n        pass\n"
+      },
+      {
+       "name": "main.py",
+       "content": "from inventory import Inventory, Item\n\ninv = Inventory()\ninv.add(Item(\"Wiper blades\", 120.0, 8))\ninv.add(Item(\"Jack\", 899.0, 2))\ninv.add(Item(\"Torch\", 249.0, 4))\n\nprint(inv.report())\n"
+      }
+     ],
+     "main": "main.py",
+     "solution": [
+      {
+       "name": "inventory.py",
+       "content": "import json\n\n\nclass Item:\n    def __init__(self, name, price, quantity):\n        self.name = name\n        self.price = price\n        self.quantity = quantity\n\n\nclass Inventory:\n    def __init__(self):\n        self.items = {}   # name -> Item\n\n    def add(self, item):\n        existing = self.items.get(item.name)\n        if existing:\n            existing.quantity += item.quantity\n        else:\n            self.items[item.name] = item\n\n    def remove(self, name, quantity):\n        if name not in self.items:\n            raise KeyError(name)\n        item = self.items[name]\n        if quantity > item.quantity:\n            raise ValueError(f\"Only {item.quantity} {name} in stock\")\n        item.quantity -= quantity\n        if item.quantity == 0:\n            del self.items[name]\n\n    def find(self, query):\n        q = query.lower()\n        hits = [item for item in self.items.values() if q in item.name.lower()]\n        return sorted(hits, key=lambda item: item.name)\n\n    def total_value(self):\n        return sum(item.price * item.quantity for item in self.items.values())\n\n    def low_stock(self, threshold=5):\n        hits = [item for item in self.items.values() if item.quantity < threshold]\n        return sorted(hits, key=lambda item: item.name)\n\n    def save(self, path):\n        data = [\n            {\"name\": i.name, \"price\": i.price, \"quantity\": i.quantity}\n            for i in self.items.values()\n        ]\n        with open(path, \"w\") as f:\n            json.dump(data, f)\n\n    @classmethod\n    def load(cls, path):\n        inv = cls()\n        with open(path) as f:\n            for row in json.load(f):\n                inv.add(Item(row[\"name\"], row[\"price\"], row[\"quantity\"]))\n        return inv\n\n    def report(self):\n        lines = [f\"{'Item':<20}{'Qty':>5}{'Price':>10}\"]\n        for item in sorted(self.items.values(), key=lambda i: i.name):\n            lines.append(f\"{item.name:<20}{item.quantity:>5}{item.price:>10.2f}\")\n        lines.append(f\"Total: {self.total_value():.2f}\")\n        return \"\\n\".join(lines)\n"
+      },
+      {
+       "name": "main.py",
+       "content": "from inventory import Inventory, Item\n\ninv = Inventory()\ninv.add(Item(\"Wiper blades\", 120.0, 8))\ninv.add(Item(\"Jack\", 899.0, 2))\ninv.add(Item(\"Torch\", 249.0, 4))\n\nprint(inv.report())\ninv.save(\"stock.json\")\nagain = Inventory.load(\"stock.json\")\nprint(\"Reloaded value:\", again.total_value())\n"
+      }
+     ],
+     "hints": [
+      "Keep `self.items` as a dict keyed by name. `add`, the duplicate merge and `remove` all become two or three lines once lookup by name is free.",
+      "`find`: `q = query.lower()`, then a comprehension over `self.items.values()` keeping the items where `q in item.name.lower()`, then `sorted(..., key=lambda i: i.name)`.",
+      "`remove` must validate both failures *before* subtracting, or a refused call will already have moved the stock: `raise KeyError(name)` for the unknown name, `raise ValueError(...)` when the quantity asked for is larger than the stock.",
+      "`save` builds a list of plain dicts and `json.dump`s it. `load` starts from `cls()` and calls `add()` on each row — the merging then comes free.",
+      "`report`: build a list of lines and join them with a newline. `f\"{item.name:<20}\"` pads left-aligned to 20 characters, `{item.price:>10.2f}` right-aligns to 10 with two decimals."
+     ],
+     "tests": [
+      {
+       "name": "Item stores its three attributes",
+       "code": "from inventory import Item\n_i = Item(\"Torch\", 249.0, 4)\nassert _i.name == \"Torch\" and _i.price == 249.0 and _i.quantity == 4, \\\n    \"Item should keep name, price and quantity\""
+      },
+      {
+       "name": "add() merges duplicates by name",
+       "code": "from inventory import Inventory, Item\n_inv = Inventory()\n_inv.add(Item(\"Torch\", 249.0, 2))\n_inv.add(Item(\"Torch\", 249.0, 3))\n_found = _inv.find(\"torch\")\nassert len(_found) == 1 and _found[0].quantity == 5, \\\n    \"Adding the same name twice should merge quantities\""
+      },
+      {
+       "name": "find() is case-insensitive and sorted",
+       "code": "from inventory import Inventory, Item\n_inv = Inventory()\n_inv.add(Item(\"Wiper blades\", 120.0, 8))\n_inv.add(Item(\"Wheel jack\", 899.0, 2))\n_inv.add(Item(\"Torch\", 249.0, 4))\n_names = [i.name for i in _inv.find(\"w\")]\nassert _names == [\"Wheel jack\", \"Wiper blades\"], f\"find('w') gave {_names!r}\"\nassert [i.name for i in _inv.find(\"TORCH\")] == [\"Torch\"], \"The search should ignore case\""
+      },
+      {
+       "name": "remove() reduces, drops at zero",
+       "code": "from inventory import Inventory, Item\n_inv = Inventory()\n_inv.add(Item(\"Torch\", 249.0, 4))\n_inv.remove(\"Torch\", 3)\nassert _inv.find(\"Torch\")[0].quantity == 1, \"remove should subtract the quantity\"\n_inv.remove(\"Torch\", 1)\nassert _inv.find(\"Torch\") == [], \"Quantity 0 should remove the item entirely\""
+      },
+      {
+       "name": "remove() raises the right errors",
+       "code": "from inventory import Inventory, Item\n_inv = Inventory()\n_inv.add(Item(\"Torch\", 249.0, 2))\ntry:\n    _inv.remove(\"Ghost\", 1)\n    assert False, \"Unknown name should raise KeyError\"\nexcept KeyError:\n    pass\ntry:\n    _inv.remove(\"Torch\", 5)\n    assert False, \"Removing more than the stock should raise ValueError\"\nexcept ValueError:\n    pass\nassert _inv.find(\"Torch\")[0].quantity == 2, \"A refused remove must change nothing\""
+      },
+      {
+       "name": "total_value() and low_stock()",
+       "code": "from inventory import Inventory, Item\n_inv = Inventory()\n_inv.add(Item(\"Wiper blades\", 120.0, 8))\n_inv.add(Item(\"Jack\", 899.0, 2))\n_inv.add(Item(\"Torch\", 249.0, 4))\nassert abs(_inv.total_value() - 3754.0) < 1e-6, \\\n    f\"total_value gave {_inv.total_value()!r}, expected 3754.0\"\nassert [i.name for i in _inv.low_stock()] == [\"Jack\", \"Torch\"], \"Default threshold 5, sorted by name\"\nassert [i.name for i in _inv.low_stock(3)] == [\"Jack\"], \"The threshold parameter should be respected\""
+      },
+      {
+       "name": "save() / Inventory.load() round-trip",
+       "code": "from inventory import Inventory, Item\n_inv = Inventory()\n_inv.add(Item(\"Torch\", 249.0, 4))\n_inv.add(Item(\"Jack\", 899.0, 2))\n_inv.save(\"inv-test.json\")\n_loaded = Inventory.load(\"inv-test.json\")\nassert abs(_loaded.total_value() - _inv.total_value()) < 1e-6, \\\n    \"The loaded inventory should match what was saved\"\nassert [i.name for i in _loaded.find(\"\")] == [\"Jack\", \"Torch\"], \\\n    \"load is a classmethod returning a new Inventory\""
+      },
+      {
+       "name": "report() lists items and the total",
+       "code": "from inventory import Inventory, Item\n_inv = Inventory()\n_inv.add(Item(\"Torch\", 249.0, 4))\n_inv.add(Item(\"Jack\", 899.0, 2))\n_rep = _inv.report()\nassert isinstance(_rep, str) and \"Torch\" in _rep and \"Jack\" in _rep and \"Total\" in _rep, \\\n    \"report() returns a string with every item and a Total line\"\nassert _rep.index(\"Jack\") < _rep.index(\"Torch\"), \"Items should appear sorted by name\""
+      }
+     ]
+    }
+   ]
   }
  ],
  "capstone": {
