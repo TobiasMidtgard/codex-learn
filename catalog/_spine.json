@@ -5,13 +5,6 @@
     "subtitle": "Integrated BSc + MSc track: a foundation year, then 36 courses, every module ending in code that runs.",
     "years": [
       {
-        "n": 0,
-        "title": "Foundations",
-        "theme": "The hands-on tracks the degree assumes you have done: write and run code, put a page on the web, serve it from a backend, reason about data structures, and learn the tools every later year uses.",
-        "icon": "◌",
-        "tint": "#E9F7D6"
-      },
-      {
         "n": 1,
         "title": "Foundations & Mathematics",
         "theme": "Learn to express ideas as programs, and to reason about them formally.",

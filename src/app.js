@@ -30,19 +30,31 @@ const teardownFns = [];
   }
 })();
 
-/* ---------- the foundation tracks are the first year of Computer Science ----------
-   They were a parallel structure: their own rail section, their own progress block,
-   their own place in the dashboard. But they are what the CS degree assumes you have
-   done, which makes them its foundation year rather than a separate product. Modelled
-   as courses in band 0 so the planner, the rail, search and every total treat them the
-   same way as everything else — the only difference left is that opening one goes to
-   the track view, because a track's lessons are not a course's modules. */
-const FOUNDATION_BAND = 0;
+/* ---------- the foundation tracks sit in the year that teaches their subject ----------
+   They were a parallel structure once: their own rail section, their own progress
+   block, their own place in the dashboard. Then they became a band 0 of their own,
+   which was better but still said they were a stage before the degree started.
+
+   They are not a stage. Each is the practical half of something the degree teaches
+   anyway, so each one joins the year that formalises it: Python Foundations beside
+   Introduction to Programming, the algorithms track beside Data Structures and
+   Algorithms, the two web tracks beside Full-Stack Development. A learner meeting
+   HTTP in the backend track and again in year three meets it twice on purpose.
+
+   Modelled as ordinary courses so the planner, the rail, search and every total treat
+   them the same way as everything else — the only difference left is that opening one
+   goes to the track view, because a track's lessons are not a course's modules. */
+const TRACK_BAND = { python: 1, tools: 1, cs: 2, web: 3, backend: 3 };
 function adoptTracksInto(programId) {
   for (const t of TRACKS) {
     t.kind = 'track';
     t.program = programId;
-    t.band = FOUNDATION_BAND;
+    /* A track with no entry here would land in a band the programme does not have,
+       and vanish from the planner without erroring. */
+    t.band = TRACK_BAND[t.id];
+    if (t.band === undefined) {
+      throw new Error('track "' + t.id + '" has no year in TRACK_BAND');
+    }
     t.title = t.name;
     t.id = t.id;
     t.level = t.level || 'Beginner';
@@ -300,7 +312,7 @@ async function fetchChunk(url, ms) {
 }
 
 /* Only a fetched course counts as the catalog having arrived: the foundation tracks
-   are inlined and already sit in cs-degree band 0. */
+   are inlined and are already spread through the cs-degree years. */
 function catalogLoaded() {
   return DEGREE.courses.some(function (c) { return c.kind !== 'track'; });
 }
@@ -1062,7 +1074,7 @@ function renderDegradeBanner() {
 function renderRail() {
   const rail = $('#rail');
   /* The foundation tracks used to head this rail as their own unlabelled section.
-     They are Computer Science's band 0 now, so they are drawn there, once. */
+     They are Computer Science's own courses now, drawn in their own years, once. */
   let h = '';
 
   for (const pr of PROGRAMS) {
@@ -1670,7 +1682,7 @@ function renderProgress(main) {
   }
 
   /* One row per band of each programme. The foundation tracks used to get their own
-     five rows on top of this; they are band 0 of Computer Science now, so those rows
+     five rows on top of this; they are Computer Science's own courses now, so those rows
      were the same units counted twice. */
   const mastery = PROGRAMS.flatMap(function (pr) { return pr.bands.map(function (y) {
     const list = coursesInBand(pr.id, y.n);
