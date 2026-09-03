@@ -358,6 +358,141 @@ derivation unit does the geometric series with symbols instead of a trace; betwe
 the whole amortised argument fits in four numbers.
 ''',
                 },
+                {
+                    "title": "Counting the work, not the seconds",
+                    "minutes": 11,
+                    "body": r'''
+Two people ship the same feature. One version answers in nine milliseconds on the test
+fixture and in forty minutes on the production table; the other answers in nine
+milliseconds on both. Neither is wrong, and the machine is the same machine. What
+differs is how the work each one does **grows** as its input grows, and that growth is a
+property of the code you can read off the page before running anything.
+
+**Big O** notation is how that growth gets written down. Saying a function is $O(n)$
+says the work rises in proportion to the input, whatever the constant of proportionality
+happens to be on this machine, in this language, this afternoon. Throwing the constant
+away looks careless until you notice it is the part that does not survive: a faster
+laptop, a newer interpreter, the same loop rewritten in C, each divides the constant and
+leaves the shape untouched. Double the input instead and an $O(n)$ program does twice
+the work while an $O(n^{2})$ one does four times — on every machine that will ever run
+either of them.
+
+## The shapes, at a size you will meet
+
+| Growth | Name | Steps at a million items |
+|---|---|---|
+| $O(1)$ | constant | one, whatever $n$ is |
+| $O(\log n)$ | logarithmic | about 20 |
+| $O(n)$ | linear | a million, so hundredths of a second |
+| $O(n \log n)$ | linearithmic | about 20 million, so a second or two |
+| $O(n^{2})$ | quadratic | a million million: minutes to hours |
+| $O(2^{n})$ | exponential | hopeless past $n = 40$ |
+
+The two rows to hold on to are the last two, because they are the ones that turn a
+program that worked in testing into a program that does not work at all. Everything
+above $O(n \log n)$ scales; $O(n^{2})$ scales until the input does not fit in an
+afternoon.
+
+## Reading a loop for its shape
+
+A loop over the input is $O(n)$. A loop *inside* a loop over the same input is
+$O(n^{2})$, and the useful version of that statement is the count. Ask whether a list
+holds a repeat by comparing every pair: the outer index $i$ runs over $n$ positions and
+the inner one covers the $n - 1 - i$ positions after it, so the comparisons are
+$n-1, n-2, \dots, 1$, which is the triangular sum
+
+$$\frac{n(n-1)}{2}.$$
+
+That is the same sum the constant-growth policy produced in the reading before this one,
+and it is the same reason both are unusable: the leading term is $n^{2}/2$. Against it,
+put the version
+that remembers what it has already seen in a set, where a membership test is one hash
+rather than a scan. Count both:
+
+```python
+def has_duplicate(items):
+    """Compare every pair, counting the comparisons."""
+    comparisons = 0
+    for i in range(len(items)):
+        for j in range(i + 1, len(items)):
+            comparisons += 1
+            if items[i] == items[j]:
+                return True, comparisons
+    return False, comparisons
+
+
+def has_duplicate_hashed(items):
+    """One pass, with a set doing the remembering."""
+    seen = set()
+    lookups = 0
+    for item in items:
+        lookups += 1
+        if item in seen:
+            return True, lookups
+        seen.add(item)
+    return False, lookups
+
+
+values = list(range(2000))     # no repeats, which is the worst case for both
+print("every pair:", has_duplicate(values)[1], "comparisons")
+print("with a set:", has_duplicate_hashed(values)[1], "lookups")
+```
+
+1,999,000 against 2,000: a factor of a thousand at two thousand items, and a factor of
+ten thousand at twenty thousand, because the ratio between them is itself proportional
+to $n$. The two functions are the same length and the same shape on the page. Only the
+count separates them.
+
+$O(\log n)$ is what halving looks like. Each step throws away half of what is left, so
+the question is how many halvings a million survives:
+
+```python
+n, halvings = 1000000, 0
+while n > 1:
+    n //= 2
+    halvings += 1
+print(halvings, "halvings take a million down to one")
+```
+
+Nineteen. Binary search over a sorted array, the second lab in this module, is that loop
+with a comparison attached to each halving — which is why it reads seventeen elements of
+a hundred thousand where a scan reads fifty thousand before it finds the average one.
+
+## The costs worth carrying in your head
+
+| Operation | Cost | Why |
+|---|---|---|
+| `values[i]`, `values.append(x)` | $O(1)$ | an index is arithmetic; an append usually has room |
+| `x in values`, `values.remove(x)` | $O(n)$ | nothing about a list says where `x` is |
+| `x in seen`, `table[key]` | $O(1)$ | the hash computes the slot |
+| `values.insert(0, x)`, `values.pop(0)` | $O(n)$ | every later element shifts one slot |
+| `sorted(values)` | $O(n \log n)$ | a comparison sort cannot do better |
+
+The mistake this table exists to prevent is a membership test against a **list** inside a
+loop. It is tempting because the code is honest and reads well, the container is already
+to hand, and on the twenty rows of test data it is instant. It is $O(n^{2})$, and the
+repair is one word — build a `set` from the list before the loop and test against that.
+
+## What it costs, and where it stops holding
+
+`seen = set()` buys its speed with $O(n)$ extra memory. Most optimisations are that
+trade, and the discipline is to name it when you make it rather than to notice it later
+in a memory graph.
+
+Two limits are worth stating plainly. First, Big O is a statement about growth, not about
+time: it hides the constant, and at small $n$ the constant is the whole answer. CPython's
+own `sorted` builds its initial runs with a binary insertion sort, which is $O(n^{2})$
+and beats merging below about sixty-four elements — a deliberate choice, in the standard
+library, to run the faster-growing algorithm exactly where its smaller constant wins.
+Second, it hides *which* operations, and on real hardware they are not interchangeable —
+walking a linked list and walking an array are both $O(n)$, and the array is several
+times quicker for the cache reasons the previous reading gave.
+
+So the analysis is a tool for a specific question: what happens when this input gets
+large? Reach for it at that moment. For $n = 10$, reach for the version that is easier
+to read.
+''',
+                },
             ],
             "quiz": {
                 "title": "Where the cost of a growable array actually goes",
@@ -712,7 +847,7 @@ container that scales and one that does not, and it comes down entirely to wheth
 the growth is multiplicative or additive.
 """,
             },
-            "lab": {
+            "lab": [{
                 "title": "A growable array and a linked list, counted",
                 "runtime": "python",
                 "minutes": 55,
@@ -1175,7 +1310,135 @@ _one.reverse()
 assert _one.to_list() == [7] and _one.head is _one.tail, "a single node is its own head and tail"
 '''},
                 ],
-            },
+            }, {
+                "title": "Binary search, with its reads counted",
+                "runtime": "python",
+                "minutes": 16,
+                "brief": r'''
+The counterpart to the traversal you counted in the lab above. `find` on the
+linked list took 100 steps to reach the 100th node, because a reference is the
+only way forward. A sorted array in contiguous slots can be read at any index for
+the same price as any other, and that one property turns a search of a hundred
+thousand values into seventeen reads.
+
+## `binary_search(items, target)`
+
+Return the index of `target` in the **sorted** list `items`, or `-1` when it is
+absent.
+
+Keep two indices, `low` and `high`, bounding the window still worth searching, and
+read only the element in the middle of it:
+
+- equal to `target` — return that index
+- smaller than `target` — every index from `low` to `mid` is too small, so
+  `low = mid + 1`
+- larger than `target` — `high = mid - 1`
+
+The loop runs while `low <= high`. When they cross, the window is empty and the
+value is not there.
+
+```text
+binary_search([1, 3, 5, 7, 9, 11], 7)   ->  3
+binary_search([1, 3, 5, 7, 9, 11], 4)   ->  -1
+binary_search([], 7)                    ->  -1
+```
+
+Write it as a loop; no recursion is needed here.
+
+One check hands the function an object holding a hundred thousand values that
+counts every element read and refuses any index that is not an integer. A scan
+reads tens of thousands; halving reads 17, and the check allows 25. Anything that
+walks the sequence — `in`, `.index()`, a `for` over `items`, or a slice — fails
+it.
+''',
+                "files": [{"name": "main.py", "content": r'''
+def binary_search(items, target):
+    """Return the index of target in the sorted list, or -1."""
+    low = 0
+    high = len(items) - 1
+    # your code here
+    return -1
+
+
+print(binary_search([1, 3, 5, 7, 9, 11], 7))    # 3
+print(binary_search([1, 3, 5, 7, 9, 11], 4))    # -1
+'''}],
+                "main": "main.py",
+                "solution": [{"name": "main.py", "content": r'''
+def binary_search(items, target):
+    """Return the index of target in the sorted list, or -1."""
+    low = 0
+    high = len(items) - 1
+    while low <= high:
+        mid = (low + high) // 2
+        value = items[mid]
+        if value == target:
+            return mid
+        if value < target:
+            low = mid + 1
+        else:
+            high = mid - 1
+    return -1
+
+
+print(binary_search([1, 3, 5, 7, 9, 11], 7))    # 3
+print(binary_search([1, 3, 5, 7, 9, 11], 4))    # -1
+'''}],
+                "hints": [
+                    "The loop condition is `while low <= high`, and the middle is "
+                    "`mid = (low + high) // 2`.",
+                    "`items[mid] < target` means the answer is to the right of mid, so "
+                    "`low = mid + 1`; too large means `high = mid - 1`. Moving past mid "
+                    "rather than to it is what makes the window shrink every time.",
+                    "Read `items[mid]` and nothing else — `in`, `.index()`, a loop over "
+                    "`items` or a slice all read the whole sequence and fail the count.",
+                ],
+                "tests": [
+                    {"name": "Finds every present value", "code": r'''
+_xs = [1, 3, 5, 7, 9, 11]
+assert [binary_search(_xs, v) for v in _xs] == [0, 1, 2, 3, 4, 5], \
+    f"each value should map to its own index, got {[binary_search(_xs, v) for v in _xs]!r}"
+'''},
+                    {"name": "Absent values give -1", "code": r'''
+assert binary_search([1, 3, 5], 4) == -1, "4 is not in the list"
+assert binary_search([], 7) == -1, "the empty list has nothing in it"
+assert binary_search([5], 4) == -1 and binary_search([5], 5) == 0, \
+    "a single-element list is still a window"
+'''},
+                    {"name": "Handles the ends of a big list", "code": r'''
+_big = list(range(0, 200000, 2))
+assert binary_search(_big, 0) == 0, "the first element"
+assert binary_search(_big, 199998) == 99999, "the last element"
+assert binary_search(_big, 3) == -1, "the odd numbers are absent"
+'''},
+                    {"name": "Reads a logarithmic number of elements", "code": r'''
+class _Probe:
+    """A sorted sequence of 0, 2, 4, ... that counts what is read from it."""
+
+    def __init__(self, n):
+        self.n = n
+        self.reads = 0
+
+    def __len__(self):
+        return self.n
+
+    def __getitem__(self, i):
+        if not isinstance(i, int):
+            raise TypeError("index must be an int — slicing reads the whole window")
+        if i < 0 or i >= self.n:
+            raise IndexError(i)
+        self.reads += 1
+        return i * 2
+
+
+_p = _Probe(100000)
+assert binary_search(_p, 135790) == 67895, \
+    "the probe holds 0, 2, 4, ... so 135790 sits at index 67895"
+assert _p.reads <= 25, \
+    f"read {_p.reads} elements of 100000 — halve the window each time round, which is about 17"
+'''},
+                ],
+            }],
         },
         # ------------------------------------------------------------ M2
         {
@@ -2670,8 +2933,163 @@ interval checker over what is left. The fill-in-the-blanks unit is `_delete` wit
 and the derivation unit does the height bounds with symbols.
 ''',
                 },
+                {
+                    "title": "Base case, progress, and the price of recomputing",
+                    "minutes": 12,
+                    "body": r'''
+Most of the code in this module describes itself the same way. `contains` is a
+comparison and then *the same search, on a smaller tree*. The three traversals are the
+node and then the same traversal of each subtree. `_delete` is a comparison and then the
+same deletion, one level down. None of that is a stylistic preference: a subtree of a
+binary search tree **is** a binary search tree, so a function written for one already
+works on the other, and writing it any other way means writing out by hand what the
+structure already says. (Insertion has the same shape, and the lab still asks for it as
+a loop — which is a statement about what a call costs, and the point this reading is
+here to make.)
+
+A function that calls itself is **recursive**, and it needs exactly two things to be
+correct. There must be a **base case** — an input it answers outright, without calling
+itself — and every call it makes must move the input **towards** that case. Both, or
+neither works: a base case that nothing reaches never fires, and progress towards
+nothing runs forever.
+
+```python
+def countdown(n):
+    """Print n down to 1, then stop."""
+    if n == 0:               # the base case: answered without another call
+        print("lift off")
+        return
+    print(n)
+    countdown(n - 1)         # the same problem, one step smaller
+
+
+countdown(3)
+```
+
+`n - 1` is the progress and `n == 0` is the base. Change the call to `countdown(n)` and
+both rules survive on the page while neither survives in practice, which is why the
+error you get is `RecursionError` rather than anything that names the real fault.
+
+## What a call costs while it is waiting
+
+`countdown(3)` does not finish before `countdown(2)` starts. It stops in the middle,
+and the interpreter has to remember where: the value of `n`, the line to return to, the
+half-finished expression. That record is a **stack frame**, and every call that has not
+yet returned is holding one. Frames come back only as calls return, so what the machine
+has to hold at once is not the number of calls — it is the **depth**, the longest chain
+of calls waiting on each other.
+
+For a tree, the depth of a recursive descent is the height of the tree. That is why the
+previous reading's three thousand sorted keys ended in `RecursionError` at around the
+thousandth: CPython caps the frame stack deliberately, because a runaway recursion is
+far commoner than a legitimately deep one. A balanced tree of a million keys descends
+about 20 levels and is in no danger; a degenerate one of three thousand is.
+
+Depth is also why recursion suits data that is nested rather than long. A list of a
+million numbers is one frame if you loop over it and a million if you recurse down it;
+a folder tree, a parsed expression, or JSON of unknown shape is a handful of frames
+either way, and the recursive version is the one that fits on the screen:
+
+```python
+def deep_sum(values):
+    """Add up numbers nested in lists to any depth."""
+    total = 0
+    for item in values:
+        if isinstance(item, list):
+            total += deep_sum(item)     # same problem, one layer in
+        else:
+            total += item
+    return total
+
+
+print(deep_sum([1, [2, [3, [4, [5]]]], 6]))
+```
+
+## The price of recomputing
+
+Recursion has one failure that correctness testing never catches, because the answers
+are right. Take the definition of the Fibonacci numbers literally — each is the sum of
+the two before it — and count the calls:
+
+```python
+CALLS = 0
+
+
+def fib(n):
+    """The definition, taken at its word."""
+    global CALLS
+    CALLS += 1
+    if n < 2:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+
+print("fib(25) =", fib(25), "after", CALLS, "calls")
+```
+
+242,785 calls to produce 75,025. The reason is visible if you draw two levels of the
+call tree: `fib(25)` asks for `fib(24)` and `fib(23)`, and `fib(24)` asks for `fib(23)`
+again. The two branches share almost all of their work and neither knows the other
+exists, so the same subproblems are solved over and over, and the total multiplies by
+about 1.618 for every 1 added to `n`. Exponential — the growth class the first module
+warned was hopeless past forty.
+
+The repair is to write the answer down the first time it is computed. That is
+**memoisation**: a dictionary from arguments to result, consulted before any work:
+
+```python
+MEMO = {}
+CALLS = 0
+
+
+def fib(n):
+    """The same definition, with each answer computed once."""
+    global CALLS
+    CALLS += 1
+    if n < 2:
+        return n
+    if n not in MEMO:
+        MEMO[n] = fib(n - 1) + fib(n - 2)
+    return MEMO[n]
+
+
+print("fib(25) =", fib(25), "after", CALLS, "calls")
+```
+
+Forty-nine calls against 242,785, for identical arithmetic and the same answer. Each
+value from 2 to 25 is computed once and read thereafter, so the work is proportional to
+$n$ rather than to $\varphi^{n}$. The standard library will do the bookkeeping for you:
+
+```python
+from functools import lru_cache
+
+
+@lru_cache(maxsize=None)
+def fib(n):
+    return n if n < 2 else fib(n - 1) + fib(n - 2)
+
+
+print(fib(90))
+```
+
+## Where it stops holding
+
+A cache is only sound when the function is **pure** — the same arguments always give
+the same answer — and it needs the arguments to be hashable, which is the same
+requirement a dictionary key has and for the same reason. It is also memory:
+`lru_cache(maxsize=None)` never evicts anything, so a function called with millions of
+distinct arguments trades a time problem for a space one.
+
+And memoisation removes the repeated work, not the frames. `fib(2000)` under
+`lru_cache` still descends two thousand calls deep on the first call and still ends in
+`RecursionError`. Recursion whose depth grows with $n$ wants either a bound you can
+argue for — a balanced tree's height — or a rewrite as a loop, which is what both labs
+in this module ask for: the descent written iteratively, and Fibonacci carried in two
+variables with no frames at all.
+''',
+                },
             ],
-            "quiz": {
+            "quiz": [{
                 "title": "The invariant, and what it costs to break it",
                 "minutes": 7,
                 "questions": [
@@ -2835,7 +3253,114 @@ A local check would have signed this tree off.
 """,
                     },
                 ],
-            },
+            }, {
+                "title": "Growth, halving, and what a call leaves behind",
+                "minutes": 6,
+                "questions": [
+                    {
+                        "q": "A loop over `n` items, with a second loop inside it that also runs over those `n` items, does work that grows as…",
+                        "opts": [
+                            r"$O(2n)$ — two loops, so twice the work of one pass over the data",
+                            r"$O(n^2)$ — the inner loop runs its full length once for every outer step",
+                            r"$O(n\log n)$ — each level of nesting multiplies the cost by a logarithmic factor",
+                            r"$O(n)$ — both loops walk the same list, so the list is walked once",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Two loops one after the other would be $2n$, and the constant would be dropped anyway. These are nested, so the inner one restarts from the top on every step of the outer one.",
+                            r"$n$ steps outside, and the inner loop's full length inside each of them.",
+                            r"$n\log n$ is what halving buys — a divide-and-conquer sort, say. Nothing here halves anything, and the depth of the nesting is a constant 2, not a function of $n$.",
+                            r"The list is walked $n$ times, once per step of the outer loop. Walking it once is a single loop, and that is the $O(n)$ version of this code.",
+                        ],
+                        "why": r"The comparisons come to $n + n + \dots$, one full inner pass per outer step, and the leading term is $n^2$. Counting a nested loop as $2n$ is the commonest slip here: sequential loops add, nested loops multiply.",
+                    },
+                    {
+                        "q": "How do `x in my_set` and `x in my_list` compare?",
+                        "opts": [
+                            r"Both are $O(n)$: `in` compares against the elements held, either way",
+                            r"The set is $O(1)$, the list $O(n)$: a hash names the slot, a list is scanned",
+                            r"The list is $O(1)$, the set $O(n)$: a set must hash every element it holds first",
+                            r"Both are $O(1)$: the interpreter indexes either container for membership",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"True of the list, and it is what the set avoids. Hashing the key computes the slot it would be in, so a set answers without comparing against anything but that slot's contents.",
+                            r"One hash against a scan — and rewriting a list membership test inside a loop as a set is the commonest real speedup there is.",
+                            r"Inverted. Hashing happens on the way *in*, once per element; a lookup hashes the key it was given and nothing else.",
+                            r"A list has no index from value to position — that is exactly what a hash table adds, and what `in` on a list has to do without.",
+                        ],
+                        "why": r"A set hashes the key and reads one slot, which is $O(1)$. A list has nothing that says where a value might be, so `in` compares against the elements until it finds one or runs out: $O(n)$. Inside a loop, that difference is $O(n)$ against $O(n^2)$.",
+                    },
+                    {
+                        "q": "Binary search needs its input to be…",
+                        "opts": [
+                            "free of duplicates, or the halving may return the wrong equal key",
+                            "sorted, because only order says which half of the window to throw away",
+                            "numeric, since the midpoint of the window is found by averaging the two ends",
+                            "short enough to fit in memory, which is what makes an arbitrary index cheap",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "Duplicates are allowed. The search may return any one of the equal keys, which is a question of *which* index comes back rather than whether the search works.",
+                            "Order is the whole mechanism: one comparison rules out half the window because everything on that side is on the wrong side of the value.",
+                            "The midpoint is an average of the two *indices*, not of the values, so the elements need only be comparable — strings and dates binary-search perfectly well.",
+                            "Size is not the requirement; a sorted file on disk is binary-searched the same way. What the algorithm needs is an index that costs the same wherever it points, plus order.",
+                        ],
+                        "why": "Comparing against the middle element is only informative when order tells you which side the target must be on. Take the sortedness away and a comparison rules out one element rather than half the window, and the search degrades into a scan that also skips things.",
+                    },
+                    {
+                        "q": "An editor's undo needs the actions to come back in a particular order. Which structure gives it?",
+                        "opts": [
+                            "A queue: the oldest action waiting is the first one taken, in arrival order",
+                            "A stack: undo takes the most recent action first, which is last in, first out",
+                            "A set: every distinct action is held once, and undoing removes it from the set",
+                            "A binary search tree keyed on the timestamp, so the latest sits at the far right",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "That is redo-from-the-beginning, not undo: it would reverse the very first edit of the session first.",
+                            "Push each action as it happens, pop to undo — the order reverses itself with no bookkeeping.",
+                            "Actions repeat, and a set holds each thing once, so typing the same character twice would leave one action to undo.",
+                            "It would work and it is $O(\\log n)$ per operation for something a stack does in $O(1)$ — the extra structure buys ordering by key, which nothing here needs.",
+                        ],
+                        "why": "Undo asks for the most recently added item, which is what last in, first out means, and pushing and popping the end of a list is $O(1)$. Anything ordered the other way undoes the wrong edit; anything ordered by key pays for a search nobody needs.",
+                    },
+                    {
+                        "q": "What must every recursive function have?",
+                        "opts": [
+                            "A loop inside it, because the repetition has to come from somewhere",
+                            "A base case it answers without recursing, and calls that move towards it",
+                            "Exactly one call to itself, or the same subproblem is solved twice over",
+                            "Shared state outside the function, so each call can see what the last one left",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "The repetition comes from the calls themselves. The three traversals in this module recurse into each subtree and contain no loop of their own.",
+                            "Both halves are needed: a base case nothing reaches never fires, and progress towards nothing runs until the frames are gone.",
+                            "Two calls are fine — the traversals make two, one per subtree. Repeated subproblems are a cost to fix with a cache, not a rule of correctness.",
+                            "Each call gets its own frame with its own arguments, which is what lets the same function work on a subtree without disturbing the call above it.",
+                        ],
+                        "why": "A base case is where the recursion stops, and progress is what reaches it. Miss either and the frames pile up until Python raises `RecursionError`, which is the stack's way of reporting an infinite loop.",
+                    },
+                    {
+                        "q": "Memoisation makes a recursive function faster by…",
+                        "opts": [
+                            "compiling the hot function down to machine code the second time it is called",
+                            "storing each subproblem's answer the first time, so it is computed once",
+                            "running the two recursive branches in parallel on separate threads",
+                            "reaching the base case sooner, which cuts the depth of the call chain",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "That is a compiler's job, and it would change the constant rather than the growth. Memoisation leaves the code exactly as it is and removes the repeats.",
+                            "`fib(25)` falls from 242,785 calls to 49, doing the same arithmetic once each.",
+                            "Nothing runs in parallel, and it would not help much: the branches overlap almost entirely, so the same work would be done twice at once.",
+                            "The depth is untouched — `fib(n)` still descends to `fib(1)` on the first call, which is why a memoised recursion can still exhaust the stack. What goes is the *width* of the call tree.",
+                        ],
+                        "why": "The naive recursion recomputes the same subproblems exponentially often. A cache consulted before the work turns each distinct subproblem into one computation and a lookup thereafter, which is the difference between $O(\\varphi^{n})$ and $O(n)$ — the same arithmetic, none of the repeats.",
+                    },
+                ],
+            }],
             "blanks": {
                 "title": "Deletion, all three cases",
                 "minutes": 9,
@@ -3011,7 +3536,7 @@ the leaves, $2^{h-2}$ above that, down to a single root. That fact is what makes
 bottom-up heapify linear, and you will meet it again in the heap module.
 """,
             },
-            "lab": {
+            "lab": [{
                 "title": "A binary search tree that can also delete",
                 "runtime": "python",
                 "minutes": 55,
@@ -3400,7 +3925,150 @@ for _k in _keys:
         assert not _t.contains(_k), f"{_k} was deleted but is still found"
 '''},
                 ],
-            },
+            }, {
+                "title": "Fibonacci, fast and slow",
+                "runtime": "python",
+                "minutes": 16,
+                "brief": r'''
+The same function twice, so the gap between the two is something you have measured
+rather than something you have been told. (`fib(0)` is 0, `fib(1)` is 1, and every
+number after those is the sum of the two before it.)
+
+## `fib_naive(n)`
+
+The definition taken at its word: the base cases, and otherwise
+`fib_naive(n - 1) + fib_naive(n - 2)`. It must genuinely call itself twice, with no
+cache of any kind — one check wraps the function in a counter and requires the call
+count to be exponential, because the point of this half is to feel what
+recomputation costs.
+
+## `fib(n)`
+
+The same numbers, cheaply. Either hold the last two values in variables and loop, or
+keep the recursion and memoise it — a dictionary consulted before the work, or
+`@lru_cache(maxsize=None)` from `functools`.
+
+It must return `fib(90) = 2880067194370816120` exactly, and a check times that call
+and fails anything slower than half a second. Python integers are arbitrary
+precision, so the 19 digits are not a problem; recomputation is.
+
+```text
+[fib(n) for n in range(10)]  ->  [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+fib(90)                      ->  2880067194370816120
+```
+
+The starter times both on `n = 25` so the gap is on the screen. Raise the naive one
+to 32 and watch it crawl; going much past that in a browser tab is a long wait for a
+number you already have.
+''',
+                "files": [{"name": "main.py", "content": r'''
+import time
+
+
+def fib_naive(n):
+    """The recursive definition, with no caching. Exponential."""
+    # your code here
+
+
+def fib(n):
+    """The same numbers in O(n): iterate, or memoise."""
+    # your code here
+
+
+start = time.time()
+print("fib_naive(25) =", fib_naive(25))
+print(f"  took {time.time() - start:.3f}s")
+
+start = time.time()
+print("fib(90) =", fib(90))
+print(f"  took {time.time() - start:.4f}s")
+'''}],
+                "main": "main.py",
+                "solution": [{"name": "main.py", "content": r'''
+import time
+
+
+def fib_naive(n):
+    """The recursive definition, with no caching. Exponential."""
+    if n < 2:
+        return n
+    return fib_naive(n - 1) + fib_naive(n - 2)
+
+
+def fib(n):
+    """The same numbers in O(n): two variables, one pass."""
+    previous, current = 0, 1
+    for _ in range(n):
+        previous, current = current, previous + current
+    return previous
+
+
+start = time.time()
+print("fib_naive(25) =", fib_naive(25))
+print(f"  took {time.time() - start:.3f}s")
+
+start = time.time()
+print("fib(90) =", fib(90))
+print(f"  took {time.time() - start:.4f}s")
+'''}],
+                "hints": [
+                    "`fib_naive`: `if n < 2: return n`, then "
+                    "`return fib_naive(n - 1) + fib_naive(n - 2)`. Both base cases are "
+                    "covered by that one line, because fib(0) is 0 and fib(1) is 1.",
+                    "Iterative `fib`: start `previous, current = 0, 1`, then n times "
+                    "`previous, current = current, previous + current`, and return "
+                    "`previous`. Assigning both on one line matters — computing `current` "
+                    "first would feed the new value back into `previous`.",
+                    "Memoised instead: decorate the recursion with "
+                    "`@lru_cache(maxsize=None)` from `functools`, or check a module-level "
+                    "dict before recursing and store the result before returning it.",
+                ],
+                "tests": [
+                    {"name": "Both agree on the sequence", "code": r'''
+_want = [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+assert [fib(n) for n in range(10)] == _want, f"fib gave {[fib(n) for n in range(10)]!r}"
+assert [fib_naive(n) for n in range(10)] == _want, \
+    f"fib_naive gave {[fib_naive(n) for n in range(10)]!r}"
+'''},
+                    {"name": "fib_naive really is the plain double recursion", "code": r'''
+_original = fib_naive
+_calls = 0
+
+
+def _counted(n):
+    """Stand in for fib_naive so the recursion is counted as it goes."""
+    global _calls
+    _calls += 1
+    return _original(n)
+
+
+fib_naive = _counted
+try:
+    _value = _counted(16)
+finally:
+    fib_naive = _original
+assert _value == 987, f"fib_naive(16) gave {_value!r}, expected 987"
+assert _calls > 1000, (
+    f"fib_naive(16) made {_calls} calls. The plain recursion makes 3193 of them; "
+    "a cache or a loop here removes the cost this half of the lab exists to show")
+'''},
+                    {"name": "fib(90) is exact, and instant", "code": r'''
+import time as _time
+_start = _time.time()
+_value = fib(90)
+_elapsed = _time.time() - _start
+assert _value == 2880067194370816120, f"fib(90) gave {_value!r}"
+assert _elapsed < 0.5, \
+    f"fib(90) took {_elapsed:.2f}s — iterate or memoise instead of recomputing"
+'''},
+                    {"name": "The fast version holds up well past 90", "code": r'''
+assert fib(1) == 1 and fib(2) == 1, "the first two values after the base cases"
+assert fib(50) == 12586269025, f"fib(50) gave {fib(50)!r}"
+assert fib(300) % 1000000007 == 644264086, \
+    "fib(300) is a 63-digit integer, and a float somewhere in the loop will not match it"
+'''},
+                ],
+            }],
         },
         # ------------------------------------------------------------ M4
         {

@@ -230,185 +230,359 @@
     "HMAC is not `hash(key + message)`: the inner and outer padding exist to stop length-extension",
     "PBKDF2 iterates HMAC, folding every block with XOR so an attacker cannot skip work",
     "A derived key longer than the hash needs several blocks, each with its own counter",
-    "Comparing digests with `==` leaks how many bytes matched; the fix is an XOR accumulator"
+    "Comparing digests with `==` leaks how many bytes matched; the fix is an XOR accumulator",
+    "A bound parameter is not an escaping routine: the statement is compiled first, so the value never reaches the parser",
+    "Data must never re-enter a parser as code — the one rule behind SQL injection, command injection and XSS alike",
+    "A signed token authenticates its claims and conceals none of them, and stateless verification has no list to revoke from"
    ],
    "read": [
     {
      "title": "Why a stolen password file is not a stolen secret",
      "minutes": 17,
      "body": "On 5 June 2012 a file appeared on a Russian password-cracking forum: 6,458,020 lines,\neach one forty hexadecimal characters. It was the SHA-1 password hashes of LinkedIn\naccounts, with no salt and no iteration. The forum was not asked to break the hash\nfunction; it was asked to help finish a list. Within days the great majority were\nrecovered, and four years later a set of about 117 million credentials from the same\nbreach went on sale.\n\nLook at what the file gives away before anyone does any work at all:\n\n```python\nimport hashlib\n\nUSERS = [(\"ada\", \"letmein\"), (\"bob\", \"hunter2\"), (\"cy\", \"letmein\"),\n         (\"dee\", \"password1\"), (\"eve\", \"hunter2\")]\n\nprint(\"unsalted SHA-256, first 12 hex characters\")\nfor name, password in USERS:\n    print(\"  %-4s %s\" % (name, hashlib.sha256(password.encode()).hexdigest()[:12]))\n\nprint(\"salted, one fixed 8-byte salt per user\")\nfor i, (name, password) in enumerate(USERS):\n    salt = b\"salt%04d\" % i\n    print(\"  %-4s %s\" % (name, hashlib.sha256(salt + password.encode()).hexdigest()[:12]))\n```\n\n`ada` and `cy` both print `1c8bfe8f801d`; `bob` and `eve` both print `f52fbd32b2b3`. A\nhash function is deterministic, so equal passwords give equal digests, and the dump\ntherefore sorts the users into groups by shared password without revealing a single one\nof them. Sort those groups by size and the largest is almost certainly `123456`. Add a\ndifferent salt to each user and the five lines have nothing in common. The mechanism is\nnot subtle, and neither is the mistake it fixes.\n\n## What preimage resistance actually promises\n\nSHA-256's guarantee is that given a digest, finding *any* input that hashes to it costs\nabout $2^{256}$ work. That is a statement about the space of all inputs. A password is\nnot drawn from the space of all inputs. It is drawn from a list — a leaked corpus like\nRockYou has around 14 million distinct entries, and a large fraction of real accounts are\nin it. The hash function keeps every promise it made and the password falls anyway,\nbecause the promise was about the wrong distribution.\n\nSo the attacker's cost is not $2^{256}$; it is the number of *distinct hash inputs* he\nmust compute. That is the quantity to attack, and every defence in this module is a way\nof driving it up.\n\n```python\nGPU = 2e10            # raw SHA-256 compressions a second, one high-end 2024 card\nDICTIONARY = 14e6     # unique entries in the leaked RockYou password list\nUSERS = 6.5e6         # accounts in the 2012 LinkedIn dump\n\n\ndef seconds(hashes):\n    return hashes / GPU\n\n\nprint(\"unsalted, 1 hash per guess:    %.4f seconds\" % seconds(DICTIONARY))\nprint(\"salted,   1 hash per guess:    %.0f minutes\" % (seconds(DICTIONARY * USERS) / 60))\nper_guess = 2 * 20000                      # two SHA-256 per HMAC, 20000 iterations\nprint(\"salted, 20000 iterations:      %.1f years\"\n      % (seconds(DICTIONARY * USERS * per_guess) / 86400 / 365))\nprint(\"one targeted user, 20000 iterations: %.0f seconds\"\n      % seconds(DICTIONARY * per_guess))\n```\n\nUnsalted, one pass over the dictionary covers **every user at once**: hash each candidate\nonce, look the digest up in a set of six and a half million, move on. That is 0.0007\nseconds of hashing for the whole dump. Salted, the salt is part of the input, so the pass\nhas to be repeated for every user — 6.5 million times the work, and the same GPU now\nneeds 76 minutes.\n\nTwo conclusions, and the second is the uncomfortable one. The salt buys a factor of\n6,500,000, which is why it is not optional. And 76 minutes is not safety. The salt kills\n*precomputation and amortisation*; it does not make a single guess expensive, and by\nitself it is nowhere near enough on 2024 hardware.\n\n## Making one guess expensive\n\nIf the amortisation is gone, the remaining lever is the cost of one derivation. Multiply\nit by $c$ and the attacker's bill multiplies by $c$ as well. That is PBKDF2:\n\n$$U_1 = \\text{HMAC}(pw,\\; salt \\,\\|\\, i), \\qquad U_j = \\text{HMAC}(pw,\\; U_{j-1}),\n\\qquad T_i = U_1 \\oplus U_2 \\oplus \\cdots \\oplus U_c$$\n\nTwo design choices in there are worth deriving rather than accepting. Why a *chain*\ninstead of hashing one very long string? Because $U_j$ cannot start until $U_{j-1}$ has\nfinished, so the work inside a single guess is strictly sequential and no amount of\nparallel hardware shortens it. Why XOR every intermediate in, rather than output $U_c$\nalone? Because then the result depends on the whole chain. Should the iteration ever\nwander into a short cycle, outputting the last value would silently collapse the output\nspace, while the running XOR still carries everything that came before the cycle.\n\nThe counter $i$ is there because one HMAC gives 32 bytes and a caller may want more:\nblocks $T_1, T_2, \\dots$ are generated with $i = 1, 2, \\dots$ as four big-endian bytes and\nconcatenated, then truncated. That has a consequence the lab checks — the first 32 bytes\nof a 64-byte derived key are exactly the 32-byte derived key, because $T_1$ does not know\nhow many blocks will follow.\n\nWith 20,000 iterations, each guess costs two SHA-256 per HMAC times 20,000, so 40,000\nhashes. The salted attack that took 76 minutes takes 5.8 years.\n\n## Why HMAC is not `sha256(key + message)`\n\nThe natural way to authenticate a message with a shared key is to hash them together.\nIt is the first thing almost everyone writes, and it is broken — not by a weakness in\nSHA-256, but by the shape of it.\n\nSHA-256 is a Merkle-Damgard construction: it pads the message to a whole number of\n64-byte blocks and folds them one at a time into a 32-byte state, and **the digest it\nreturns is that state**. Hand someone a digest and you have handed them the machine's\ninternal condition at the moment it stopped. They can start it again.\n\nHere is that attack in full, on a toy hash with the same shape:\n\n```python\nimport hashlib\n\nBLOCK = 8            # SHA-256 uses 64; the shape is the same\nIV = b\"\\x00\" * 8\n\n\ndef compress(state, block):\n    \"\"\"One compression step: old state and one block in, new state out.\"\"\"\n    return hashlib.sha256(state + block).digest()[:8]\n\n\ndef padding(length):\n    \"\"\"The suffix that makes a message a whole number of blocks, SHA-style.\"\"\"\n    pad = b\"\\x80\" + b\"\\x00\" * ((BLOCK - 1 - (length + 8) % BLOCK) % BLOCK)\n    return pad + (length * 8).to_bytes(8, \"big\")\n\n\ndef toy_hash(message, state=IV, already=0):\n    \"\"\"Merkle-Damgard. `state`/`already` let a caller RESUME a finished hash.\"\"\"\n    data = message + padding(already + len(message))\n    for i in range(0, len(data), BLOCK):\n        state = compress(state, data[i:i + BLOCK])\n    return state\n\n\nsecret = b\"s3cr3t!!\"                       # the attacker never sees this\nmessage = b\"user=ada&admin=0\"\ntag = toy_hash(secret + message)\nprint(\"server tag:\", tag.hex())\n\n# The attacker knows message, tag and len(secret) — and nothing else.\nglue = padding(len(secret) + len(message))\nextension = b\"&admin=1\"\nforged_message = message + glue + extension\nforged_tag = toy_hash(extension, state=tag,\n                      already=len(secret) + len(message) + len(glue))\nprint(\"forged tag:\", forged_tag.hex())\nprint(\"server would compute:\", toy_hash(secret + forged_message).hex())\nprint(\"forgery accepted:\", forged_tag == toy_hash(secret + forged_message))\n\n\ndef toy_hmac(key, message):\n    \"\"\"The same toy hash, wrapped the way RFC 2104 wraps SHA-256.\"\"\"\n    key = key + b\"\\x00\" * (BLOCK - len(key))\n    inner = bytes(b ^ 0x36 for b in key)\n    outer = bytes(b ^ 0x5C for b in key)\n    return toy_hash(outer + toy_hash(inner + message))\n\n\nmac = toy_hmac(secret, message)\nforged_mac = toy_hash(extension, state=mac, already=BLOCK + BLOCK)\nprint(\"HMAC forgery accepted:\", forged_mac == toy_hmac(secret, forged_message))\n```\n\nIt prints `forgery accepted: True`. The attacker never learned `secret`. He resumed the\nhash from the tag, appended `&admin=1`, and produced a tag the server will accept for a\nmessage he chose. The only thing he needed beyond the public message and its tag was the\n*length* of the key, and that is usually guessable in a couple of dozen tries. This is\nnot a thought experiment: Flickr's API in 2009 signed requests with the digest of a\nsecret followed by the parameters, and Thai Duong and Juliano Rizzo forged calls against\nit with exactly this.\n\nNow look at what HMAC releases. It is $H(K_o \\,\\|\\, H(K_i \\,\\|\\, m))$, so the value on the\nwire is the state of a hash whose input began with $K_o$ — and resuming it requires\nknowing $K_o$, which the attacker does not. The last line prints `False`. The inner and\nouter pads differ (`0x36` and `0x5c`) so that the two keys are different: reusing one key\nfor both passes would let a length-extension of the inner hash be replayed against the\nouter one.\n\nThe mirror mistake, `sha256(message + key)`, resists length extension and fails\ndifferently. Its security now leans on collision resistance: two messages that collide\nunder SHA-256 have the same tag under *every* key, so a collision found once forges\nforever. HMAC needs neither property — its proof rests on the compression function\nbehaving like a pseudorandom function — which is why HMAC-MD5 did not fall the day MD5\ncollisions arrived.\n\n## Comparing the answer\n\nOne line remains where a correct implementation still leaks. `digest == expected` in any\nlanguage stops at the first byte that differs, and the time it takes is therefore a\nfunction of how many leading bytes were right.\n\n```python\nimport hashlib\n\nREAL = hashlib.sha256(b\"transfer 100 to bob\").digest()\n\n\ndef naive_equals(a, b):\n    \"\"\"`a == b` written out, so the bytes it inspects can be counted.\"\"\"\n    looked = 0\n    for x, y in zip(a, b):\n        looked += 1\n        if x != y:\n            return False, looked\n    return True, looked\n\n\ndef constant_equals(a, b):\n    looked = 0\n    difference = 0\n    for x, y in zip(a, b):\n        looked += 1\n        difference |= x ^ y\n    return difference == 0, looked\n\n\nfor right in range(4):\n    guess = REAL[:right] + bytes([REAL[right] ^ 0xFF]) + bytes(31 - right)\n    print(\"first %d byte(s) correct -> naive inspects %d, constant-time inspects %d\"\n          % (right, naive_equals(REAL, guess)[1], constant_equals(REAL, guess)[1]))\nprint(\"guesses to walk a 32-byte tag one byte at a time:\", 256 * 32)\nprint(\"guesses to search a 32-byte tag outright: 2 **\", 8 * 32)\n```\n\nThe naive count is 1, 2, 3, 4 — it is a direct readout of how much of the tag the\nattacker already has. Turn that into an attack: try all 256 values of byte 0, keep the\none that took longest, then move to byte 1. That is $256 \\times 32 = 8192$ attempts to\nforge a tag, against $2^{256}$ to search for one. The fix is in the second function: OR\nevery `x ^ y` into an accumulator and test it once at the end, so the count is 32 whatever\nthe input. Google's Keyczar library shipped a byte-wise comparison in its HMAC\nverification until 2009, when Nate Lawson pointed out that this made remote forgery\npractical.\n\n## Where all this stops holding\n\nThe last line of the cost table is the honest one: against a *targeted* user, 20,000\niterations buy 28 seconds. Salting and stretching destroy the bulk attack on a whole\ndump; they do nothing about one weak password on one account someone cares about. No\nserver-side scheme repairs `hunter2`.\n\nPBKDF2 also buys its cost in the one currency an attacker has cheapest. Its work is\nsequential in *time* but needs a few hundred bytes of memory, so a GPU with thousands of\ncores runs thousands of guesses side by side. scrypt and Argon2 answer that by demanding\nmegabytes per guess, which turns parallelism into silicon area; Argon2id won the Password\nHashing Competition in 2015 and is what a new system should use. PBKDF2 is in this course\nbecause it is the one you can build from a hash function in twenty lines and check\nagainst a published vector.\n\nIteration counts date, too. The 1,000 in RFC 8018's examples was a figure from around\n2000, and current guidance for PBKDF2-HMAC-SHA256 is in the hundreds of thousands; the\nlab's 20,000 is a teaching number chosen so the checks finish quickly. Because the right\nnumber changes, a stored record has to *carry* the number it used, which is why the\nformat has four fields rather than two — and why the capstone's authentication tag covers\nthe iteration count as well as the ciphertext, so that nobody can quietly rewrite it\ndownwards.\n\nFinally, constant-time comparison fixes the comparison and nothing else. If the code\naround it branches on the length of the password, or the key derivation itself is\nvariable-time, the leak has moved rather than closed.\n\n## The lab\n\n**HMAC-SHA256 and PBKDF2 from scratch** builds this bottom-up from `hashlib.sha256` and\n`secrets`, and grades it against the specifications rather than against itself. Your\n`hmac_sha256` meets the RFC 4231 vectors, including the empty-key-empty-message case and\nthe 131-byte key that has to be hashed down to 32 bytes before padding; your `pbkdf2`\nmeets the RFC 8018 vectors at 1, 2 and 4096 iterations, plus a 64-byte derivation whose\nfirst 32 bytes must equal the 32-byte one. `constant_time_equals` must inspect every byte\nof an equal-length pair, `hash_password` must emit\n`pbkdf2_sha256$20000$<salt hex>$<key hex>` with a fresh salt every call, and one check\nreplaces `constant_time_equals` with a spy to confirm that `verify_password` goes through\nit rather than around it."
+    },
+    {
+     "title": "A perfect password store you can walk straight past",
+     "minutes": 14,
+     "body": "On 21 October 2015 TalkTalk, a British telecoms company with about four million\ncustomers, pulled its website down. The intrusion had not gone near the password\nstore. It went through three web pages inherited from Tiscali, a business TalkTalk had\nacquired in 2009, whose database queries were assembled by pasting strings together.\nThe personal data of 156,959 customers came out that way. The Information\nCommissioner's Office fined TalkTalk £400,000, its largest penalty at the time, and\nthe finding that stung was not that the flaw was subtle: a fix for it had been\navailable since 2012, and nobody was looking at those pages at all.\n\nThe previous reading spent itself on making one stored record expensive to attack. An\nattacker who can put his own text into your queries never has to touch that record.\nBoth defences are needed, and neither substitutes for the other — which is the\nuncomfortable shape of application security generally, and the reason this reading\nexists beside the last one rather than inside it.\n\n## The value is being pasted into a program\n\nA SQL statement is source code, and the database compiles it before running it. When\nthe statement is built by formatting a string, whatever the user typed becomes part of\nthat source before the compiler ever sees it.\n\n```python\nimport sqlite3\n\nconn = sqlite3.connect(\":memory:\")\nconn.executescript(\"\"\"\n    CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT);\n    INSERT INTO users (name, email) VALUES ('ada',   'ada@example.com'),\n                                           ('grace', 'grace@example.com');\n\"\"\")\n\n\ndef find_glued(name):\n    \"\"\"The query is built by gluing, so the caller supplies part of the SQL.\"\"\"\n    sql = \"SELECT name, email FROM users WHERE name = '%s'\" % name\n    print(\"  sql:  \", sql)\n    return conn.execute(sql).fetchall()\n\n\nprint(\"a real user:\")\nprint(\"  rows: \", find_glued(\"ada\"))\nprint(\"the string  ' OR '1'='1\")\nprint(\"  rows: \", find_glued(\"' OR '1'='1\"))\n```\n\nThe printed SQL is the whole lesson. For `ada` the statement reads `WHERE name =\n'ada'` and one row comes back. For the second input the closing quote arrives from the\ninput itself, and the statement the database compiles is `WHERE name = '' OR '1'='1'`\n— a condition true of every row, so both users come back and a login routine that takes\nthe first row signs the attacker in as Ada. The attacker did not break a hash, a cipher\nor a random number generator. He supplied a fragment of the program.\n\nEverything else follows from that one observation. A semicolon buys a second\nstatement; a `UNION SELECT` buys the contents of another table, which is how a customer\nlist leaves; and in a database that exposes the file system, injection reaches beyond\nthe database entirely.\n\n## The placeholder is not an escaping routine\n\nThe fix is one character, and what makes it work is worth being precise about, because\nthe wrong explanation for it leads straight to the wrong fix.\n\n```python\nimport sqlite3\n\nconn = sqlite3.connect(\":memory:\")\nconn.executescript(\"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)\")\nfor row in [(\"ada\", \"ada@example.com\"), (\"o'brien\", \"ob@example.com\")]:\n    conn.execute(\"INSERT INTO users (name, email) VALUES (?, ?)\", row)\n\n\ndef find(name):\n    \"\"\"One compiled statement, one bound value. The value is never parsed.\"\"\"\n    return conn.execute(\n        \"SELECT name, email FROM users WHERE name = ?\", (name,)\n    ).fetchall()\n\n\nprint(\"ada          ->\", find(\"ada\"))\nprint(\"o'brien      ->\", find(\"o'brien\"))\nprint(\"' OR '1'='1  ->\", find(\"' OR '1'='1\"))\n\n# The filter that gets written instead: strip the quotes and glue anyway.\ncleaned = \"o'brien\".replace(\"'\", \"\")\nsql = \"SELECT name, email FROM users WHERE name = '%s'\" % cleaned\nprint(\"sanitised sql:\", sql)\nprint(\"sanitised     ->\", conn.execute(sql).fetchall())\n```\n\nThe `?` is not a quoting helper. The statement with the `?` in it is compiled once,\ninto a plan with a labelled hole, and the value is handed to the running plan\nafterwards. There is no moment at which the value is text inside a program, so there\nis nothing for a quote to terminate: `' OR '1'='1` comes back as no rows, because it is\na username nobody has.\n\nNow compare the `o'brien` line with the two `sanitised` ones. `o'brien` is a customer,\nnot an attack, and the parameterised lookup finds him. The quote-stripping filter — the\nfix people reach for when they believe the problem is dangerous characters — rewrites\nhim to `obrien` and returns nothing, so the customer with an apostrophe in his name\ncannot log in. And it has closed the hole only as far as that one character: a numeric\ncolumn needs no quotes to be injected, an `ORDER BY` needs none either, and a value\nthat was already decoded once before the filter saw it has none left to strip. That is\nthe shape of every input-filtering defence. It breaks legitimate data, and it is a\nblacklist, so it is only ever as good as the last bypass somebody thought of.\n\n## Where the placeholder stops\n\nA parameter stands in for a *value*. It cannot stand in for the name of a table, a\ncolumn, or a keyword, because those are decided when the statement is compiled and the\nvalue arrives after that.\n\n```python\nimport sqlite3\n\nconn = sqlite3.connect(\":memory:\")\nconn.executescript(\"CREATE TABLE t (v INTEGER); INSERT INTO t VALUES (3), (1), (2);\")\n\nprint(\"ORDER BY ?   ->\", conn.execute(\"SELECT v FROM t ORDER BY ?\", (\"v\",)).fetchall())\nprint(\"ORDER BY v   ->\", conn.execute(\"SELECT v FROM t ORDER BY v\").fetchall())\n\ntry:\n    conn.execute(\"SELECT v FROM ?\", (\"t\",))\nexcept sqlite3.OperationalError as exc:\n    print(\"FROM ?       ->\", type(exc).__name__, exc)\n```\n\n`SELECT v FROM ?` is a syntax error, which is the harmless case: the code does not\nship. `ORDER BY ?` is the dangerous one. It compiles, it runs, and it sorts by the\nconstant string `\"v\"`, which orders nothing — the rows come back `3, 1, 2` in the order\nthey were inserted, while `ORDER BY v` gives `1, 2, 3`. A sort column that arrives from\na query string therefore cannot be parameterised, and the only safe construction is to\nmap the request onto a fixed list of column names you wrote yourself and reject\nanything that is not on it. Allow-list, never escape.\n\nThat generalises past SQL, and it is the sentence to carry out of this module: **data\nmust never re-enter a parser as code**. The same defect with a shell parser is command\ninjection, with an HTML parser it is cross-site scripting, with an LDAP or an XPath\nparser it has its own name and the same cause. Each parser has its own version of the\n`?`, and in the browser that version is `textContent` rather than `innerHTML`.\n\n## After the password check\n\nVerifying the password is one request. HTTP has no memory, so the server has to hand\nthe client something that proves the check already happened, and there are two families.\n\nA **session cookie** carries an opaque identifier and the server keeps the mapping:\nsession `a8f3` is user 42. The state costs storage and a lookup per request, and buys\nrevocation — deleting the row logs the user out immediately. A **signed token** carries\nthe claims themselves, with a tag the server can verify without storing anything:\n\n```python\nimport hashlib\nimport hmac\n\nSIGNING_KEY = b\"the server's signing key, never sent anywhere\"\n\n\ndef issue(claims):\n    \"\"\"Hand the client a statement plus a tag only this key can produce.\"\"\"\n    tag = hmac.new(SIGNING_KEY, claims.encode(), hashlib.sha256).hexdigest()[:16]\n    return claims + \".\" + tag\n\n\ndef accept(token):\n    claims, _, tag = token.rpartition(\".\")\n    expected = hmac.new(SIGNING_KEY, claims.encode(), hashlib.sha256).hexdigest()[:16]\n    return hmac.compare_digest(tag, expected)\n\n\ntoken = issue(\"user=42&role=reader\")\nprint(\"issued:  \", token)\nprint(\"accepted:\", accept(token))\n\npromoted = token.replace(\"role=reader\", \"role=admin\")\nprint(\"promoted:\", promoted)\nprint(\"accepted:\", accept(promoted))\nprint(\"readable by anyone holding it:\", token.rpartition(\".\")[0])\n```\n\nThat `hmac.new` is the construction this module's HMAC lab builds by hand, doing the\njob it was designed for. Editing `role=reader` to `role=admin` leaves the tag unchanged\nand the token is refused, because producing the matching tag needs the key. A JWT is\nthis shape with base64 and JSON.\n\nThe last line is the misconception worth naming, because it is the one people actually\nhold: the token is signed, not encrypted. The claims are readable by anyone who holds\nit. A signed token authenticates its contents and hides nothing, so a secret in a token\nis a published secret. And a stateless token cannot be recalled — the server that\nchecks a signature is not consulting a list, so a token stays good until it expires.\nThat is why the expiry is short and why anything needing immediate revocation keeps\nserver-side state after all.\n\nTwo status codes, and they are routinely swapped. **401** means the request carried no\nusable identity: no credentials, a bad password, an expired token. **403** means the\nidentity is established and this user is not allowed to do this. Answering 403 to an\nanonymous request tells a client to stop retrying when re-authenticating would have\nworked; answering 401 to a logged-in user sends them back to a login screen that will\nnot help.\n\n## The rest of the boundary, and what each item costs\n\nValidate at the boundary — type, length, range — and reject with **400**. This is not\nan anti-injection measure and treating it as one is how filtering defences get built;\nparameters already closed that hole. Validation is about the code behind the boundary\nbeing able to assume what it was written to assume, and about the blast radius of the\nbugs it does not catch.\n\nKeep secrets out of the source. An environment variable is not a vault — it is\nreadable by every child process and lands in crash dumps — but it is not in the\nrepository, and that is the distinction that matters, because a key committed once\nstays in the history after it is deleted from the tip. Rotate anything that was ever\ncommitted.\n\nRate-limit the login endpoint, and notice why this module in particular owes it a\nmention. The last reading made one password check deliberately expensive, and current\nguidance puts the count in the hundreds of thousands. The server pays that cost as\nwell, once per attempt, before it can know the attempt was wrong. Key stretching with\nno limit on attempts therefore hands an attacker a CPU-exhaustion primitive that needs\nno cryptography at all: the defence that protects the stolen file is the same thing\nthat makes the live endpoint worth flooding.\n\nWhere does this stop holding? All of it assumes the transport is confidential. Over\nplain HTTP the password, the cookie and the token are readable in transit, and every\nmechanism above is decoration; HTTPS is the precondition, not an item on the list.\n\n## The lab\n\n**Close the injection hole** hands you the vulnerable lookup from the first example\nabove, spelled with an f-string rather than a `%` because the defect is the gluing and\nnot the syntax, with the attack run at the bottom of the file. Rewrite `find_user` with\na parameter so that `' OR '1'='1` returns `None` while a name containing an apostrophe\nstill returns its row, and write `create_user` to insert with parameters after\nvalidating its arguments — an empty or whitespace username and an address with no `@`\nraise `ValueError`. The checks are written to fail a solution that filters the input\ninstead of binding it."
     }
    ],
    "sandbox": null,
-   "quiz": {
-    "title": "Salts, stretching and the two ways to build a MAC",
-    "minutes": 9,
-    "questions": [
-     {
-      "q": "The salt is stored in the clear, right next to the digest it was used with. Why does adding it help at all?",
-      "opts": [
-       "It lengthens the hash input past one 64-byte block, so an attacker must run two compressions per guess",
-       "It makes the digest unpredictable, so an attacker who knows the password cannot confirm it",
-       "It forces the dictionary pass to be repeated per user, since a guess is now tied to one account",
-       "It hides how many accounts share a password by spreading equal passwords over different digests"
-      ],
-      "a": 2,
-      "why": "Without a salt, one pass over a candidate list produces digests that can be looked up\nagainst the whole dump at once, so the cost of attacking six and a half million accounts\nequals the cost of attacking one. The salt puts the account into the hash input, so a\ncandidate hashed for one user says nothing about any other, and the pass must be run\nagain per account. That is the whole factor of 6,500,000 — it comes from destroying\namortisation and precomputation, and it needs no secrecy whatever, only uniqueness. What\na salt does not do is make any individual guess expensive; that is the iteration count's\njob, and it is a separate defence.",
-      "whys": [
-       "A 16-byte salt in front of a short password does not cross the block boundary, and even if it did, doubling the cost of one hash is nothing next to the factor of six and a half million the salt actually buys.",
-       "An attacker holding a candidate password and the record can confirm it in one derivation — the salt is right there. Confirming a guess was never what a salt makes hard; making the guess *reusable* is.",
-       "Unsalted, one pass over the dictionary tests every user at once; salted, each user needs a pass of their own.",
-       "It does have that effect, and it is worth having, but it is a side benefit. The 6,500,000-fold increase in attacker work comes from the loss of amortisation, and it would be there even if every user's password were distinct."
-      ]
-     },
-     {
-      "q": "A service authenticates API calls with `tag = sha256(secret + params)`. An attacker has one valid `(params, tag)` pair. What can they do?",
-      "opts": [
-       "Nothing without a SHA-256 collision, which is why this construction is considered adequate in practice",
-       "Recover `secret` from the tag by running the compression function backwards from the released state",
-       "Append data of their choosing and compute a valid tag, because the released digest is the hash's state",
-       "Replay the same call indefinitely, which is the only weakness, and a nonce in the parameters removes it"
-      ],
-      "a": 2,
-      "why": "SHA-256 folds 64-byte blocks into a 32-byte state and returns that state as the digest,\nso a released tag is a running hash that can be restarted. The attacker appends the\npadding the hash would have applied to `secret + params`, then whatever they want, and\nresumes from the tag to compute the digest of the longer message — without ever learning\n`secret`. They need only the length of the secret, which is a couple of dozen guesses.\nFlickr's API was forged this way in 2009. HMAC is immune because the value it releases is\nthe state of a hash whose input began with the outer key, and resuming that requires the\nkey.",
-      "whys": [
-       "No collision is needed. The extension attack works on a hash with no known collisions at all, because it exploits the shape of Merkle-Damgard rather than any weakness in the compression function.",
-       "The compression function is one-way, and running it backwards is exactly the problem SHA-256 is built to make hard. Forgery here needs no inversion — the attacker goes forwards from a state he was handed.",
-       "A Merkle-Damgard digest is the internal state, so anyone holding it can resume the machine.",
-       "Replay is a real problem and a nonce is a real fix, but a nonce does nothing here: the attacker is not resending the old call, he is producing a tag for a message that has never been sent."
-      ]
-     },
-     {
-      "q": "PBKDF2 chains HMAC calls, feeding each output back in as the next input. What does the chaining buy that hashing a long padded string would not?",
-      "opts": [
-       "The work inside one guess is sequential, so extra cores cannot shorten a single derivation",
-       "The derived key grows with the iteration count, so more iterations give more bytes",
-       "Each iteration mixes in fresh salt bytes, so a precomputed table would have to cover them all",
-       "It keeps the derived key uniform, since a hash of a long input is biased towards its later blocks"
-      ],
-      "a": 0,
-      "why": "Hashing one very long string costs the same total work but is not forced to be\nsequential in a way that matters, and it is trivially pipelined; the chain makes $U_j$\ndepend on the completed $U_{j-1}$, so a single guess occupies one core for the full\nduration however much hardware is available. The XOR fold on top of that makes the result\ndepend on every intermediate rather than only the last, so a chain that wandered into a\nshort cycle could not silently shrink the output space. Note what the chain does *not*\nbuy: the attacker still runs thousands of separate guesses in parallel, which is why\nPBKDF2 loses to GPUs and why memory-hard designs replaced it.",
-      "whys": [
-       "$U_j$ cannot begin until $U_{j-1}$ is finished, and no hardware repeals that.",
-       "The output is 32 bytes per block whatever the iteration count; extra length comes from extra blocks, generated with a counter of their own. Iterations buy time, not size, and the two knobs are independent.",
-       "The salt appears once, in $U_1$, and never again. Precomputation is defeated by the salt being there at all, which a single hash of `salt + password` also achieves — the chain is answering a different question.",
-       "A hash of a long input is not biased towards anything; every block is folded into the same state and the output is uniform either way. Merkle-Damgard has real weaknesses, and this is not one of them."
-      ]
-     },
-     {
-      "q": "Verification compares a 32-byte tag with `==`. Roughly how many attempts does an attacker who can time the response need to forge a tag?",
-      "opts": [
-       "About $2^{128}$, since timing halves the exponent the way a birthday attack does",
-       "About 8192: 256 values for each byte position, walked left to right across 32 bytes",
-       "About $2^{256}$ still, because the timing difference is far below network jitter and cannot be used",
-       "About 32, one per byte, since each comparison reveals the byte it stopped on outright"
-      ],
-      "a": 1,
-      "why": "A short-circuiting comparison inspects 1, 2, 3 … bytes as the guess gets more of the\nprefix right, so its running time reports how many leading bytes are correct. The attacker\nfixes the prefix he has, tries all 256 values of the next byte, keeps the one that took\nmeasurably longer, and moves on: $256 \\times 32 = 8192$ attempts, against $2^{256}$ to\nsearch the tag space. The fix is to inspect all 32 bytes every time — OR each `x ^ y` into\nan accumulator and test it once — which is what `constant_time_equals` does and what the\nlab's spy check confirms `verify_password` actually calls.",
-      "whys": [
-       "Timing here does not shave an exponent, it removes one. The leak turns a search over the whole tag into 32 independent searches over one byte, which is a change of kind rather than of degree.",
-       "Fix the leading bytes, try all 256 values of the next, and keep whichever ran longest.",
-       "Jitter makes the measurement need repetition and statistics; it does not destroy the signal, and remote timing attacks on differences of this size have been demonstrated on real networks. Difficulty of measurement is not a security property.",
-       "The comparison reveals only *how far* it got, not what it found — the attacker still has to try values until one runs a byte longer. That is 256 tries per position, not one."
-      ]
-     },
-     {
-      "q": "A site salts every password and runs 20,000 PBKDF2 iterations. An attacker steals the database and targets one specific account whose password is in a 14-million-entry leaked list. What happens?",
-      "opts": [
-       "The iteration count applies per record, so recovering one password costs as much as recovering the whole database",
-       "The salt is unknown to the attacker for that account, so the dictionary cannot be tested against it at all",
-       "That password falls in well under a minute, because the defences remove amortisation and not guessability",
-       "Nothing: 20,000 iterations put a single dictionary pass beyond the reach of any single machine"
-      ],
-      "a": 2,
-      "why": "14 million candidates at 40,000 hashes each is $5.6 \\times 10^{11}$ hashes, about 28\nseconds on one high-end card. Salting and stretching multiply the cost of attacking\n*everybody*, and the numbers there are decisive: 0.0007 seconds unsalted, 76 minutes\nsalted, 5.8 years salted and stretched. Against one chosen account with a password on a\npublic list, they buy half a minute. No server-side scheme repairs a guessable password;\nwhat these defences protect is every other user in the file, which is most of the value\nand none of the comfort for that one account.",
-      "whys": [
-       "The whole database is 6.5 million records and one record is one; the costs differ by that factor exactly. This has it backwards — the per-record cost is what stops the *bulk* attack, and it is small when only one record is wanted.",
-       "The salt is stored beside the digest, in the clear, and the attacker has the database. Salts were never secret, and a scheme that needed them to be would break every login.",
-       "14 million candidates at 40,000 hashes each is under 30 seconds on one card.",
-       "14 million times 40,000 is $5.6 \\times 10^{11}$ hashes, which a single high-end card retires in about half a minute. Iteration counts move the bar; they do not put one dictionary pass out of reach."
-      ]
-     },
-     {
-      "q": "Why does the stored record carry its iteration count as a field, instead of the code applying a single constant?",
-      "opts": [
-       "So that verification can lower the count on a slow machine and raise it again on a fast one",
-       "So that records written under an older, cheaper setting still verify once the constant is raised",
-       "So that each account can be given a different count, which frustrates a precomputed table",
-       "So that the derived key length can be worked out from it, since the two are linked by the block counter"
-      ],
-      "a": 1,
-      "why": "The appropriate count rises as hardware gets faster — 1,000 in RFC 8018's examples was a\nfigure from around 2000, and current guidance is in the hundreds of thousands. Every\npassword already on disk was derived under whatever number was current when it was\nstored, and that derivation cannot be redone without the password. Carrying the count in\nthe record lets old entries verify while new ones use the new setting, and lets an entry\nbe upgraded at the next successful login, when the plaintext is briefly available. It\nalso creates a target: an attacker who can edit the field to 1 has removed the defence\nentirely, which is why the capstone's authentication tag covers the iteration count as\nwell as the ciphertext.",
-      "whys": [
-       "The count is not a tuning parameter that verification may choose. Deriving with a different number than the one used at storage time produces a different key and a failed login, whatever machine it runs on.",
-       "The right number keeps rising, and the records already on disk were written under the old one.",
-       "Varying the count per account is a defence the salt already provides far better, and a precomputed table is already dead once a per-user salt exists. Iterations raise the cost of a guess; they are not a second separator.",
-       "The block counter runs 1, 2, 3 over output blocks and has nothing to do with iterations. A 32-byte and a 64-byte key can be derived at the same count, and the lab checks that the first 32 bytes agree."
-      ]
-     }
-    ]
-   },
+   "quiz": [
+    {
+     "title": "Salts, stretching and the two ways to build a MAC",
+     "minutes": 9,
+     "questions": [
+      {
+       "q": "The salt is stored in the clear, right next to the digest it was used with. Why does adding it help at all?",
+       "opts": [
+        "It lengthens the hash input past one 64-byte block, so an attacker must run two compressions per guess",
+        "It makes the digest unpredictable, so an attacker who knows the password cannot confirm it",
+        "It forces the dictionary pass to be repeated per user, since a guess is now tied to one account",
+        "It hides how many accounts share a password by spreading equal passwords over different digests"
+       ],
+       "a": 2,
+       "why": "Without a salt, one pass over a candidate list produces digests that can be looked up\nagainst the whole dump at once, so the cost of attacking six and a half million accounts\nequals the cost of attacking one. The salt puts the account into the hash input, so a\ncandidate hashed for one user says nothing about any other, and the pass must be run\nagain per account. That is the whole factor of 6,500,000 — it comes from destroying\namortisation and precomputation, and it needs no secrecy whatever, only uniqueness. What\na salt does not do is make any individual guess expensive; that is the iteration count's\njob, and it is a separate defence.",
+       "whys": [
+        "A 16-byte salt in front of a short password does not cross the block boundary, and even if it did, doubling the cost of one hash is nothing next to the factor of six and a half million the salt actually buys.",
+        "An attacker holding a candidate password and the record can confirm it in one derivation — the salt is right there. Confirming a guess was never what a salt makes hard; making the guess *reusable* is.",
+        "Unsalted, one pass over the dictionary tests every user at once; salted, each user needs a pass of their own.",
+        "It does have that effect, and it is worth having, but it is a side benefit. The 6,500,000-fold increase in attacker work comes from the loss of amortisation, and it would be there even if every user's password were distinct."
+       ]
+      },
+      {
+       "q": "A service authenticates API calls with `tag = sha256(secret + params)`. An attacker has one valid `(params, tag)` pair. What can they do?",
+       "opts": [
+        "Nothing without a SHA-256 collision, which is why this construction is considered adequate in practice",
+        "Recover `secret` from the tag by running the compression function backwards from the released state",
+        "Append data of their choosing and compute a valid tag, because the released digest is the hash's state",
+        "Replay the same call indefinitely, which is the only weakness, and a nonce in the parameters removes it"
+       ],
+       "a": 2,
+       "why": "SHA-256 folds 64-byte blocks into a 32-byte state and returns that state as the digest,\nso a released tag is a running hash that can be restarted. The attacker appends the\npadding the hash would have applied to `secret + params`, then whatever they want, and\nresumes from the tag to compute the digest of the longer message — without ever learning\n`secret`. They need only the length of the secret, which is a couple of dozen guesses.\nFlickr's API was forged this way in 2009. HMAC is immune because the value it releases is\nthe state of a hash whose input began with the outer key, and resuming that requires the\nkey.",
+       "whys": [
+        "No collision is needed. The extension attack works on a hash with no known collisions at all, because it exploits the shape of Merkle-Damgard rather than any weakness in the compression function.",
+        "The compression function is one-way, and running it backwards is exactly the problem SHA-256 is built to make hard. Forgery here needs no inversion — the attacker goes forwards from a state he was handed.",
+        "A Merkle-Damgard digest is the internal state, so anyone holding it can resume the machine.",
+        "Replay is a real problem and a nonce is a real fix, but a nonce does nothing here: the attacker is not resending the old call, he is producing a tag for a message that has never been sent."
+       ]
+      },
+      {
+       "q": "PBKDF2 chains HMAC calls, feeding each output back in as the next input. What does the chaining buy that hashing a long padded string would not?",
+       "opts": [
+        "The work inside one guess is sequential, so extra cores cannot shorten a single derivation",
+        "The derived key grows with the iteration count, so more iterations give more bytes",
+        "Each iteration mixes in fresh salt bytes, so a precomputed table would have to cover them all",
+        "It keeps the derived key uniform, since a hash of a long input is biased towards its later blocks"
+       ],
+       "a": 0,
+       "why": "Hashing one very long string costs the same total work but is not forced to be\nsequential in a way that matters, and it is trivially pipelined; the chain makes $U_j$\ndepend on the completed $U_{j-1}$, so a single guess occupies one core for the full\nduration however much hardware is available. The XOR fold on top of that makes the result\ndepend on every intermediate rather than only the last, so a chain that wandered into a\nshort cycle could not silently shrink the output space. Note what the chain does *not*\nbuy: the attacker still runs thousands of separate guesses in parallel, which is why\nPBKDF2 loses to GPUs and why memory-hard designs replaced it.",
+       "whys": [
+        "$U_j$ cannot begin until $U_{j-1}$ is finished, and no hardware repeals that.",
+        "The output is 32 bytes per block whatever the iteration count; extra length comes from extra blocks, generated with a counter of their own. Iterations buy time, not size, and the two knobs are independent.",
+        "The salt appears once, in $U_1$, and never again. Precomputation is defeated by the salt being there at all, which a single hash of `salt + password` also achieves — the chain is answering a different question.",
+        "A hash of a long input is not biased towards anything; every block is folded into the same state and the output is uniform either way. Merkle-Damgard has real weaknesses, and this is not one of them."
+       ]
+      },
+      {
+       "q": "Verification compares a 32-byte tag with `==`. Roughly how many attempts does an attacker who can time the response need to forge a tag?",
+       "opts": [
+        "About $2^{128}$, since timing halves the exponent the way a birthday attack does",
+        "About 8192: 256 values for each byte position, walked left to right across 32 bytes",
+        "About $2^{256}$ still, because the timing difference is far below network jitter and cannot be used",
+        "About 32, one per byte, since each comparison reveals the byte it stopped on outright"
+       ],
+       "a": 1,
+       "why": "A short-circuiting comparison inspects 1, 2, 3 … bytes as the guess gets more of the\nprefix right, so its running time reports how many leading bytes are correct. The attacker\nfixes the prefix he has, tries all 256 values of the next byte, keeps the one that took\nmeasurably longer, and moves on: $256 \\times 32 = 8192$ attempts, against $2^{256}$ to\nsearch the tag space. The fix is to inspect all 32 bytes every time — OR each `x ^ y` into\nan accumulator and test it once — which is what `constant_time_equals` does and what the\nlab's spy check confirms `verify_password` actually calls.",
+       "whys": [
+        "Timing here does not shave an exponent, it removes one. The leak turns a search over the whole tag into 32 independent searches over one byte, which is a change of kind rather than of degree.",
+        "Fix the leading bytes, try all 256 values of the next, and keep whichever ran longest.",
+        "Jitter makes the measurement need repetition and statistics; it does not destroy the signal, and remote timing attacks on differences of this size have been demonstrated on real networks. Difficulty of measurement is not a security property.",
+        "The comparison reveals only *how far* it got, not what it found — the attacker still has to try values until one runs a byte longer. That is 256 tries per position, not one."
+       ]
+      },
+      {
+       "q": "A site salts every password and runs 20,000 PBKDF2 iterations. An attacker steals the database and targets one specific account whose password is in a 14-million-entry leaked list. What happens?",
+       "opts": [
+        "The iteration count applies per record, so recovering one password costs as much as recovering the whole database",
+        "The salt is unknown to the attacker for that account, so the dictionary cannot be tested against it at all",
+        "That password falls in well under a minute, because the defences remove amortisation and not guessability",
+        "Nothing: 20,000 iterations put a single dictionary pass beyond the reach of any single machine"
+       ],
+       "a": 2,
+       "why": "14 million candidates at 40,000 hashes each is $5.6 \\times 10^{11}$ hashes, about 28\nseconds on one high-end card. Salting and stretching multiply the cost of attacking\n*everybody*, and the numbers there are decisive: 0.0007 seconds unsalted, 76 minutes\nsalted, 5.8 years salted and stretched. Against one chosen account with a password on a\npublic list, they buy half a minute. No server-side scheme repairs a guessable password;\nwhat these defences protect is every other user in the file, which is most of the value\nand none of the comfort for that one account.",
+       "whys": [
+        "The whole database is 6.5 million records and one record is one; the costs differ by that factor exactly. This has it backwards — the per-record cost is what stops the *bulk* attack, and it is small when only one record is wanted.",
+        "The salt is stored beside the digest, in the clear, and the attacker has the database. Salts were never secret, and a scheme that needed them to be would break every login.",
+        "14 million candidates at 40,000 hashes each is under 30 seconds on one card.",
+        "14 million times 40,000 is $5.6 \\times 10^{11}$ hashes, which a single high-end card retires in about half a minute. Iteration counts move the bar; they do not put one dictionary pass out of reach."
+       ]
+      },
+      {
+       "q": "Why does the stored record carry its iteration count as a field, instead of the code applying a single constant?",
+       "opts": [
+        "So that verification can lower the count on a slow machine and raise it again on a fast one",
+        "So that records written under an older, cheaper setting still verify once the constant is raised",
+        "So that each account can be given a different count, which frustrates a precomputed table",
+        "So that the derived key length can be worked out from it, since the two are linked by the block counter"
+       ],
+       "a": 1,
+       "why": "The appropriate count rises as hardware gets faster — 1,000 in RFC 8018's examples was a\nfigure from around 2000, and current guidance is in the hundreds of thousands. Every\npassword already on disk was derived under whatever number was current when it was\nstored, and that derivation cannot be redone without the password. Carrying the count in\nthe record lets old entries verify while new ones use the new setting, and lets an entry\nbe upgraded at the next successful login, when the plaintext is briefly available. It\nalso creates a target: an attacker who can edit the field to 1 has removed the defence\nentirely, which is why the capstone's authentication tag covers the iteration count as\nwell as the ciphertext.",
+       "whys": [
+        "The count is not a tuning parameter that verification may choose. Deriving with a different number than the one used at storage time produces a different key and a failed login, whatever machine it runs on.",
+        "The right number keeps rising, and the records already on disk were written under the old one.",
+        "Varying the count per account is a defence the salt already provides far better, and a precomputed table is already dead once a per-user salt exists. Iterations raise the cost of a guess; they are not a second separator.",
+        "The block counter runs 1, 2, 3 over output blocks and has nothing to do with iterations. A 32-byte and a 64-byte key can be derived at the same count, and the lab checks that the first 32 bytes agree."
+       ]
+      }
+     ]
+    },
+    {
+     "title": "Injection, identity and what a signed token does not hide",
+     "minutes": 9,
+     "questions": [
+      {
+       "q": "A login page builds its lookup by concatenation: the SQL text, then `username`, then a closing quote. Why does the input `' OR '1'='1` return every row here, and nothing at all once the same query uses a `?` parameter?",
+       "opts": [
+        "The input is long enough to be truncated by the driver, and a truncated comparison matches whatever is left",
+        "Its apostrophe closes the literal, so the rest of the input reaches the database as SQL rather than as a name",
+        "A parameter escapes apostrophes before the string is assembled, which is what stops this input closing the literal",
+        "It contains bytes the driver cannot encode, so the comparison fails open and every row satisfies it"
+       ],
+       "a": 1,
+       "why": "A SQL statement is source code and the database compiles it before running it. Pasting\nthe input in means the apostrophe ends the literal that was opened for it, and the text\nafter it is compiled as a condition true of every row. The `?` version is not the same\nstatement with better quoting. It is compiled once, with a hole where the value goes,\nand the value is bound to the finished plan afterwards; there is no moment at which it\nis text inside a program, so there is nothing for a quote to terminate, and\n`' OR '1'='1` comes back as the username nobody has.",
+       "whys": [
+        "Nothing is truncated and the input arrives whole. Length is not what makes it dangerous: two characters, an apostrophe and a space, end the literal as effectively as thirteen do.",
+        "The apostrophe ends the string literal, and what follows it is compiled as part of the statement.",
+        "This is the explanation that leads to the wrong fix. A bound parameter escapes nothing: the statement is compiled with a labelled hole in it and the value is handed to the finished plan, so the value is never text inside a program.",
+        "Drivers encode this input without difficulty, and nothing fails open. Every row satisfies the clause because the input rewrote the clause into `OR '1'='1'`, not because a comparison gave up."
+       ]
+      },
+      {
+       "q": "A report page takes the name of the sort column from the query string. Writing `ORDER BY ?` and binding it does not work. What does, and why?",
+       "opts": [
+        "Run the value through the driver's quoting helper and paste it in, which is what a bound parameter does internally",
+        "Map the request onto a list of column names written in the code, and refuse anything not on it",
+        "Strip spaces, quotes and semicolons, since a legitimate column name contains none of them",
+        "Nothing: `ORDER BY ?` binds the column the way `WHERE name = ?` binds a value, and it already sorts correctly"
+       ],
+       "a": 1,
+       "why": "A parameter stands in for a value, and a column name is not a value: it is fixed when\nthe statement is compiled, and binding happens after that. `SELECT v FROM ?` at least\nfails loudly with a syntax error. `ORDER BY ?` compiles, runs, and sorts by the constant\nstring, so the rows come back unsorted and the defect is silent. Since the name has to\nbecome part of the SQL text, the only defence left is to decide in your own code which\nnames are permitted and refuse everything else. Allow-list rather than escape, and the\nrule holds anywhere a value has to become part of a program.",
+       "whys": [
+        "Quoting helpers exist, and they are still the wrong tool: a helper is a blacklist of characters, only ever as good as the last bypass anybody thought of. A bound parameter does no quoting at all, so it is not a model for what to do where a parameter cannot go.",
+        "An allow-list of names you wrote yourself is decidable: the value is on the list or it is not.",
+        "Filtering has the same defect wherever it is used, and it breaks real data as well: the same reflex applied to a name rewrites `o'brien` to `obrien` and locks a customer out. Deciding what is permitted is a different operation from deleting what is not.",
+        "`ORDER BY ?` compiles and runs, which is what makes it dangerous rather than safe. It sorts by a constant string, so the rows arrive in whatever order the plan produced, and no error is reported anywhere."
+       ]
+      },
+      {
+       "q": "A request arrives with no credentials at all, for a page only administrators may open. Which status code belongs on the response, and what does the choice cost if it is wrong?",
+       "opts": [
+        "400, because a request missing a required header is malformed and the client should repair and resend it",
+        "401: no identity was established, and answering 403 tells a client to stop rather than to authenticate",
+        "403, because the page belongs to administrators and this request is not from one",
+        "404, because acknowledging that an administrative page exists is a disclosure, and hiding it is the safer default"
+       ],
+       "a": 1,
+       "why": "The two codes answer different questions. 401 means no usable identity arrived — no\ncredentials, a wrong password, an expired token — and it is an invitation to\nauthenticate. 403 means the identity is established and this user may not do this, so\nretrying with the same credentials is pointless. Swapping them costs the client its next\nmove in both directions: 403 to an anonymous caller tells it to give up where logging in\nwould have worked, and 401 to a logged-in user sends it back to a login screen that\nchanges nothing. 404 is a third answer, chosen on purpose when the existence of the\nresource is itself sensitive.",
+       "whys": [
+        "400 says the request itself was malformed: bad syntax, a header that could not be parsed. A well-formed anonymous request is not malformed, and a client told to repair it has nothing to repair.",
+        "No identity was presented, so what is missing is authentication, and 401 is the code that asks for it.",
+        "403 is right once the identity is known and insufficient. Sent to an anonymous caller it says the answer would still be no after logging in, so a client that would have authenticated gives up instead.",
+        "Answering 404 to conceal a resource is a real practice and a deliberate trade rather than a default. It costs the caller any way to tell a missing page from a forbidden one, and it is chosen when the existence of the page is itself the secret."
+       ]
+      },
+      {
+       "q": "A service issues stateless signed tokens carrying `user` and `role`, with an HMAC tag over both. Which statement about those tokens is true?",
+       "opts": [
+        "Rewriting `role` to `admin` yields a token the server accepts, because the tag covers `user` and not the rest",
+        "Anyone holding one can read the claims; the tag stops them being changed, not being read",
+        "The claims are encrypted under the signing key, so a token is a safe place to carry a session secret",
+        "It can be revoked at once by deleting it server-side, which is why it is cheap"
+       ],
+       "a": 1,
+       "why": "A signed token carries its claims in the open with a tag over them. The tag is what\nmakes an edit detectable, because recomputing it needs the key, and it does nothing\nwhatever to conceal the contents. A JWT is this shape with base64 and JSON, and base64\nis an encoding, so every claim is readable by anyone holding the token. The second\nconsequence is revocation: verifying a signature consults nothing, so there is no record\nto delete and the token stays good until it expires. Short expiries, plus a server-side\nlist for the cases that need an immediate cut-off, are the usual answers, and the second\none hands back the statelessness that motivated the design.",
+       "whys": [
+        "The tag is computed over the whole claims string, so altering any byte of it invalidates the tag. A MAC covering only part of what it authenticates would be a serious bug, and it is exactly what HMAC's contract rules out.",
+        "Signing authenticates the claims and conceals nothing; the tag proves they were not edited.",
+        "This is the misconception that leaks secrets. Signed is not encrypted: the claims travel in the clear, base64 is an encoding rather than a cipher, and anything confidential put into a token is published to whoever holds it.",
+        "There is nothing on the server to delete — statelessness is the whole design, and verification checks a tag rather than consulting a list. That is the cost of the trade, and it is why expiries are kept short."
+       ]
+      },
+      {
+       "q": "An API key was committed to a repository three months ago and has since been deleted from the file it was in. What has to happen now?",
+       "opts": [
+        "Add the file to `.gitignore`, which drops the object holding the key from the repository",
+        "Rotate the key: every clone and every commit in the history still contains it",
+        "Nothing further: the tip no longer holds the key, and that is what deploys",
+        "Make the repository private, after which the key in the history is reachable only by people who already have access"
+       ],
+       "a": 1,
+       "why": "A repository keeps its history, and a secret committed once is reachable from the commit\nthat added it however the file reads at the tip. Every clone taken in the last three\nmonths holds it, and a public repository has to be assumed scraped within minutes. The\nonly action that restores the property the key was supposed to have is rotation: issue a\nnew key, revoke the old one, and treat rewriting the history as tidying rather than as\nremediation. Reading the key from the environment or from a secret store avoids the\nproblem at its source — not because an environment variable is well protected, since it\nis readable by child processes and lands in crash dumps, but because it is not in the\nrepository.",
+       "whys": [
+        "`.gitignore` governs what gets added in future and has no effect on what is already committed. The object holding the key stays reachable from the commit that added it.",
+        "Deleting the line changes the tip and nothing else; the key is in every copy of the history.",
+        "That is true of what a deployment checks out and false of what the repository stores. Every commit since the key was added still contains it, and so does every clone, fork and cached copy taken in three months.",
+        "Restricting access afterwards reaches neither the clones that already exist nor any mirror or scraper that saw it while it was public. Access control applied after disclosure narrows the future audience rather than undoing the disclosure."
+       ]
+      },
+      {
+       "q": "A login endpoint derives the password with 300,000 PBKDF2 iterations and puts no limit on attempts. What has that combination created, over and above the guessing risk?",
+       "opts": [
+        "A timing channel: the derivation runs longer as more of the submitted password matches the stored one",
+        "A denial-of-service target: each attempt spends the server's CPU on the cost the iteration count imposes",
+        "Nothing further, because the iteration count is a cost paid by the attacker and not by the server",
+        "A correctness problem, because a derivation that slow can time out mid-request and reject a valid password"
+       ],
+       "a": 1,
+       "why": "Key stretching works by making one password check expensive, and the endpoint that\nchecks passwords sits on the defender's side of the wire. A request carrying a garbage\npassword cannot be rejected until the derivation has run, so an attacker who sends\nnothing but garbage buys hundreds of thousands of hash compressions per packet and needs\nno cryptography at all to do it. The defence and the exposure are the same parameter,\nwhich is why a limit on attempts belongs beside it: throttle per account and per source,\nback off after repeated failures, and put the expensive derivation behind that gate\nrather than in front of it.",
+       "whys": [
+        "PBKDF2 runs the same number of iterations whatever the password is, so its duration says nothing about how close a guess came. The timing leak in this module is in the comparison at the end, and the fix there is to inspect every byte.",
+        "The server has to run the derivation before it can know the attempt was wrong, so it pays for every attempt.",
+        "The cost is symmetric on the login path. An attacker holding the stolen file pays it offline, and the live endpoint pays it as well, once per attempt, before it can tell a real login from a flood.",
+        "Hundreds of thousands of HMAC-SHA256 iterations take tens of milliseconds rather than seconds, so a valid password is in no danger of being rejected for slowness. The cost is real and it shows up as load, not as a wrong answer."
+       ]
+      }
+     ]
+    }
+   ],
    "blanks": null,
    "numeric": null,
    "match": null,
    "tune": null,
    "build": null,
    "derive": null,
-   "lab": {
-    "title": "HMAC-SHA256 and PBKDF2 from scratch",
-    "runtime": "python",
-    "minutes": 65,
-    "brief": "Only `hashlib.sha256` and `secrets` are given. Everything else you build, and\nthe checks compare your output against the published vectors of RFC 4231 and\nRFC 8018.\n\n**`hmac_sha256(key, message)`** — RFC 2104 with SHA-256, block size 64:\n\n```text\nkey longer than 64 bytes  ->  key = sha256(key).digest()\nkey shorter than 64 bytes ->  pad with zero bytes to 64\nipad = key xor 0x36 * 64      opad = key xor 0x5c * 64\nHMAC = sha256(opad + sha256(ipad + message).digest()).digest()\n```\n\n**`pbkdf2(password, salt, iterations, dklen=32)`** — PBKDF2-HMAC-SHA256:\n\n```text\nblock i (counting from 1):\n  U1 = HMAC(password, salt + i as 4 big-endian bytes)\n  Uj = HMAC(password, U(j-1))            for j = 2..iterations\n  T_i = U1 xor U2 xor ... xor U_iterations\noutput = T_1 || T_2 || ...   truncated to dklen\n```\n\n`iterations` below 1 raises `ValueError`.\n\n**`constant_time_equals(a, b)`** — compare two byte strings without leaking\nwhere they differ. Accept `str` as well by encoding it. Different lengths give\n`False`, and the comparison over equal lengths must look at every byte.\n\n**`random_salt(size=16)`** — `size` bytes from `secrets`.\n\n**`hash_password(password, iterations=DEFAULT_ITERATIONS)`** — a storable\nrecord, four fields separated by `$`:\n\n```text\npbkdf2_sha256$20000$<salt as hex>$<32-byte derived key as hex>\n```\n\n**`verify_password(password, stored)`** — split the record, derive with the\nsame salt and iteration count, and compare in constant time. A record that is\nnot four fields, or whose algorithm is not `pbkdf2_sha256`, raises `ValueError`.",
-    "files": [
-     {
-      "name": "main.py",
-      "content": "import hashlib\nimport secrets\n\nBLOCK_SIZE = 64          # SHA-256 processes 64-byte blocks\nDIGEST_SIZE = 32\nALGORITHM = \"pbkdf2_sha256\"\nDEFAULT_ITERATIONS = 20000\n\n\ndef hmac_sha256(key, message):\n    \"\"\"RFC 2104 HMAC with SHA-256. Returns 32 bytes.\"\"\"\n    # your code here\n\n\ndef pbkdf2(password, salt, iterations, dklen=32):\n    \"\"\"PBKDF2-HMAC-SHA256. ValueError when iterations < 1.\"\"\"\n    # your code here\n\n\ndef constant_time_equals(a, b):\n    \"\"\"Compare without revealing the position of the first difference.\"\"\"\n    # your code here\n\n\ndef random_salt(size=16):\n    \"\"\"size unpredictable bytes.\"\"\"\n    # your code here\n\n\ndef hash_password(password, iterations=DEFAULT_ITERATIONS):\n    \"\"\"A storable record: algorithm$iterations$salt$derived key.\"\"\"\n    # your code here\n\n\ndef verify_password(password, stored):\n    \"\"\"True when password reproduces the stored record.\"\"\"\n    # your code here\n\n\nrecord = hash_password(\"correct horse battery staple\", iterations=1000)\nprint(record)\nprint(\"right password:\", verify_password(\"correct horse battery staple\", record))\nprint(\"wrong password:\", verify_password(\"Tr0ub4dor&3\", record))\n"
-     }
-    ],
-    "main": "main.py",
-    "solution": [
-     {
-      "name": "main.py",
-      "content": "import hashlib\nimport secrets\n\nBLOCK_SIZE = 64          # SHA-256 processes 64-byte blocks\nDIGEST_SIZE = 32\nALGORITHM = \"pbkdf2_sha256\"\nDEFAULT_ITERATIONS = 20000\n\n\ndef as_bytes(value):\n    \"\"\"UTF-8 encode a str, pass bytes through.\"\"\"\n    return value.encode(\"utf-8\") if isinstance(value, str) else bytes(value)\n\n\ndef hmac_sha256(key, message):\n    \"\"\"RFC 2104 HMAC with SHA-256. Returns 32 bytes.\"\"\"\n    key = as_bytes(key)\n    message = as_bytes(message)\n    if len(key) > BLOCK_SIZE:\n        key = hashlib.sha256(key).digest()\n    key = key + b\"\\x00\" * (BLOCK_SIZE - len(key))\n    inner = bytes(b ^ 0x36 for b in key)\n    outer = bytes(b ^ 0x5C for b in key)\n    return hashlib.sha256(outer + hashlib.sha256(inner + message).digest()).digest()\n\n\ndef pbkdf2(password, salt, iterations, dklen=32):\n    \"\"\"PBKDF2-HMAC-SHA256. ValueError when iterations < 1.\"\"\"\n    if iterations < 1:\n        raise ValueError(\"iterations must be at least 1\")\n    if dklen < 1:\n        raise ValueError(\"dklen must be at least 1\")\n    password = as_bytes(password)\n    salt = as_bytes(salt)\n    out = b\"\"\n    block = 1\n    while len(out) < dklen:\n        current = hmac_sha256(password, salt + block.to_bytes(4, \"big\"))\n        accumulator = current\n        for _ in range(iterations - 1):\n            current = hmac_sha256(password, current)\n            accumulator = bytes(x ^ y for x, y in zip(accumulator, current))\n        out += accumulator\n        block += 1\n    return out[:dklen]\n\n\ndef constant_time_equals(a, b):\n    \"\"\"Compare without revealing the position of the first difference.\"\"\"\n    a = as_bytes(a)\n    b = as_bytes(b)\n    if len(a) != len(b):\n        return False\n    difference = 0\n    for x, y in zip(a, b):\n        difference |= x ^ y\n    return difference == 0\n\n\ndef random_salt(size=16):\n    \"\"\"size unpredictable bytes.\"\"\"\n    return secrets.token_bytes(size)\n\n\ndef hash_password(password, iterations=DEFAULT_ITERATIONS):\n    \"\"\"A storable record: algorithm$iterations$salt$derived key.\"\"\"\n    salt = random_salt()\n    derived = pbkdf2(password, salt, iterations, DIGEST_SIZE)\n    return f\"{ALGORITHM}${iterations}${salt.hex()}${derived.hex()}\"\n\n\ndef verify_password(password, stored):\n    \"\"\"True when password reproduces the stored record.\"\"\"\n    parts = stored.split(\"$\")\n    if len(parts) != 4:\n        raise ValueError(\"a stored record has four fields\")\n    algorithm, iterations, salt_hex, expected_hex = parts\n    if algorithm != ALGORITHM:\n        raise ValueError(f\"unsupported algorithm {algorithm!r}\")\n    derived = pbkdf2(password, bytes.fromhex(salt_hex), int(iterations), DIGEST_SIZE)\n    return constant_time_equals(derived, bytes.fromhex(expected_hex))\n\n\nrecord = hash_password(\"correct horse battery staple\", iterations=1000)\nprint(record)\nprint(\"right password:\", verify_password(\"correct horse battery staple\", record))\nprint(\"wrong password:\", verify_password(\"Tr0ub4dor&3\", record))\n"
-     }
-    ],
-    "hints": [
-     "Normalise inputs first: one `as_bytes` helper that encodes `str` and passes `bytes` through keeps every later function honest about types.",
-     "The two HMAC pads are byte-wise XORs of the padded key: `bytes(b ^ 0x36 for b in key)` and the same with `0x5c`.",
-     "A PBKDF2 block starts from `HMAC(password, salt + i.to_bytes(4, 'big'))` and then feeds each U back in, XOR-ing every result into the accumulator. Note the loop runs `iterations - 1` more times.",
-     "Constant-time comparison never returns early: OR every `x ^ y` into one integer and test that integer once at the end."
-    ],
-    "tests": [
-     {
-      "name": "HMAC-SHA256 against RFC 4231",
-      "code": "_cases = [(bytes([0x0b]) * 20, b\"Hi There\",\n           \"b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7\"),\n          (b\"Jefe\", b\"what do ya want for nothing?\",\n           \"5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843\"),\n          (b\"\", b\"\",\n           \"b613679a0814d9ec772f95d778c35fc5ff1697c493715653c6c712144292c5ad\")]\nfor _key, _msg, _want in _cases:\n    _got = hmac_sha256(_key, _msg)\n    assert isinstance(_got, bytes) and len(_got) == 32, \\\n        f\"hmac_sha256 should return 32 bytes, got {_got!r}\"\n    assert _got.hex() == _want, f\"HMAC({_key!r}, {_msg!r}) gave {_got.hex()}, expected {_want}\""
-     },
-     {
-      "name": "Oversized keys are hashed first",
-      "code": "_got = hmac_sha256(bytes([0xaa]) * 131,\n                   b\"Test Using Larger Than Block-Size Key - Hash Key First\").hex()\n_want = \"60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54\"\nassert _got == _want, f\"a 131-byte key gave {_got}, expected {_want}\"\nassert hmac_sha256(\"Jefe\", \"what do ya want for nothing?\") == \\\n       hmac_sha256(b\"Jefe\", b\"what do ya want for nothing?\"), \\\n    \"str and bytes arguments should agree\"\n_short = hmac_sha256(b\"k\", b\"m\")\nassert _short != hashlib.sha256(b\"k\" + b\"m\").digest(), \\\n    \"HMAC is not sha256(key + message) — the pads are the point\""
-     },
-     {
-      "name": "PBKDF2-HMAC-SHA256 against the published vectors",
-      "code": "_cases = [(1, \"120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b\"),\n          (2, \"ae4d0c95af6b46d32d0adff928f06dd02a303f8ef3c251dfd6e2d85a95474c43\"),\n          (4096, \"c5e478d59288c841aa530db6845c4c8d962893a001ce4e11a4963873aa98134a\")]\nfor _iterations, _want in _cases:\n    _got = pbkdf2(b\"password\", b\"salt\", _iterations, 32).hex()\n    assert _got == _want, \\\n        f\"pbkdf2('password', 'salt', {_iterations}, 32) gave {_got}, expected {_want}\""
-     },
-     {
-      "name": "Derived keys longer or shorter than one block",
-      "code": "_got = pbkdf2(b\"password\", b\"salt\", 100, 64).hex()\n_want = (\"07e6997180cf7f12904f04100d405d34888fdf62af6d506a0ecc23b196fe99d8\"\n         \"675294ec5aa7944b6a86c51fd97051bbefad5239c8fe47db259c296e98569a86\")\nassert _got == _want, f\"a 64-byte key gave {_got}, expected {_want}\"\nassert _got[:64] == pbkdf2(b\"password\", b\"salt\", 100, 32).hex(), \\\n    \"the first block must not change when more blocks are asked for\"\n_got = pbkdf2(b\"passwd\", b\"salt\", 1, 20).hex()\nassert _got == \"55ac046e56e3089fec1691c22544b605f9418521\", \\\n    f\"a 20-byte key gave {_got}\"\nfor _bad in (0, -1):\n    try:\n        pbkdf2(b\"p\", b\"s\", _bad, 32)\n        assert False, f\"iterations={_bad} should raise ValueError\"\n    except ValueError:\n        pass"
-     },
-     {
-      "name": "Constant-time comparison",
-      "code": "assert constant_time_equals(b\"abcdef\", b\"abcdef\") is True, \"equal inputs compare equal\"\nassert constant_time_equals(b\"abcdef\", b\"Abcdef\") is False, \"a difference at the front\"\nassert constant_time_equals(b\"abcdef\", b\"abcdeF\") is False, \"a difference at the back\"\nassert constant_time_equals(b\"abc\", b\"abcd\") is False, \"different lengths are not equal\"\nassert constant_time_equals(\"secret\", \"secret\") is True, \"str arguments are accepted\"\nassert constant_time_equals(b\"\", b\"\") is True, \"two empty strings are equal\""
-     },
-     {
-      "name": "Password records are salted and verifiable",
-      "code": "_record = hash_password(\"hunter2\", iterations=512)\n_parts = _record.split(\"$\")\nassert len(_parts) == 4, f\"a record has four $-separated fields, got {_record!r}\"\nassert _parts[0] == \"pbkdf2_sha256\", f\"algorithm field was {_parts[0]!r}\"\nassert _parts[1] == \"512\", f\"iteration field was {_parts[1]!r}\"\nassert len(bytes.fromhex(_parts[2])) == 16, \"the salt should be 16 bytes\"\nassert len(bytes.fromhex(_parts[3])) == 32, \"the derived key should be 32 bytes\"\nassert verify_password(\"hunter2\", _record) is True, \"the right password must verify\"\nassert verify_password(\"hunter3\", _record) is False, \"the wrong password must not\"\n_again = hash_password(\"hunter2\", iterations=512)\nassert _again != _record, \"two records for the same password must differ — that is the salt\"\nassert verify_password(\"hunter2\", _again) is True, \"and both must still verify\"\nassert random_salt(16) != random_salt(16), \"salts must not repeat\"\nassert len(random_salt(24)) == 24 and isinstance(random_salt(8), bytes), \\\n    \"random_salt returns the requested number of bytes\""
-     },
-     {
-      "name": "Verification goes through the constant-time compare",
-      "code": "_record = hash_password(\"hunter2\", iterations=256)\n_calls = []\n_real = constant_time_equals\ndef _spy(a, b):\n    _calls.append((a, b))\n    return _real(a, b)\nconstant_time_equals = _spy\ntry:\n    assert verify_password(\"hunter2\", _record) is True\n    assert verify_password(\"nope\", _record) is False\nfinally:\n    constant_time_equals = _real\nassert len(_calls) >= 2, \"verify_password should compare through constant_time_equals\"\nfor _broken in [\"pbkdf2_sha256$100$aabb\", \"md5$100$aabb$ccdd\", \"nonsense\"]:\n    try:\n        verify_password(\"x\", _broken)\n        assert False, f\"the record {_broken!r} should raise ValueError\"\n    except ValueError:\n        pass"
-     }
-    ]
-   }
+   "lab": [
+    {
+     "title": "HMAC-SHA256 and PBKDF2 from scratch",
+     "runtime": "python",
+     "minutes": 65,
+     "brief": "Only `hashlib.sha256` and `secrets` are given. Everything else you build, and\nthe checks compare your output against the published vectors of RFC 4231 and\nRFC 8018.\n\n**`hmac_sha256(key, message)`** — RFC 2104 with SHA-256, block size 64:\n\n```text\nkey longer than 64 bytes  ->  key = sha256(key).digest()\nkey shorter than 64 bytes ->  pad with zero bytes to 64\nipad = key xor 0x36 * 64      opad = key xor 0x5c * 64\nHMAC = sha256(opad + sha256(ipad + message).digest()).digest()\n```\n\n**`pbkdf2(password, salt, iterations, dklen=32)`** — PBKDF2-HMAC-SHA256:\n\n```text\nblock i (counting from 1):\n  U1 = HMAC(password, salt + i as 4 big-endian bytes)\n  Uj = HMAC(password, U(j-1))            for j = 2..iterations\n  T_i = U1 xor U2 xor ... xor U_iterations\noutput = T_1 || T_2 || ...   truncated to dklen\n```\n\n`iterations` below 1 raises `ValueError`.\n\n**`constant_time_equals(a, b)`** — compare two byte strings without leaking\nwhere they differ. Accept `str` as well by encoding it. Different lengths give\n`False`, and the comparison over equal lengths must look at every byte.\n\n**`random_salt(size=16)`** — `size` bytes from `secrets`.\n\n**`hash_password(password, iterations=DEFAULT_ITERATIONS)`** — a storable\nrecord, four fields separated by `$`:\n\n```text\npbkdf2_sha256$20000$<salt as hex>$<32-byte derived key as hex>\n```\n\n**`verify_password(password, stored)`** — split the record, derive with the\nsame salt and iteration count, and compare in constant time. A record that is\nnot four fields, or whose algorithm is not `pbkdf2_sha256`, raises `ValueError`.",
+     "files": [
+      {
+       "name": "main.py",
+       "content": "import hashlib\nimport secrets\n\nBLOCK_SIZE = 64          # SHA-256 processes 64-byte blocks\nDIGEST_SIZE = 32\nALGORITHM = \"pbkdf2_sha256\"\nDEFAULT_ITERATIONS = 20000\n\n\ndef hmac_sha256(key, message):\n    \"\"\"RFC 2104 HMAC with SHA-256. Returns 32 bytes.\"\"\"\n    # your code here\n\n\ndef pbkdf2(password, salt, iterations, dklen=32):\n    \"\"\"PBKDF2-HMAC-SHA256. ValueError when iterations < 1.\"\"\"\n    # your code here\n\n\ndef constant_time_equals(a, b):\n    \"\"\"Compare without revealing the position of the first difference.\"\"\"\n    # your code here\n\n\ndef random_salt(size=16):\n    \"\"\"size unpredictable bytes.\"\"\"\n    # your code here\n\n\ndef hash_password(password, iterations=DEFAULT_ITERATIONS):\n    \"\"\"A storable record: algorithm$iterations$salt$derived key.\"\"\"\n    # your code here\n\n\ndef verify_password(password, stored):\n    \"\"\"True when password reproduces the stored record.\"\"\"\n    # your code here\n\n\nrecord = hash_password(\"correct horse battery staple\", iterations=1000)\nprint(record)\nprint(\"right password:\", verify_password(\"correct horse battery staple\", record))\nprint(\"wrong password:\", verify_password(\"Tr0ub4dor&3\", record))\n"
+      }
+     ],
+     "main": "main.py",
+     "solution": [
+      {
+       "name": "main.py",
+       "content": "import hashlib\nimport secrets\n\nBLOCK_SIZE = 64          # SHA-256 processes 64-byte blocks\nDIGEST_SIZE = 32\nALGORITHM = \"pbkdf2_sha256\"\nDEFAULT_ITERATIONS = 20000\n\n\ndef as_bytes(value):\n    \"\"\"UTF-8 encode a str, pass bytes through.\"\"\"\n    return value.encode(\"utf-8\") if isinstance(value, str) else bytes(value)\n\n\ndef hmac_sha256(key, message):\n    \"\"\"RFC 2104 HMAC with SHA-256. Returns 32 bytes.\"\"\"\n    key = as_bytes(key)\n    message = as_bytes(message)\n    if len(key) > BLOCK_SIZE:\n        key = hashlib.sha256(key).digest()\n    key = key + b\"\\x00\" * (BLOCK_SIZE - len(key))\n    inner = bytes(b ^ 0x36 for b in key)\n    outer = bytes(b ^ 0x5C for b in key)\n    return hashlib.sha256(outer + hashlib.sha256(inner + message).digest()).digest()\n\n\ndef pbkdf2(password, salt, iterations, dklen=32):\n    \"\"\"PBKDF2-HMAC-SHA256. ValueError when iterations < 1.\"\"\"\n    if iterations < 1:\n        raise ValueError(\"iterations must be at least 1\")\n    if dklen < 1:\n        raise ValueError(\"dklen must be at least 1\")\n    password = as_bytes(password)\n    salt = as_bytes(salt)\n    out = b\"\"\n    block = 1\n    while len(out) < dklen:\n        current = hmac_sha256(password, salt + block.to_bytes(4, \"big\"))\n        accumulator = current\n        for _ in range(iterations - 1):\n            current = hmac_sha256(password, current)\n            accumulator = bytes(x ^ y for x, y in zip(accumulator, current))\n        out += accumulator\n        block += 1\n    return out[:dklen]\n\n\ndef constant_time_equals(a, b):\n    \"\"\"Compare without revealing the position of the first difference.\"\"\"\n    a = as_bytes(a)\n    b = as_bytes(b)\n    if len(a) != len(b):\n        return False\n    difference = 0\n    for x, y in zip(a, b):\n        difference |= x ^ y\n    return difference == 0\n\n\ndef random_salt(size=16):\n    \"\"\"size unpredictable bytes.\"\"\"\n    return secrets.token_bytes(size)\n\n\ndef hash_password(password, iterations=DEFAULT_ITERATIONS):\n    \"\"\"A storable record: algorithm$iterations$salt$derived key.\"\"\"\n    salt = random_salt()\n    derived = pbkdf2(password, salt, iterations, DIGEST_SIZE)\n    return f\"{ALGORITHM}${iterations}${salt.hex()}${derived.hex()}\"\n\n\ndef verify_password(password, stored):\n    \"\"\"True when password reproduces the stored record.\"\"\"\n    parts = stored.split(\"$\")\n    if len(parts) != 4:\n        raise ValueError(\"a stored record has four fields\")\n    algorithm, iterations, salt_hex, expected_hex = parts\n    if algorithm != ALGORITHM:\n        raise ValueError(f\"unsupported algorithm {algorithm!r}\")\n    derived = pbkdf2(password, bytes.fromhex(salt_hex), int(iterations), DIGEST_SIZE)\n    return constant_time_equals(derived, bytes.fromhex(expected_hex))\n\n\nrecord = hash_password(\"correct horse battery staple\", iterations=1000)\nprint(record)\nprint(\"right password:\", verify_password(\"correct horse battery staple\", record))\nprint(\"wrong password:\", verify_password(\"Tr0ub4dor&3\", record))\n"
+      }
+     ],
+     "hints": [
+      "Normalise inputs first: one `as_bytes` helper that encodes `str` and passes `bytes` through keeps every later function honest about types.",
+      "The two HMAC pads are byte-wise XORs of the padded key: `bytes(b ^ 0x36 for b in key)` and the same with `0x5c`.",
+      "A PBKDF2 block starts from `HMAC(password, salt + i.to_bytes(4, 'big'))` and then feeds each U back in, XOR-ing every result into the accumulator. Note the loop runs `iterations - 1` more times.",
+      "Constant-time comparison never returns early: OR every `x ^ y` into one integer and test that integer once at the end."
+     ],
+     "tests": [
+      {
+       "name": "HMAC-SHA256 against RFC 4231",
+       "code": "_cases = [(bytes([0x0b]) * 20, b\"Hi There\",\n           \"b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7\"),\n          (b\"Jefe\", b\"what do ya want for nothing?\",\n           \"5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843\"),\n          (b\"\", b\"\",\n           \"b613679a0814d9ec772f95d778c35fc5ff1697c493715653c6c712144292c5ad\")]\nfor _key, _msg, _want in _cases:\n    _got = hmac_sha256(_key, _msg)\n    assert isinstance(_got, bytes) and len(_got) == 32, \\\n        f\"hmac_sha256 should return 32 bytes, got {_got!r}\"\n    assert _got.hex() == _want, f\"HMAC({_key!r}, {_msg!r}) gave {_got.hex()}, expected {_want}\""
+      },
+      {
+       "name": "Oversized keys are hashed first",
+       "code": "_got = hmac_sha256(bytes([0xaa]) * 131,\n                   b\"Test Using Larger Than Block-Size Key - Hash Key First\").hex()\n_want = \"60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54\"\nassert _got == _want, f\"a 131-byte key gave {_got}, expected {_want}\"\nassert hmac_sha256(\"Jefe\", \"what do ya want for nothing?\") == \\\n       hmac_sha256(b\"Jefe\", b\"what do ya want for nothing?\"), \\\n    \"str and bytes arguments should agree\"\n_short = hmac_sha256(b\"k\", b\"m\")\nassert _short != hashlib.sha256(b\"k\" + b\"m\").digest(), \\\n    \"HMAC is not sha256(key + message) — the pads are the point\""
+      },
+      {
+       "name": "PBKDF2-HMAC-SHA256 against the published vectors",
+       "code": "_cases = [(1, \"120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b\"),\n          (2, \"ae4d0c95af6b46d32d0adff928f06dd02a303f8ef3c251dfd6e2d85a95474c43\"),\n          (4096, \"c5e478d59288c841aa530db6845c4c8d962893a001ce4e11a4963873aa98134a\")]\nfor _iterations, _want in _cases:\n    _got = pbkdf2(b\"password\", b\"salt\", _iterations, 32).hex()\n    assert _got == _want, \\\n        f\"pbkdf2('password', 'salt', {_iterations}, 32) gave {_got}, expected {_want}\""
+      },
+      {
+       "name": "Derived keys longer or shorter than one block",
+       "code": "_got = pbkdf2(b\"password\", b\"salt\", 100, 64).hex()\n_want = (\"07e6997180cf7f12904f04100d405d34888fdf62af6d506a0ecc23b196fe99d8\"\n         \"675294ec5aa7944b6a86c51fd97051bbefad5239c8fe47db259c296e98569a86\")\nassert _got == _want, f\"a 64-byte key gave {_got}, expected {_want}\"\nassert _got[:64] == pbkdf2(b\"password\", b\"salt\", 100, 32).hex(), \\\n    \"the first block must not change when more blocks are asked for\"\n_got = pbkdf2(b\"passwd\", b\"salt\", 1, 20).hex()\nassert _got == \"55ac046e56e3089fec1691c22544b605f9418521\", \\\n    f\"a 20-byte key gave {_got}\"\nfor _bad in (0, -1):\n    try:\n        pbkdf2(b\"p\", b\"s\", _bad, 32)\n        assert False, f\"iterations={_bad} should raise ValueError\"\n    except ValueError:\n        pass"
+      },
+      {
+       "name": "Constant-time comparison",
+       "code": "assert constant_time_equals(b\"abcdef\", b\"abcdef\") is True, \"equal inputs compare equal\"\nassert constant_time_equals(b\"abcdef\", b\"Abcdef\") is False, \"a difference at the front\"\nassert constant_time_equals(b\"abcdef\", b\"abcdeF\") is False, \"a difference at the back\"\nassert constant_time_equals(b\"abc\", b\"abcd\") is False, \"different lengths are not equal\"\nassert constant_time_equals(\"secret\", \"secret\") is True, \"str arguments are accepted\"\nassert constant_time_equals(b\"\", b\"\") is True, \"two empty strings are equal\""
+      },
+      {
+       "name": "Password records are salted and verifiable",
+       "code": "_record = hash_password(\"hunter2\", iterations=512)\n_parts = _record.split(\"$\")\nassert len(_parts) == 4, f\"a record has four $-separated fields, got {_record!r}\"\nassert _parts[0] == \"pbkdf2_sha256\", f\"algorithm field was {_parts[0]!r}\"\nassert _parts[1] == \"512\", f\"iteration field was {_parts[1]!r}\"\nassert len(bytes.fromhex(_parts[2])) == 16, \"the salt should be 16 bytes\"\nassert len(bytes.fromhex(_parts[3])) == 32, \"the derived key should be 32 bytes\"\nassert verify_password(\"hunter2\", _record) is True, \"the right password must verify\"\nassert verify_password(\"hunter3\", _record) is False, \"the wrong password must not\"\n_again = hash_password(\"hunter2\", iterations=512)\nassert _again != _record, \"two records for the same password must differ — that is the salt\"\nassert verify_password(\"hunter2\", _again) is True, \"and both must still verify\"\nassert random_salt(16) != random_salt(16), \"salts must not repeat\"\nassert len(random_salt(24)) == 24 and isinstance(random_salt(8), bytes), \\\n    \"random_salt returns the requested number of bytes\""
+      },
+      {
+       "name": "Verification goes through the constant-time compare",
+       "code": "_record = hash_password(\"hunter2\", iterations=256)\n_calls = []\n_real = constant_time_equals\ndef _spy(a, b):\n    _calls.append((a, b))\n    return _real(a, b)\nconstant_time_equals = _spy\ntry:\n    assert verify_password(\"hunter2\", _record) is True\n    assert verify_password(\"nope\", _record) is False\nfinally:\n    constant_time_equals = _real\nassert len(_calls) >= 2, \"verify_password should compare through constant_time_equals\"\nfor _broken in [\"pbkdf2_sha256$100$aabb\", \"md5$100$aabb$ccdd\", \"nonsense\"]:\n    try:\n        verify_password(\"x\", _broken)\n        assert False, f\"the record {_broken!r} should raise ValueError\"\n    except ValueError:\n        pass"
+      }
+     ]
+    },
+    {
+     "title": "Close the injection hole",
+     "runtime": "python",
+     "minutes": 25,
+     "brief": "The starter holds the vulnerable lookup from the reading: a query assembled by\nformatting the username into the SQL text. Its demo runs the attack for you — the\ninputs `' OR '1'='1` and `ada' --` both come back with a row belonging to somebody\nelse.\n\n**`find_user(conn, username)`** — rewrite it with a `?` parameter. Return the\n`(name, email)` tuple for an exact match, or `None`. Every injection string must come\nback as `None`, and a customer named `o'brien` must come back with his row.\n\n**`create_user(conn, username, email)`** — insert with parameters, after validating.\nRaise `ValueError` when the username is empty or only whitespace, or when the email\nhas no `@`, and raise it before anything is written. Return the new row id.\n\nDo not reach for a filter that strips quotes out of the input. A bound value never\nreaches the SQL parser, so there is nothing to escape — and the checks include a name\nwith an apostrophe in it, which a filter breaks and a parameter does not.",
+     "files": [
+      {
+       "name": "main.py",
+       "content": "import sqlite3\n\n\ndef setup(conn):\n    \"\"\"Two users to look up. The checks add more.\"\"\"\n    conn.executescript(\"\"\"\n        CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT);\n        INSERT INTO users (name, email) VALUES\n            ('ada', 'ada@example.com'),\n            ('grace', 'grace@example.com');\n    \"\"\")\n\n\ndef find_user(conn, username):\n    \"\"\"VULNERABLE — the username is formatted into the statement. Rewrite with ?.\"\"\"\n    query = f\"SELECT name, email FROM users WHERE name = '{username}'\"\n    return conn.execute(query).fetchone()\n\n\ndef create_user(conn, username, email):\n    \"\"\"Validate, then insert with parameters. Return the new row id.\"\"\"\n    # your code here\n\n\nconn = sqlite3.connect(\":memory:\")\nsetup(conn)\nprint(\"ada           ->\", find_user(conn, \"ada\"))\nprint(\"' OR '1'='1   ->\", find_user(conn, \"' OR '1'='1\"))    # None once it is fixed\nprint(\"ada' --       ->\", find_user(conn, \"ada' --\"))        # None once it is fixed\n"
+      }
+     ],
+     "main": "main.py",
+     "solution": [
+      {
+       "name": "main.py",
+       "content": "import sqlite3\n\n\ndef setup(conn):\n    \"\"\"Two users to look up. The checks add more.\"\"\"\n    conn.executescript(\"\"\"\n        CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT);\n        INSERT INTO users (name, email) VALUES\n            ('ada', 'ada@example.com'),\n            ('grace', 'grace@example.com');\n    \"\"\")\n\n\ndef find_user(conn, username):\n    \"\"\"Safe: the statement is compiled first and the value is bound to it.\"\"\"\n    return conn.execute(\n        \"SELECT name, email FROM users WHERE name = ?\", (username,)\n    ).fetchone()\n\n\ndef create_user(conn, username, email):\n    \"\"\"Validate, then insert with parameters. Return the new row id.\"\"\"\n    if not username or not username.strip():\n        raise ValueError(\"username is required\")\n    if \"@\" not in email:\n        raise ValueError(\"invalid email\")\n    cursor = conn.execute(\n        \"INSERT INTO users (name, email) VALUES (?, ?)\", (username, email)\n    )\n    conn.commit()\n    return cursor.lastrowid\n\n\nconn = sqlite3.connect(\":memory:\")\nsetup(conn)\nprint(\"ada           ->\", find_user(conn, \"ada\"))\nprint(\"' OR '1'='1   ->\", find_user(conn, \"' OR '1'='1\"))\nprint(\"ada' --       ->\", find_user(conn, \"ada' --\"))\n"
+      }
+     ],
+     "hints": [
+      "The whole of find_user is one call: conn.execute(\"SELECT name, email FROM users WHERE name = ?\", (username,)).fetchone() — note the one-element tuple, which is what the trailing comma is for.",
+      "create_user: raise on the two bad cases first, then execute the INSERT with a two-element tuple, conn.commit(), and return cursor.lastrowid.",
+      "The apostrophe check needs no special case of its own. A bound value never reaches the parser, so o'brien works from the moment find_user stops building the string."
+     ],
+     "tests": [
+      {
+       "name": "Finds a user, apostrophe and all",
+       "code": "import sqlite3 as _sq\n_c = _sq.connect(\":memory:\")\nsetup(_c)\n_c.execute(\"INSERT INTO users (name, email) VALUES (?, ?)\", (\"o'brien\", \"ob@example.com\"))\nassert find_user(_c, \"ada\") == (\"ada\", \"ada@example.com\"), f\"Got {find_user(_c, 'ada')!r} for 'ada'\"\nassert find_user(_c, \"nobody\") is None, \"An unknown name gives None\"\nassert find_user(_c, \"o'brien\") == (\"o'brien\", \"ob@example.com\"), \\\n    \"A name with an apostrophe is a customer, not an attack — a bound value needs no escaping\""
+      },
+      {
+       "name": "The injection comes back empty",
+       "code": "import sqlite3 as _sq\n_c = _sq.connect(\":memory:\")\nsetup(_c)\nassert find_user(_c, \"' OR '1'='1\") is None, \"The pasted-together SQL is still running — bind the value with ?\""
+      },
+      {
+       "name": "And so do the other spellings of it",
+       "code": "import sqlite3 as _sq\n_c = _sq.connect(\":memory:\")\nsetup(_c)\nassert find_user(_c, \"ada' --\") is None, \"A trailing SQL comment ends the literal early too — nobody is named that\"\nassert find_user(_c, \"' UNION SELECT name, email FROM users --\") is None, \\\n    \"A UNION reaches the whole table; a bound value cannot reach the parser at all\""
+      },
+      {
+       "name": "create_user inserts and returns an id",
+       "code": "import sqlite3 as _sq\n_c = _sq.connect(\":memory:\")\nsetup(_c)\n_id = create_user(_c, \"ken\", \"ken@example.com\")\nassert isinstance(_id, int), f\"Return the new row id (got {_id!r})\"\nassert find_user(_c, \"ken\") == (\"ken\", \"ken@example.com\"), \"The user should actually be inserted\""
+      },
+      {
+       "name": "create_user validates its arguments",
+       "code": "import sqlite3 as _sq\n_c = _sq.connect(\":memory:\")\nsetup(_c)\nfor _bad in [(\"\", \"a@b.com\"), (\"   \", \"a@b.com\"), (\"bo\", \"not-an-email\")]:\n    try:\n        create_user(_c, _bad[0], _bad[1])\n        assert False, f\"create_user{_bad!r} should raise ValueError\"\n    except ValueError:\n        pass"
+      },
+      {
+       "name": "A rejected argument leaves no row behind",
+       "code": "import sqlite3 as _sq\n_c = _sq.connect(\":memory:\")\nsetup(_c)\n_before = _c.execute(\"SELECT COUNT(*) FROM users\").fetchone()[0]\nfor _bad in [(\"\", \"a@b.com\"), (\"bo\", \"nope\")]:\n    try:\n        create_user(_c, _bad[0], _bad[1])\n    except ValueError:\n        pass\n_mid = _c.execute(\"SELECT COUNT(*) FROM users\").fetchone()[0]\nassert _mid == _before, f\"{_mid - _before} row(s) written for input that was rejected — validate before the INSERT\"\ncreate_user(_c, \"ken\", \"ken@example.com\")\n_after = _c.execute(\"SELECT COUNT(*) FROM users\").fetchone()[0]\nassert _after == _before + 1, f\"A valid call should add exactly one row (count went {_before} -> {_after})\""
+      },
+      {
+       "name": "A username made of SQL is stored as a username",
+       "code": "import sqlite3 as _sq\n_c = _sq.connect(\":memory:\")\nsetup(_c)\n_odd = \"'); DROP TABLE users; --\"\ncreate_user(_c, _odd, \"odd@example.com\")\nassert find_user(_c, _odd) == (_odd, \"odd@example.com\"), \"The value goes in and comes back unchanged\"\nassert find_user(_c, \"ada\") == (\"ada\", \"ada@example.com\"), \"and the table is still there\""
+      }
+     ]
+    }
+   ]
   },
   {
    "title": "Symmetric encryption and modes of operation",

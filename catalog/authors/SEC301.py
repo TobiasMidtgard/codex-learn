@@ -858,6 +858,9 @@ for _key in ["lemon", "cipher", "monarchy", "zebrastripe"]:
                 "PBKDF2 iterates HMAC, folding every block with XOR so an attacker cannot skip work",
                 "A derived key longer than the hash needs several blocks, each with its own counter",
                 "Comparing digests with `==` leaks how many bytes matched; the fix is an XOR accumulator",
+                "A bound parameter is not an escaping routine: the statement is compiled first, so the value never reaches the parser",
+                "Data must never re-enter a parser as code — the one rule behind SQL injection, command injection and XSS alike",
+                "A signed token authenticates its claims and conceals none of them, and stateless verification has no list to revoke from",
             ],
             "read": [
                 {
@@ -1143,8 +1146,249 @@ replaces `constant_time_equals` with a spy to confirm that `verify_password` goe
 it rather than around it.
 ''',
                 },
+                {
+                    "title": "A perfect password store you can walk straight past",
+                    "minutes": 14,
+                    "body": r'''
+On 21 October 2015 TalkTalk, a British telecoms company with about four million
+customers, pulled its website down. The intrusion had not gone near the password
+store. It went through three web pages inherited from Tiscali, a business TalkTalk had
+acquired in 2009, whose database queries were assembled by pasting strings together.
+The personal data of 156,959 customers came out that way. The Information
+Commissioner's Office fined TalkTalk £400,000, its largest penalty at the time, and
+the finding that stung was not that the flaw was subtle: a fix for it had been
+available since 2012, and nobody was looking at those pages at all.
+
+The previous reading spent itself on making one stored record expensive to attack. An
+attacker who can put his own text into your queries never has to touch that record.
+Both defences are needed, and neither substitutes for the other — which is the
+uncomfortable shape of application security generally, and the reason this reading
+exists beside the last one rather than inside it.
+
+## The value is being pasted into a program
+
+A SQL statement is source code, and the database compiles it before running it. When
+the statement is built by formatting a string, whatever the user typed becomes part of
+that source before the compiler ever sees it.
+
+```python
+import sqlite3
+
+conn = sqlite3.connect(":memory:")
+conn.executescript("""
+    CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT);
+    INSERT INTO users (name, email) VALUES ('ada',   'ada@example.com'),
+                                           ('grace', 'grace@example.com');
+""")
+
+
+def find_glued(name):
+    """The query is built by gluing, so the caller supplies part of the SQL."""
+    sql = "SELECT name, email FROM users WHERE name = '%s'" % name
+    print("  sql:  ", sql)
+    return conn.execute(sql).fetchall()
+
+
+print("a real user:")
+print("  rows: ", find_glued("ada"))
+print("the string  ' OR '1'='1")
+print("  rows: ", find_glued("' OR '1'='1"))
+```
+
+The printed SQL is the whole lesson. For `ada` the statement reads `WHERE name =
+'ada'` and one row comes back. For the second input the closing quote arrives from the
+input itself, and the statement the database compiles is `WHERE name = '' OR '1'='1'`
+— a condition true of every row, so both users come back and a login routine that takes
+the first row signs the attacker in as Ada. The attacker did not break a hash, a cipher
+or a random number generator. He supplied a fragment of the program.
+
+Everything else follows from that one observation. A semicolon buys a second
+statement; a `UNION SELECT` buys the contents of another table, which is how a customer
+list leaves; and in a database that exposes the file system, injection reaches beyond
+the database entirely.
+
+## The placeholder is not an escaping routine
+
+The fix is one character, and what makes it work is worth being precise about, because
+the wrong explanation for it leads straight to the wrong fix.
+
+```python
+import sqlite3
+
+conn = sqlite3.connect(":memory:")
+conn.executescript("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)")
+for row in [("ada", "ada@example.com"), ("o'brien", "ob@example.com")]:
+    conn.execute("INSERT INTO users (name, email) VALUES (?, ?)", row)
+
+
+def find(name):
+    """One compiled statement, one bound value. The value is never parsed."""
+    return conn.execute(
+        "SELECT name, email FROM users WHERE name = ?", (name,)
+    ).fetchall()
+
+
+print("ada          ->", find("ada"))
+print("o'brien      ->", find("o'brien"))
+print("' OR '1'='1  ->", find("' OR '1'='1"))
+
+# The filter that gets written instead: strip the quotes and glue anyway.
+cleaned = "o'brien".replace("'", "")
+sql = "SELECT name, email FROM users WHERE name = '%s'" % cleaned
+print("sanitised sql:", sql)
+print("sanitised     ->", conn.execute(sql).fetchall())
+```
+
+The `?` is not a quoting helper. The statement with the `?` in it is compiled once,
+into a plan with a labelled hole, and the value is handed to the running plan
+afterwards. There is no moment at which the value is text inside a program, so there
+is nothing for a quote to terminate: `' OR '1'='1` comes back as no rows, because it is
+a username nobody has.
+
+Now compare the `o'brien` line with the two `sanitised` ones. `o'brien` is a customer,
+not an attack, and the parameterised lookup finds him. The quote-stripping filter — the
+fix people reach for when they believe the problem is dangerous characters — rewrites
+him to `obrien` and returns nothing, so the customer with an apostrophe in his name
+cannot log in. And it has closed the hole only as far as that one character: a numeric
+column needs no quotes to be injected, an `ORDER BY` needs none either, and a value
+that was already decoded once before the filter saw it has none left to strip. That is
+the shape of every input-filtering defence. It breaks legitimate data, and it is a
+blacklist, so it is only ever as good as the last bypass somebody thought of.
+
+## Where the placeholder stops
+
+A parameter stands in for a *value*. It cannot stand in for the name of a table, a
+column, or a keyword, because those are decided when the statement is compiled and the
+value arrives after that.
+
+```python
+import sqlite3
+
+conn = sqlite3.connect(":memory:")
+conn.executescript("CREATE TABLE t (v INTEGER); INSERT INTO t VALUES (3), (1), (2);")
+
+print("ORDER BY ?   ->", conn.execute("SELECT v FROM t ORDER BY ?", ("v",)).fetchall())
+print("ORDER BY v   ->", conn.execute("SELECT v FROM t ORDER BY v").fetchall())
+
+try:
+    conn.execute("SELECT v FROM ?", ("t",))
+except sqlite3.OperationalError as exc:
+    print("FROM ?       ->", type(exc).__name__, exc)
+```
+
+`SELECT v FROM ?` is a syntax error, which is the harmless case: the code does not
+ship. `ORDER BY ?` is the dangerous one. It compiles, it runs, and it sorts by the
+constant string `"v"`, which orders nothing — the rows come back `3, 1, 2` in the order
+they were inserted, while `ORDER BY v` gives `1, 2, 3`. A sort column that arrives from
+a query string therefore cannot be parameterised, and the only safe construction is to
+map the request onto a fixed list of column names you wrote yourself and reject
+anything that is not on it. Allow-list, never escape.
+
+That generalises past SQL, and it is the sentence to carry out of this module: **data
+must never re-enter a parser as code**. The same defect with a shell parser is command
+injection, with an HTML parser it is cross-site scripting, with an LDAP or an XPath
+parser it has its own name and the same cause. Each parser has its own version of the
+`?`, and in the browser that version is `textContent` rather than `innerHTML`.
+
+## After the password check
+
+Verifying the password is one request. HTTP has no memory, so the server has to hand
+the client something that proves the check already happened, and there are two families.
+
+A **session cookie** carries an opaque identifier and the server keeps the mapping:
+session `a8f3` is user 42. The state costs storage and a lookup per request, and buys
+revocation — deleting the row logs the user out immediately. A **signed token** carries
+the claims themselves, with a tag the server can verify without storing anything:
+
+```python
+import hashlib
+import hmac
+
+SIGNING_KEY = b"the server's signing key, never sent anywhere"
+
+
+def issue(claims):
+    """Hand the client a statement plus a tag only this key can produce."""
+    tag = hmac.new(SIGNING_KEY, claims.encode(), hashlib.sha256).hexdigest()[:16]
+    return claims + "." + tag
+
+
+def accept(token):
+    claims, _, tag = token.rpartition(".")
+    expected = hmac.new(SIGNING_KEY, claims.encode(), hashlib.sha256).hexdigest()[:16]
+    return hmac.compare_digest(tag, expected)
+
+
+token = issue("user=42&role=reader")
+print("issued:  ", token)
+print("accepted:", accept(token))
+
+promoted = token.replace("role=reader", "role=admin")
+print("promoted:", promoted)
+print("accepted:", accept(promoted))
+print("readable by anyone holding it:", token.rpartition(".")[0])
+```
+
+That `hmac.new` is the construction this module's HMAC lab builds by hand, doing the
+job it was designed for. Editing `role=reader` to `role=admin` leaves the tag unchanged
+and the token is refused, because producing the matching tag needs the key. A JWT is
+this shape with base64 and JSON.
+
+The last line is the misconception worth naming, because it is the one people actually
+hold: the token is signed, not encrypted. The claims are readable by anyone who holds
+it. A signed token authenticates its contents and hides nothing, so a secret in a token
+is a published secret. And a stateless token cannot be recalled — the server that
+checks a signature is not consulting a list, so a token stays good until it expires.
+That is why the expiry is short and why anything needing immediate revocation keeps
+server-side state after all.
+
+Two status codes, and they are routinely swapped. **401** means the request carried no
+usable identity: no credentials, a bad password, an expired token. **403** means the
+identity is established and this user is not allowed to do this. Answering 403 to an
+anonymous request tells a client to stop retrying when re-authenticating would have
+worked; answering 401 to a logged-in user sends them back to a login screen that will
+not help.
+
+## The rest of the boundary, and what each item costs
+
+Validate at the boundary — type, length, range — and reject with **400**. This is not
+an anti-injection measure and treating it as one is how filtering defences get built;
+parameters already closed that hole. Validation is about the code behind the boundary
+being able to assume what it was written to assume, and about the blast radius of the
+bugs it does not catch.
+
+Keep secrets out of the source. An environment variable is not a vault — it is
+readable by every child process and lands in crash dumps — but it is not in the
+repository, and that is the distinction that matters, because a key committed once
+stays in the history after it is deleted from the tip. Rotate anything that was ever
+committed.
+
+Rate-limit the login endpoint, and notice why this module in particular owes it a
+mention. The last reading made one password check deliberately expensive, and current
+guidance puts the count in the hundreds of thousands. The server pays that cost as
+well, once per attempt, before it can know the attempt was wrong. Key stretching with
+no limit on attempts therefore hands an attacker a CPU-exhaustion primitive that needs
+no cryptography at all: the defence that protects the stolen file is the same thing
+that makes the live endpoint worth flooding.
+
+Where does this stop holding? All of it assumes the transport is confidential. Over
+plain HTTP the password, the cookie and the token are readable in transit, and every
+mechanism above is decoration; HTTPS is the precondition, not an item on the list.
+
+## The lab
+
+**Close the injection hole** hands you the vulnerable lookup from the first example
+above, spelled with an f-string rather than a `%` because the defect is the gluing and
+not the syntax, with the attack run at the bottom of the file. Rewrite `find_user` with
+a parameter so that `' OR '1'='1` returns `None` while a name containing an apostrophe
+still returns its row, and write `create_user` to insert with parameters after
+validating its arguments — an empty or whitespace username and an address with no `@`
+raise `ValueError`. The checks are written to fail a solution that filters the input
+instead of binding it.
+''',
+                },
             ],
-            "quiz": {
+            "quiz": [{
                 "title": "Salts, stretching and the two ways to build a MAC",
                 "minutes": 9,
                 "questions": [
@@ -1304,8 +1548,168 @@ well as the ciphertext.
 """,
                     },
                 ],
-            },
-            "lab": {
+            }, {
+                "title": "Injection, identity and what a signed token does not hide",
+                "minutes": 9,
+                "questions": [
+                    {
+                        "q": "A login page builds its lookup by concatenation: the SQL text, then `username`, then a closing quote. Why does the input `' OR '1'='1` return every row here, and nothing at all once the same query uses a `?` parameter?",
+                        "opts": [
+                            "The input is long enough to be truncated by the driver, and a truncated comparison matches whatever is left",
+                            "Its apostrophe closes the literal, so the rest of the input reaches the database as SQL rather than as a name",
+                            "A parameter escapes apostrophes before the string is assembled, which is what stops this input closing the literal",
+                            "It contains bytes the driver cannot encode, so the comparison fails open and every row satisfies it",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Nothing is truncated and the input arrives whole. Length is not what makes it dangerous: two characters, an apostrophe and a space, end the literal as effectively as thirteen do.",
+                            r"The apostrophe ends the string literal, and what follows it is compiled as part of the statement.",
+                            r"This is the explanation that leads to the wrong fix. A bound parameter escapes nothing: the statement is compiled with a labelled hole in it and the value is handed to the finished plan, so the value is never text inside a program.",
+                            r"Drivers encode this input without difficulty, and nothing fails open. Every row satisfies the clause because the input rewrote the clause into `OR '1'='1'`, not because a comparison gave up.",
+                        ],
+                        "why": r"""
+A SQL statement is source code and the database compiles it before running it. Pasting
+the input in means the apostrophe ends the literal that was opened for it, and the text
+after it is compiled as a condition true of every row. The `?` version is not the same
+statement with better quoting. It is compiled once, with a hole where the value goes,
+and the value is bound to the finished plan afterwards; there is no moment at which it
+is text inside a program, so there is nothing for a quote to terminate, and
+`' OR '1'='1` comes back as the username nobody has.
+""",
+                    },
+                    {
+                        "q": "A report page takes the name of the sort column from the query string. Writing `ORDER BY ?` and binding it does not work. What does, and why?",
+                        "opts": [
+                            "Run the value through the driver's quoting helper and paste it in, which is what a bound parameter does internally",
+                            "Map the request onto a list of column names written in the code, and refuse anything not on it",
+                            "Strip spaces, quotes and semicolons, since a legitimate column name contains none of them",
+                            "Nothing: `ORDER BY ?` binds the column the way `WHERE name = ?` binds a value, and it already sorts correctly",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Quoting helpers exist, and they are still the wrong tool: a helper is a blacklist of characters, only ever as good as the last bypass anybody thought of. A bound parameter does no quoting at all, so it is not a model for what to do where a parameter cannot go.",
+                            r"An allow-list of names you wrote yourself is decidable: the value is on the list or it is not.",
+                            r"Filtering has the same defect wherever it is used, and it breaks real data as well: the same reflex applied to a name rewrites `o'brien` to `obrien` and locks a customer out. Deciding what is permitted is a different operation from deleting what is not.",
+                            r"`ORDER BY ?` compiles and runs, which is what makes it dangerous rather than safe. It sorts by a constant string, so the rows arrive in whatever order the plan produced, and no error is reported anywhere.",
+                        ],
+                        "why": r"""
+A parameter stands in for a value, and a column name is not a value: it is fixed when
+the statement is compiled, and binding happens after that. `SELECT v FROM ?` at least
+fails loudly with a syntax error. `ORDER BY ?` compiles, runs, and sorts by the constant
+string, so the rows come back unsorted and the defect is silent. Since the name has to
+become part of the SQL text, the only defence left is to decide in your own code which
+names are permitted and refuse everything else. Allow-list rather than escape, and the
+rule holds anywhere a value has to become part of a program.
+""",
+                    },
+                    {
+                        "q": "A request arrives with no credentials at all, for a page only administrators may open. Which status code belongs on the response, and what does the choice cost if it is wrong?",
+                        "opts": [
+                            "400, because a request missing a required header is malformed and the client should repair and resend it",
+                            "401: no identity was established, and answering 403 tells a client to stop rather than to authenticate",
+                            "403, because the page belongs to administrators and this request is not from one",
+                            "404, because acknowledging that an administrative page exists is a disclosure, and hiding it is the safer default",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"400 says the request itself was malformed: bad syntax, a header that could not be parsed. A well-formed anonymous request is not malformed, and a client told to repair it has nothing to repair.",
+                            r"No identity was presented, so what is missing is authentication, and 401 is the code that asks for it.",
+                            r"403 is right once the identity is known and insufficient. Sent to an anonymous caller it says the answer would still be no after logging in, so a client that would have authenticated gives up instead.",
+                            r"Answering 404 to conceal a resource is a real practice and a deliberate trade rather than a default. It costs the caller any way to tell a missing page from a forbidden one, and it is chosen when the existence of the page is itself the secret.",
+                        ],
+                        "why": r"""
+The two codes answer different questions. 401 means no usable identity arrived — no
+credentials, a wrong password, an expired token — and it is an invitation to
+authenticate. 403 means the identity is established and this user may not do this, so
+retrying with the same credentials is pointless. Swapping them costs the client its next
+move in both directions: 403 to an anonymous caller tells it to give up where logging in
+would have worked, and 401 to a logged-in user sends it back to a login screen that
+changes nothing. 404 is a third answer, chosen on purpose when the existence of the
+resource is itself sensitive.
+""",
+                    },
+                    {
+                        "q": "A service issues stateless signed tokens carrying `user` and `role`, with an HMAC tag over both. Which statement about those tokens is true?",
+                        "opts": [
+                            "Rewriting `role` to `admin` yields a token the server accepts, because the tag covers `user` and not the rest",
+                            "Anyone holding one can read the claims; the tag stops them being changed, not being read",
+                            "The claims are encrypted under the signing key, so a token is a safe place to carry a session secret",
+                            "It can be revoked at once by deleting it server-side, which is why it is cheap",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The tag is computed over the whole claims string, so altering any byte of it invalidates the tag. A MAC covering only part of what it authenticates would be a serious bug, and it is exactly what HMAC's contract rules out.",
+                            r"Signing authenticates the claims and conceals nothing; the tag proves they were not edited.",
+                            r"This is the misconception that leaks secrets. Signed is not encrypted: the claims travel in the clear, base64 is an encoding rather than a cipher, and anything confidential put into a token is published to whoever holds it.",
+                            r"There is nothing on the server to delete — statelessness is the whole design, and verification checks a tag rather than consulting a list. That is the cost of the trade, and it is why expiries are kept short.",
+                        ],
+                        "why": r"""
+A signed token carries its claims in the open with a tag over them. The tag is what
+makes an edit detectable, because recomputing it needs the key, and it does nothing
+whatever to conceal the contents. A JWT is this shape with base64 and JSON, and base64
+is an encoding, so every claim is readable by anyone holding the token. The second
+consequence is revocation: verifying a signature consults nothing, so there is no record
+to delete and the token stays good until it expires. Short expiries, plus a server-side
+list for the cases that need an immediate cut-off, are the usual answers, and the second
+one hands back the statelessness that motivated the design.
+""",
+                    },
+                    {
+                        "q": "An API key was committed to a repository three months ago and has since been deleted from the file it was in. What has to happen now?",
+                        "opts": [
+                            "Add the file to `.gitignore`, which drops the object holding the key from the repository",
+                            "Rotate the key: every clone and every commit in the history still contains it",
+                            "Nothing further: the tip no longer holds the key, and that is what deploys",
+                            "Make the repository private, after which the key in the history is reachable only by people who already have access",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"`.gitignore` governs what gets added in future and has no effect on what is already committed. The object holding the key stays reachable from the commit that added it.",
+                            r"Deleting the line changes the tip and nothing else; the key is in every copy of the history.",
+                            r"That is true of what a deployment checks out and false of what the repository stores. Every commit since the key was added still contains it, and so does every clone, fork and cached copy taken in three months.",
+                            r"Restricting access afterwards reaches neither the clones that already exist nor any mirror or scraper that saw it while it was public. Access control applied after disclosure narrows the future audience rather than undoing the disclosure.",
+                        ],
+                        "why": r"""
+A repository keeps its history, and a secret committed once is reachable from the commit
+that added it however the file reads at the tip. Every clone taken in the last three
+months holds it, and a public repository has to be assumed scraped within minutes. The
+only action that restores the property the key was supposed to have is rotation: issue a
+new key, revoke the old one, and treat rewriting the history as tidying rather than as
+remediation. Reading the key from the environment or from a secret store avoids the
+problem at its source — not because an environment variable is well protected, since it
+is readable by child processes and lands in crash dumps, but because it is not in the
+repository.
+""",
+                    },
+                    {
+                        "q": "A login endpoint derives the password with 300,000 PBKDF2 iterations and puts no limit on attempts. What has that combination created, over and above the guessing risk?",
+                        "opts": [
+                            "A timing channel: the derivation runs longer as more of the submitted password matches the stored one",
+                            "A denial-of-service target: each attempt spends the server's CPU on the cost the iteration count imposes",
+                            "Nothing further, because the iteration count is a cost paid by the attacker and not by the server",
+                            "A correctness problem, because a derivation that slow can time out mid-request and reject a valid password",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"PBKDF2 runs the same number of iterations whatever the password is, so its duration says nothing about how close a guess came. The timing leak in this module is in the comparison at the end, and the fix there is to inspect every byte.",
+                            r"The server has to run the derivation before it can know the attempt was wrong, so it pays for every attempt.",
+                            r"The cost is symmetric on the login path. An attacker holding the stolen file pays it offline, and the live endpoint pays it as well, once per attempt, before it can tell a real login from a flood.",
+                            r"Hundreds of thousands of HMAC-SHA256 iterations take tens of milliseconds rather than seconds, so a valid password is in no danger of being rejected for slowness. The cost is real and it shows up as load, not as a wrong answer.",
+                        ],
+                        "why": r"""
+Key stretching works by making one password check expensive, and the endpoint that
+checks passwords sits on the defender's side of the wire. A request carrying a garbage
+password cannot be rejected until the derivation has run, so an attacker who sends
+nothing but garbage buys hundreds of thousands of hash compressions per packet and needs
+no cryptography at all to do it. The defence and the exposure are the same parameter,
+which is why a limit on attempts belongs beside it: throttle per account and per source,
+back off after repeated failures, and put the expensive derivation behind that gate
+rather than in front of it.
+""",
+                    },
+                ],
+            }],
+            "lab": [{
                 "title": "HMAC-SHA256 and PBKDF2 from scratch",
                 "runtime": "python",
                 "minutes": 65,
@@ -1592,7 +1996,176 @@ for _broken in ["pbkdf2_sha256$100$aabb", "md5$100$aabb$ccdd", "nonsense"]:
         pass
 '''},
                 ],
-            },
+            }, {
+                "title": "Close the injection hole",
+                "runtime": "python",
+                "minutes": 25,
+                "brief": r'''
+The starter holds the vulnerable lookup from the reading: a query assembled by
+formatting the username into the SQL text. Its demo runs the attack for you — the
+inputs `' OR '1'='1` and `ada' --` both come back with a row belonging to somebody
+else.
+
+**`find_user(conn, username)`** — rewrite it with a `?` parameter. Return the
+`(name, email)` tuple for an exact match, or `None`. Every injection string must come
+back as `None`, and a customer named `o'brien` must come back with his row.
+
+**`create_user(conn, username, email)`** — insert with parameters, after validating.
+Raise `ValueError` when the username is empty or only whitespace, or when the email
+has no `@`, and raise it before anything is written. Return the new row id.
+
+Do not reach for a filter that strips quotes out of the input. A bound value never
+reaches the SQL parser, so there is nothing to escape — and the checks include a name
+with an apostrophe in it, which a filter breaks and a parameter does not.
+''',
+                "files": [{"name": "main.py", "content": r'''
+import sqlite3
+
+
+def setup(conn):
+    """Two users to look up. The checks add more."""
+    conn.executescript("""
+        CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT);
+        INSERT INTO users (name, email) VALUES
+            ('ada', 'ada@example.com'),
+            ('grace', 'grace@example.com');
+    """)
+
+
+def find_user(conn, username):
+    """VULNERABLE — the username is formatted into the statement. Rewrite with ?."""
+    query = f"SELECT name, email FROM users WHERE name = '{username}'"
+    return conn.execute(query).fetchone()
+
+
+def create_user(conn, username, email):
+    """Validate, then insert with parameters. Return the new row id."""
+    # your code here
+
+
+conn = sqlite3.connect(":memory:")
+setup(conn)
+print("ada           ->", find_user(conn, "ada"))
+print("' OR '1'='1   ->", find_user(conn, "' OR '1'='1"))    # None once it is fixed
+print("ada' --       ->", find_user(conn, "ada' --"))        # None once it is fixed
+'''}],
+                "main": "main.py",
+                "solution": [{"name": "main.py", "content": r'''
+import sqlite3
+
+
+def setup(conn):
+    """Two users to look up. The checks add more."""
+    conn.executescript("""
+        CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT);
+        INSERT INTO users (name, email) VALUES
+            ('ada', 'ada@example.com'),
+            ('grace', 'grace@example.com');
+    """)
+
+
+def find_user(conn, username):
+    """Safe: the statement is compiled first and the value is bound to it."""
+    return conn.execute(
+        "SELECT name, email FROM users WHERE name = ?", (username,)
+    ).fetchone()
+
+
+def create_user(conn, username, email):
+    """Validate, then insert with parameters. Return the new row id."""
+    if not username or not username.strip():
+        raise ValueError("username is required")
+    if "@" not in email:
+        raise ValueError("invalid email")
+    cursor = conn.execute(
+        "INSERT INTO users (name, email) VALUES (?, ?)", (username, email)
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+conn = sqlite3.connect(":memory:")
+setup(conn)
+print("ada           ->", find_user(conn, "ada"))
+print("' OR '1'='1   ->", find_user(conn, "' OR '1'='1"))
+print("ada' --       ->", find_user(conn, "ada' --"))
+'''}],
+                "hints": [
+                    "The whole of find_user is one call: conn.execute(\"SELECT name, email FROM users WHERE name = ?\", (username,)).fetchone() — note the one-element tuple, which is what the trailing comma is for.",
+                    "create_user: raise on the two bad cases first, then execute the INSERT with a two-element tuple, conn.commit(), and return cursor.lastrowid.",
+                    "The apostrophe check needs no special case of its own. A bound value never reaches the parser, so o'brien works from the moment find_user stops building the string.",
+                ],
+                "tests": [
+                    {"name": "Finds a user, apostrophe and all", "code": r'''
+import sqlite3 as _sq
+_c = _sq.connect(":memory:")
+setup(_c)
+_c.execute("INSERT INTO users (name, email) VALUES (?, ?)", ("o'brien", "ob@example.com"))
+assert find_user(_c, "ada") == ("ada", "ada@example.com"), f"Got {find_user(_c, 'ada')!r} for 'ada'"
+assert find_user(_c, "nobody") is None, "An unknown name gives None"
+assert find_user(_c, "o'brien") == ("o'brien", "ob@example.com"), \
+    "A name with an apostrophe is a customer, not an attack — a bound value needs no escaping"
+'''},
+                    {"name": "The injection comes back empty", "code": r'''
+import sqlite3 as _sq
+_c = _sq.connect(":memory:")
+setup(_c)
+assert find_user(_c, "' OR '1'='1") is None, "The pasted-together SQL is still running — bind the value with ?"
+'''},
+                    {"name": "And so do the other spellings of it", "code": r'''
+import sqlite3 as _sq
+_c = _sq.connect(":memory:")
+setup(_c)
+assert find_user(_c, "ada' --") is None, "A trailing SQL comment ends the literal early too — nobody is named that"
+assert find_user(_c, "' UNION SELECT name, email FROM users --") is None, \
+    "A UNION reaches the whole table; a bound value cannot reach the parser at all"
+'''},
+                    {"name": "create_user inserts and returns an id", "code": r'''
+import sqlite3 as _sq
+_c = _sq.connect(":memory:")
+setup(_c)
+_id = create_user(_c, "ken", "ken@example.com")
+assert isinstance(_id, int), f"Return the new row id (got {_id!r})"
+assert find_user(_c, "ken") == ("ken", "ken@example.com"), "The user should actually be inserted"
+'''},
+                    {"name": "create_user validates its arguments", "code": r'''
+import sqlite3 as _sq
+_c = _sq.connect(":memory:")
+setup(_c)
+for _bad in [("", "a@b.com"), ("   ", "a@b.com"), ("bo", "not-an-email")]:
+    try:
+        create_user(_c, _bad[0], _bad[1])
+        assert False, f"create_user{_bad!r} should raise ValueError"
+    except ValueError:
+        pass
+'''},
+                    {"name": "A rejected argument leaves no row behind", "code": r'''
+import sqlite3 as _sq
+_c = _sq.connect(":memory:")
+setup(_c)
+_before = _c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+for _bad in [("", "a@b.com"), ("bo", "nope")]:
+    try:
+        create_user(_c, _bad[0], _bad[1])
+    except ValueError:
+        pass
+_mid = _c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+assert _mid == _before, f"{_mid - _before} row(s) written for input that was rejected — validate before the INSERT"
+create_user(_c, "ken", "ken@example.com")
+_after = _c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+assert _after == _before + 1, f"A valid call should add exactly one row (count went {_before} -> {_after})"
+'''},
+                    {"name": "A username made of SQL is stored as a username", "code": r'''
+import sqlite3 as _sq
+_c = _sq.connect(":memory:")
+setup(_c)
+_odd = "'); DROP TABLE users; --"
+create_user(_c, _odd, "odd@example.com")
+assert find_user(_c, _odd) == (_odd, "odd@example.com"), "The value goes in and comes back unchanged"
+assert find_user(_c, "ada") == ("ada", "ada@example.com"), "and the table is still there"
+'''},
+                ],
+            }],
         },
         # ------------------------------------------------------------ M3
         {
