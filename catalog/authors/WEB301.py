@@ -287,8 +287,187 @@ Six checks read the accessibility tree back, and each one corresponds to somethi
 reader could not hear.
 ''',
                 },
+                {
+                    "title": "What the browser does with your file",
+                    "minutes": 11,
+                    "body": r'''
+Save a file called `index.html`, open it, and a page appears. The browser did not *run*
+that file the way a Python interpreter runs a script. It **parsed** it: read the
+characters once, top to bottom, and built out of them a tree of objects — the DOM. Every
+other thing that happens afterwards is work done on that tree and not on your file. The
+pixels are painted from it. The stylesheet matches against it. Script reads and rewrites
+it. The accessibility tree this module's first reading is about is built from it. So the
+first question to ask about a piece of markup is not how it will look; it is *what node
+does this become*.
+
+## Four steps, and where you get a say
+
+1. The browser asks a server for a URL, and gets bytes back with a `Content-Type` header
+   saying what kind of thing they are.
+2. It decodes those bytes into characters, using `<meta charset="utf-8">` if you supplied
+   one and guessing if you did not — which is where a curly quote turns into `â€™`.
+3. It parses the characters into the DOM, one node per element, per attribute, and per
+   run of text.
+4. It fetches whatever the tree points at — the stylesheet in `<link>`, the code in
+   `<script>`, the picture in `<img>` — and applies each to the tree.
+
+You write the markup at step 3 and the two languages that arrive at step 4. Everything in
+this course is one of those three.
+
+## An element, taken apart
+
+```html
+<p class="intro">Wiper blades, <strong>fitted while you wait</strong>.</p>
+```
+
+`<p>` is the start tag, `</p>` the end tag, and what sits between them is the element's
+content. `class="intro"` is an **attribute**: a name and a value, written on the start
+tag, that carries information the tag alone cannot. Elements nest, so the `<strong>` is a
+child of the `<p>`, and an end tag closes the most recently opened element — you close in
+the reverse of the order you opened.
+
+A handful of elements have no content and therefore no end tag: `<img>`, `<br>`,
+`<input>`, `<meta>`, `<link>`, `<hr>`. Writing `<img></img>` does not create a closed
+image; it creates an image and then a stray end tag the parser throws away.
+
+## The skeleton, line by line
+
+```html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Shown in the browser tab</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <!-- everything visible goes here -->
+  </body>
+</html>
+```
+
+Not one of those lines is decoration. `<!doctype html>` selects standards mode; leave it
+out and the browser switches to a quirks mode written to keep 1998 working, in which the
+box model is the wrong one. `lang="en"` tells a screen reader which voice to read with
+and a browser which hyphenation rules to use. `charset` fixes step 2, and it has to
+appear in the first 1024 bytes, which is why it is the first thing in the `<head>`. The
+viewport meta is what makes a phone report a 360-pixel viewport instead of pretending to
+be a 980-pixel desktop, and without it the next module's media queries never match.
+`<title>` names the tab, the bookmark and the search result. `<!-- -->` is a comment: it
+becomes a node in the tree, and it is never drawn.
+
+## Markup is a tree, and the parser will make one whether or not you did
+
+The nesting is the tree, and the parser refuses to hand back anything that is not one. If
+your tags do not describe a tree, it repairs them — silently, by rules you did not choose.
+
+```js
+var written =
+  '<div id="card">' +
+  '<p>Fitted while you wait. <div class="note">Two working days.</div></p>' +
+  '</div>';
+
+var doc = new DOMParser().parseFromString(written, 'text/html');
+
+function outline(node, depth) {
+  var lines = [];
+  Array.prototype.forEach.call(node.children, function (el) {
+    lines.push(new Array(depth + 1).join('  ') + '<' + el.tagName.toLowerCase() +
+      (el.id ? ' id="' + el.id + '"' : '') +
+      (el.className ? ' class="' + el.className + '"' : '') + '>');
+    lines = lines.concat(outline(el, depth + 1));
+  });
+  return lines;
+}
+
+console.log(outline(doc.body, 0).join('\n'));
+console.log('#card holds ' + doc.getElementById('card').children.length + ' child element(s)');
+console.log('.note sits inside <' + doc.querySelector('.note').parentElement.tagName.toLowerCase() + '>');
+```
+
+Two elements were written inside `#card` and three come out. A `<div>` start tag is not
+allowed inside a `<p>`, so the parser closes the paragraph before it, hangs the `<div>`
+off `#card` as a sibling, and then meets a `</p>` with no open paragraph to close — which
+it handles by inserting an empty one. `.note` is a child of the `div`, not of the `p`, so
+a rule written as `p .note { ... }` matches nothing and a script that reads
+`noteEl.parentElement` gets `#card`. Nothing threw, nothing failed to render, and the
+tree is not the tree you wrote.
+
+## The elements you will reach for
+
+| Element | Job |
+|---|---|
+| `<h1>` … `<h6>` | headings — one `<h1>` per page, `<h2>` for its sections |
+| `<p>` | a paragraph of prose |
+| `<a href="https://…">` | a link; `href` is where it goes, and without one it is not a link |
+| `<img src="photo.jpg" alt="…">` | an image, with `alt` standing in for it |
+| `<ul>` `<ol>` `<li>` | unordered and ordered lists; only `<li>` may be their child |
+| `<button>` | something to press |
+| `<form>` `<label>` `<input>` | collecting what someone types |
+| `<div>` `<span>` | a block and an inline box with no meaning of their own |
+
+`<div>` and `<span>` are last on the list on purpose. They are the elements to reach for
+when nothing more specific fits, and the moment something more specific does fit — a
+heading, a list, a button — the tree is better for it, because a `<div>` contributes a
+node that says nothing.
+
+## Sectioning, next to landmarks
+
+`<header>`, `<nav>`, `<main>` and `<footer>` are the landmarks the module's other reading
+covers: they answer *where am I on this page*. `<section>`, `<article>` and `<aside>`
+answer a different question — *what is this piece of content*. An `<article>` is
+self-contained enough to make sense lifted out of the page: a post, a product card, a
+comment. A `<section>` is a thematic group inside the page and wants a heading, because a
+section nobody named is one a screen reader announces as *region* with nothing after it.
+An `<aside>` is related but skippable. Use them for what they say, not for the boxes they
+draw, because they draw none.
+
+## id and class
+
+`id="x"` names exactly one element in the document. `class="a b"` is a reusable label and
+an element can carry several, separated by spaces. The distinction is not stylistic: an
+`id` is what `<label for>` binds to, what `aria-describedby` points at, what a `#fragment`
+in a URL scrolls to, and what `document.getElementById` looks up — all of which assume
+there is one. Repeat an `id` and the browser does not complain; it hands the first match
+to every one of those and the rest of them stop working.
+
+## The mistake, and why it is tempting
+
+The one that costs the most time is putting a block element inside a `<p>` — the bug the
+example above ran into. It is tempting because it reads correctly in the file: a note
+belongs to the paragraph it is about, so nesting it looks like saying so. But `<p>` is
+defined as holding only inline content, and the parser enforces that by moving your
+element rather than by telling you. You then write CSS that matches nothing and read a
+`parentElement` that is not the one on screen, and the source in your editor disagrees
+with the tree in the inspector. The fix is not to nest more carefully; it is to notice
+that `<p>` means *paragraph of text*, and a container that holds other blocks is a
+`<div>` or a `<section>`.
+
+## Where this stops holding
+
+The DOM is not a copy of the file, and it drifts from it as soon as anything runs. View
+Source shows the bytes that arrived; the Elements panel shows the tree as it is right
+now, including everything script has added. When the two disagree, the panel is the one
+that is true.
+
+The repairs above are helpful precisely when you do not want them: a validator will tell
+you about broken nesting, the parser will not. And `<script>` is a special case in the
+parse — a classic `<script src>` in the `<head>` blocks parsing until it has been fetched
+and run, which is why the tag is written immediately before `</body>` in the labs here,
+or given `defer` so it waits for the tree to be finished.
+
+## In the lab
+
+*A profile page built from real elements* hands you an empty `<body>` and asks for a
+page: a `<header>` with the name in an `<h1>`, a `<main>` around the content, an image
+whose `alt` says what it shows, a paragraph, a list of at least three items, and a link
+that actually goes somewhere. Six checks read the tree back — none of them looks at a
+single pixel.
+''',
+                },
             ],
-            "quiz": {
+            "quiz": [{
                 "title": "What the markup promises",
                 "minutes": 7,
                 "questions": [
@@ -382,7 +561,126 @@ visible; `aria-describedby` only says how the two are related.
 """,
                     },
                 ],
-            },
+            }, {
+                "title": "Elements, attributes and the tree",
+                "minutes": 6,
+                "questions": [
+                    {
+                        "q": "A photo of a bicycle in a repair stand sits on the page. What does its `alt` attribute do?",
+                        "opts": [
+                            "Stands in for the picture — read aloud, and shown when the file fails to load",
+                            "Shows a tooltip with the same words when the pointer rests on the image",
+                            "Tells the browser which file to request, so `src` and `alt` must agree",
+                            "Marks the image decorative, so assistive technology passes over it without announcing anything",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`alt` is the picture written down, and it earns its keep in two different failures: the
+person cannot see the image, or the image never arrived. The tooltip is a different
+attribute — `title` — announced inconsistently, never on touch, and never on keyboard
+focus in several browsers. `src` alone names the file; an `alt` that repeats the file
+name is the worst outcome, because that is exactly what assistive technology falls back
+to when the attribute is missing entirely. And an image is declared decorative by
+`alt=""` — the empty string, deliberately written — not by describing it as decorative.
+""",
+                    },
+                    {
+                        "q": "Which of these is a correctly structured list?",
+                        "opts": [
+                            "`<ul><li>One</li><li>Two</li></ul>`",
+                            "`<li><ul>One</ul><ul>Two</ul></li>`",
+                            "`<ul>One<br>Two</ul>`",
+                            "`<list><item>One</item><item>Two</item></list>`",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The items live inside the list and the text lives inside the items: the children of a
+`<ul>` are `<li>` elements, and that is what lets a screen reader announce *list, three
+items* and
+then count down as you move. Turning it inside out puts a list inside an item, which the
+parser will rearrange rather than reject. Two lines separated by `<br>` look identical on
+screen and are one run of text in the tree, with no count and no items. And `<list>` and
+`<item>` are not HTML: an unknown tag is not an error either, it becomes an inline
+element with no meaning, styled by nothing and announced as nothing.
+""",
+                    },
+                    {
+                        "q": "In `<a href=\"https://example.com\">Read more</a>`, what is `href`?",
+                        "opts": [
+                            "An attribute on the start tag, holding the address the link goes to",
+                            "A tag nested inside the anchor, which the browser resolves before drawing it",
+                            "The visible label, which the browser draws in place of the text",
+                            "A CSS property that gives the anchor its underline and colour",
+                        ],
+                        "a": 0,
+                        "why": r"""
+An attribute is a name and a value written on a start tag, and `href` is the one that
+carries the destination. It is worth separating from the two things beside it. The label
+is the content between the tags, which is what someone reads and what a voice-control
+user says out loud; the underline and colour come from the browser's own stylesheet, and
+CSS can take them away without the link ceasing to be one. The reverse is not true: an
+`<a>` with no `href` is not a link at all — it is text in an anchor element, with no
+focus stop, no activation and nothing in the accessibility tree to say it goes anywhere.
+""",
+                    },
+                    {
+                        "q": "Why write `<main>` and `<nav>` rather than `<div class=\"main\">` and `<div class=\"nav\">`?",
+                        "opts": [
+                            "The semantic elements are announced with a role, so the structure reaches the accessibility tree",
+                            "The semantic elements are quicker to parse, so the first paint arrives sooner on a slow connection",
+                            "`<div>` is deprecated, and browsers will stop supporting it",
+                            "The semantic elements arrive with default styling that a `<div>` has to be given",
+                        ],
+                        "a": 0,
+                        "why": r"""
+On screen the two are indistinguishable — that is the whole difficulty. The difference is
+in the second tree the browser builds: `<main>` contributes a landmark someone can jump
+to and `<nav>` contributes another, while a `<div>` contributes a node with no role worth
+announcing, whatever its class says. Parsing cost is not the argument; the two are the
+same handful of bytes. `<div>` is not deprecated and never will be — it is the right
+element when nothing more specific fits. Nor do the semantic elements bring styling worth
+having: `<main>` renders as a plain block, which is why the div version looks finished.
+""",
+                    },
+                    {
+                        "q": "How many `<h1>` elements does a page normally carry?",
+                        "opts": [
+                            "One — the page's own title, with `<h2>` and below for its sections",
+                            "As many as look right, since the level chooses a size rather than a structure",
+                            "None: `<h1>` is reserved for the browser's own chrome",
+                            "Six, one of each level, or the outline is incomplete",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The headings are the page's table of contents, and someone navigating by heading hears
+the level announced each time. One `<h1>` gives that outline a single root; several give
+it several, and the reader has no way to tell which one the page is about. The level is
+not a size — `h2 { font-size: 1rem }` costs nothing and keeps the outline honest, which
+is the fix whenever a heading looks too big. And the six levels are a range to draw from
+as the nesting needs them, not a set to be filled in.
+""",
+                    },
+                    {
+                        "q": "Which element collects one line of typed text?",
+                        "opts": [
+                            "`<input>`, bound by `id` to a `<label>` that names it",
+                            "`<button>`, whose text content becomes the value",
+                            "`<span contenteditable>`, the element built for typing",
+                            "`<text>`, the element the form specification defines for this",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`<input>` is the form control, and it is only half a control until a `<label for>` points
+at its `id` — that binding is what gives it a name to be announced by and what makes
+clicking the words focus the field. A `<button>` is pressed, not typed into, and carries
+no value a form would submit for it. `contenteditable` does make a `<span>` typeable, and
+it is how rich-text editors are built, but it is not a form control: no name, no `value`,
+nothing submitted, and every keyboard behaviour written by hand. There is no `<text>`
+element; an unrecognised tag falls back to an inline box that quietly does nothing.
+""",
+                    },
+                ],
+            }],
             "blanks": {
                 "title": "The booking form, attribute by attribute",
                 "minutes": 9,
@@ -559,7 +857,7 @@ and the only hand-made control needed an attribute to buy back part of what `<bu
 comes with.
 """,
             },
-            "lab": {
+            "lab": [{
                 "title": "A booking form a screen reader can navigate",
                 "runtime": "web",
                 "minutes": 40,
@@ -845,7 +1143,130 @@ assert(_hint !== null, 'aria-describedby points at "' + _d + '", but no element 
 assert(_hint.textContent.trim() !== '', 'The element referenced by aria-describedby is empty');
 '''},
                 ],
-            },
+            }, {
+                "title": "A profile page built from real elements",
+                "runtime": "web",
+                "minutes": 16,
+                "brief": r'''
+`index.html` holds an empty `<body>` and one image. Build a profile page for a
+person — real or invented — out of the elements that say what each part is. There
+is no stylesheet, so nothing here can be faked with a class name: every check
+reads the tree.
+
+The page must contain:
+
+- a `<header>` holding an `<h1>` with the person's name
+- a `<main>` around everything else
+- the `<img>`, given an `alt` that describes what the picture shows
+- a `<p>` inside `<main>` with a short biography
+- a `<ul>` of at least **three** skills, one `<li>` each
+- an `<a>` whose `href` starts with `https://`, with visible link text
+
+Press Run to see the preview beside the checks. The page will look plain, and it
+is meant to — the structure is the exercise.
+''',
+                "files": [
+                    {"name": "index.html", "content": r'''
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Profile</title>
+</head>
+<body>
+
+<!-- Build the profile page here. The image below is yours to place and describe. -->
+<img src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Crect width='160' height='160' fill='%23d9e2ec'/%3E%3C/svg%3E" alt="">
+
+</body>
+</html>
+'''},
+                ],
+                "main": "index.html",
+                "solution": [
+                    {"name": "index.html", "content": r'''
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ada Lovelace — profile</title>
+</head>
+<body>
+
+<header>
+  <h1>Ada Lovelace</h1>
+  <p>Analyst, metaphysician, first programmer</p>
+</header>
+
+<main>
+  <img src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Crect width='160' height='160' fill='%23d9e2ec'/%3E%3C/svg%3E" alt="Portrait of Ada Lovelace at a writing desk">
+
+  <p>Ada wrote the first algorithm intended for a machine, decades before anyone
+  built one that could run it.</p>
+
+  <h2>Skills</h2>
+  <ul>
+    <li>Algorithms</li>
+    <li>Mathematics</li>
+    <li>Technical writing</li>
+  </ul>
+
+  <h2>Elsewhere</h2>
+  <p><a href="https://en.wikipedia.org/wiki/Ada_Lovelace">Read more about Ada Lovelace</a></p>
+</main>
+
+</body>
+</html>
+'''},
+                ],
+                "hints": [
+                    "Skeleton first: a `<header>` holding the `<h1>`, then a `<main>` holding everything else. Nothing else can pass until those two exist.",
+                    "A list is a `<ul>` wrapped around three or more `<li>` elements — the text goes inside the items, never loose inside the `<ul>`.",
+                    "The link needs both halves: an `href` that starts with `https://`, and words between the tags for someone to read and click.",
+                    "Alt text stands in for the picture. Describe what it shows in a clause, in the voice of the page — not `photo`, and not the file name.",
+                ],
+                "tests": [
+                    {"name": "The name is an h1 inside a header", "code": r'''
+var _h1 = document.querySelector('header h1');
+assert(_h1 !== null, 'Expected an <h1> inside a <header> — found ' + document.querySelectorAll('h1').length + ' <h1> and ' + document.querySelectorAll('header').length + ' <header> on the page');
+assert(_h1.textContent.trim().length > 0, 'The <h1> is empty — put the person name in it');
+assertEqual(document.querySelectorAll('h1').length, 1, 'A page has exactly one <h1>, found ' + document.querySelectorAll('h1').length);
+'''},
+                    {"name": "The content lives in a main landmark", "code": r'''
+assertEqual(document.querySelectorAll('main').length, 1, 'Wrap the content in exactly one <main>, found ' + document.querySelectorAll('main').length);
+assert(document.querySelector('main').textContent.trim().length > 0, 'The <main> is empty — the biography, the list and the link belong inside it');
+'''},
+                    {"name": "The image describes itself", "code": r'''
+var _img = document.querySelector('img');
+assert(_img !== null, 'The <img> has gone — keep it on the page');
+var _alt = _img.getAttribute('alt');
+assert(_alt !== null, 'The <img> has no alt attribute at all');
+assert(_alt.trim().length >= 10, 'The alt text "' + _alt + '" is too short to describe what the picture shows');
+'''},
+                    {"name": "There is a biography paragraph", "code": r'''
+var _ps = document.querySelectorAll('main p');
+assert(_ps.length >= 1, 'Add a <p> with a short biography inside <main>, found ' + _ps.length + ' paragraph(s) there');
+var _long = Array.prototype.filter.call(_ps, function (p) { return p.textContent.trim().length >= 20; });
+assert(_long.length >= 1, 'The paragraph in <main> is a few characters long — write a sentence about the person');
+'''},
+                    {"name": "The skills are a real list", "code": r'''
+var _ul = document.querySelector('ul');
+assert(_ul !== null, 'No <ul> on the page — the skills belong in a list');
+var _items = _ul.querySelectorAll(':scope > li');
+assert(_items.length >= 3, 'Found ' + _items.length + ' <li> directly inside the <ul> — at least three are needed');
+for (var _i = 0; _i < _items.length; _i++) {
+  assert(_items[_i].textContent.trim() !== '', 'List item ' + (_i + 1) + ' is empty');
+}
+'''},
+                    {"name": "The link goes somewhere and says so", "code": r'''
+var _a = document.querySelector('a[href]');
+assert(_a !== null, 'Needs an <a> with an href — an anchor without one is not a link');
+var _href = _a.getAttribute('href');
+assert(_href.indexOf('https://') === 0, 'The href should start with https://, got "' + _href + '"');
+assert(_a.textContent.trim().length > 0, 'Give the link visible text — a link nobody can read is a link nobody can follow');
+'''},
+                ],
+            }],
         },
         # ------------------------------------------------------------ M2
         {
@@ -1059,8 +1480,193 @@ showing, and the last of them is the one this reading opened with: `scrollWidth`
 than `clientWidth`.
 ''',
                 },
+                {
+                    "title": "Which rule wins",
+                    "minutes": 11,
+                    "body": r'''
+You write `.card h2 { color: teal; }`, reload, and the heading is still black. Open the
+inspector, click the heading, and your declaration is there in the Styles panel with a
+line through it. Nothing is broken. Two rules matched the same element, they disagreed,
+and the browser resolved the disagreement by a procedure — one you can run on paper
+before you reload. This reading is that procedure, and the three other things a
+stylesheet does that are not layout: inherit, measure, and name.
+
+## A rule, and what connects it
+
+```html
+<link rel="stylesheet" href="style.css">
+```
+
+That line in the `<head>` is what pairs a stylesheet with a document. The stylesheet
+itself is a list of **rules**, and each rule is a *selector* saying which elements it is
+about, followed by a block of *declarations* — property, colon, value, semicolon.
+
+```css
+h1 {
+  color: #1b1f2a;
+  font-size: 2rem;
+}
+```
+
+The selectors worth knowing at the start are few:
+
+| Selector | Matches |
+|---|---|
+| `p` | every `<p>` — a **type** selector |
+| `.card` | anything whose `class` list contains `card` |
+| `#main-nav` | the one element with `id="main-nav"` |
+| `.card h2` | an `<h2>` anywhere inside `.card` — a **descendant** |
+| `.card > h2` | an `<h2>` that is a direct child of `.card` |
+| `a:hover` | a link while the pointer is over it |
+| `input[type="email"]` | by attribute |
+| `.card, .panel` | either, as two independent selectors |
+
+That last row is worth pausing on. A comma does not create one selector matching both; it
+duplicates the whole rule, and each half is weighed separately when the disagreement is
+resolved.
+
+## Specificity is three numbers
+
+When two rules set the same property on the same element, the browser scores each
+selector as a triple — write it `(a, b, c)`:
+
+- **a** — how many `#id` selectors it contains
+- **b** — how many classes, attribute selectors and pseudo-classes (`.note`,
+  `[type="email"]`, `:hover`)
+- **c** — how many element types and pseudo-elements (`p`, `h2`, `::before`)
+
+Compare the triples left to right, and the first column that differs decides it. A single
+id beats any number of classes, because column *a* is read before column *b* ever is:
+`(1, 0, 0)` beats `(0, 9, 0)`. Only when two triples are identical does the tiebreak
+happen, and the tiebreak is document order — the rule written **later** wins.
+
+Five rules against three paragraphs, with the answers read back off the live page:
+
+```js
+var css = [
+  'p { color: rgb(20, 20, 20); }',          /* (0, 0, 1) */
+  'article p { color: rgb(0, 0, 200); }',   /* (0, 0, 2) */
+  '.note { color: rgb(0, 120, 0); }',       /* (0, 1, 0) */
+  '.note { color: rgb(120, 0, 120); }',     /* (0, 1, 0), written later */
+  '#lead { color: rgb(200, 0, 0); }'        /* (1, 0, 0) */
+].join('\n');
+
+var sheet = document.createElement('style');
+sheet.textContent = css;
+document.head.appendChild(sheet);
+
+var article = document.createElement('article');
+[['one', 'lead', 'note'], ['two', '', 'note'], ['three', '', '']].forEach(function (row) {
+  var p = document.createElement('p');
+  p.textContent = row[0];
+  if (row[1]) { p.id = row[1]; }
+  if (row[2]) { p.className = row[2]; }
+  article.appendChild(p);
+});
+document.body.appendChild(article);
+
+article.querySelectorAll('p').forEach(function (p) {
+  console.log(p.textContent + ' -> ' + getComputedStyle(p).color);
+});
+```
+
+*one* comes out `rgb(200, 0, 0)`: four rules match it and `#lead` at `(1, 0, 0)` is ahead
+of every one of them on the first column. *two* comes out `rgb(120, 0, 120)`: the two
+`.note` rules at `(0, 1, 0)` both beat `article p` at `(0, 0, 2)` — a class outranks any
+pile of element names — and between the two identical triples the later one takes it.
+*three* comes out `rgb(0, 0, 200)`, because `article p` at `(0, 0, 2)` beats bare `p` at
+`(0, 0, 1)`. The heading at the top of this reading was the second case: `.card h2` is
+`(0, 1, 1)`, and whatever was painting it black had a class more.
+
+## Inheritance is a different mechanism
+
+A rule that matches nothing can still change an element, because some properties pass
+down the tree on their own. `color`, `font-family`, `font-size`, `line-height`,
+`text-align` and `visibility` inherit; `margin`, `padding`, `border`, `background`,
+`width` and `display` do not. That is why setting `font-family` once on `body` styles the
+whole page and setting `border` on `body` draws exactly one box.
+
+Inheritance loses to any rule that matches. An inherited value is what an element gets
+when nothing said otherwise, so a browser default such as `a { color: -webkit-link }`
+beats the `color` inherited from a parent — which is why links keep their blue inside a
+paragraph you have coloured, and why `a { color: inherit; }` is the line that fixes it.
+
+## Units, and which to use where
+
+`px` is an absolute length and ignores everything about the reader. `rem` is a multiple
+of the root font size, so text set in `rem` grows when someone raises their browser's
+default from 16px — a setting people who need it do use, and `px` silently overrides.
+`em` is a multiple of the *element's own* font size, which makes it good for padding that
+should scale with its text and treacherous when nested, because two levels of
+`font-size: 0.9em` compound to 0.81. `%` is relative to the parent's corresponding
+length. Text and spacing in `rem`, hairlines and radii in `px`, is a defensible default.
+
+Colour has four common spellings for the same thing: a keyword (`tomato`), hex
+(`#f26a1b`), `rgb(242 106 27)`, and `rgb(242 106 27 / 10%)` when part of what you want is
+transparency. Nothing distinguishes them but readability.
+
+## Custom properties are inherited properties
+
+```css
+:root { --accent: #f26a1b; }
+button { background: var(--accent); }
+```
+
+`--accent` is not a compile-time constant. It is an ordinary CSS property that inherits,
+declared here on `:root` — the `<html>` element — so every descendant computes the same
+value and `var(--accent)` resolves against whatever the element itself inherited. Two
+consequences fall out. Re-declaring it lower down changes it for that subtree only, which
+is how a `.panel--warning` recolours everything inside it with one line. And re-declaring
+it inside a media query changes it for the whole page at one width, which is how the
+module's lab publishes `--layout` for JavaScript to read. `var(--gap, 1rem)` supplies a
+fallback for the case where the property was never declared at all.
+
+## The mistake, and why it is tempting
+
+The heading is still black, so you write `color: teal !important;` and move on. It works,
+and it has cost more than it looks. `!important` is not a bigger number in the same
+comparison — it moves the declaration into a separate round that is resolved before the
+ordinary one, so nothing you write later at any specificity can override it without being
+`!important` too. The next person needing a different colour has one move available, and
+from then on the file is a ladder of exclamation marks with the real precedence buried
+under it.
+
+The cousin is winning by inflation: adding `#page` to the front of the selector to
+outscore whatever beat you. It works once, and it raises the floor for every rule after
+it. Both are the same misreading — treating a lost comparison as something to beat rather
+than something to look at. The comparison told you which rule won and why. Usually the
+answer is to lower the winner rather than raise the loser: replace `article p` with a
+class, or move your rule below its equal.
+
+## Where this stops holding
+
+The triple is not the whole order. An inline `style="…"` attribute outranks every
+selector; `!important` declarations are resolved in their own pass, and there they run
+from the *bottom* of the priority list upwards, so a reader's `!important` in a user
+stylesheet beats yours. `:where(...)` contributes zero to the triple no matter what is
+inside it, which is how a design system ships defaults that are trivial to override, and
+`:is(...)` contributes its most specific argument, so `:is(#a, p)` scores `(1, 0, 0)`
+even when it matched the `p`. Cascade layers reorder the whole thing again, and are
+resolved before specificity is consulted at all.
+
+And `getComputedStyle` does not report what you wrote. It reports the resolved value:
+`font-size: 2rem` reads back as `32px`, `color: teal` as `rgb(0, 128, 128)`, and a `width`
+in `%` as the pixels it currently occupies. Every check in this module's labs is written
+against those resolved strings, which is why they compare `'rgb(0, 0, 0)'` rather than
+`'black'`.
+
+## In the lab
+
+*A card with shape* gives you the finished markup — an `<article class="card">` holding
+an avatar, a heading, two paragraphs and a `<ul class="skills">` of `.tag` items — and a
+stylesheet with the reset and the page background already written. You add the rules: a
+rounded, padded, shadowed white card; the skills list as a flex row with a gap and no
+bullets; padded, rounded tags; and a heading in something other than the default black.
+Five checks read the computed styles back off the live page.
+''',
+                },
             ],
-            "quiz": {
+            "quiz": [{
                 "title": "Boxes, axes and the cascade",
                 "minutes": 7,
                 "questions": [
@@ -1156,7 +1762,132 @@ here beyond being the common ancestor.
 """,
                     },
                 ],
-            },
+            }, {
+                "title": "Selectors, inheritance and units",
+                "minutes": 6,
+                "questions": [
+                    {
+                        "q": "Which selector matches every element carrying `class=\"card\"`?",
+                        "opts": [
+                            "`.card`",
+                            "`#card`",
+                            "`card`",
+                            "`*[card]`",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A leading dot means a class, a leading hash means an id, and a bare name means an element
+type. `#card` matches the one element with `id="card"` and nothing else, which is a
+different element or none at all. `card` is a type selector for a `<card>` element, and
+since no such element exists it matches nothing — quietly, because an unmatched selector
+is not an error. `*[card]` is an attribute selector: it would match `<div card>`, not
+`<div class="card">`, because the attribute here is called `class` and `card` is one word
+of its value.
+""",
+                    },
+                    {
+                        "q": "A `.card` has a background colour, 16px of padding and 24px of margin. How far out does the background paint?",
+                        "opts": [
+                            "To the border's outer edge — under the padding, but not under the margin",
+                            "To the content's edge, so neither the padding band nor the margin takes the colour",
+                            "To the margin's outer edge, since margin is part of the element's box",
+                            "As far as `background-clip` says, and it has no initial value to fall back on",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Padding is inside the border and margin is outside it, and the background fills
+everything up to and including the border box. That is the practical difference between
+the two, and the reason a card with a background gets breathing room from `padding` and
+separation from its neighbours with `margin` — swap them and the text touches a coloured
+edge while a coloured gap sits between the cards. Two more consequences follow from the
+same picture: adjacent vertical margins collapse into one and padding never does, and a
+click landing in the padding hits the element while a click in the margin does not.
+`background-clip` can move that edge, but its initial value is `border-box`, which is the
+behaviour described here.
+""",
+                    },
+                    {
+                        "q": "`#page p { color: red }` and `.intro { color: blue }` both match one paragraph. Which colour renders?",
+                        "opts": [
+                            "Red — an id in the selector outranks a class, whatever else is in either",
+                            "Blue — the later rule wins whenever two rules disagree about a property",
+                            "Blue — `.intro` names the element more precisely than a descendant chain",
+                            "Red — the selector with more parts wins, and `#page p` has two of them",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Specificity is three numbers compared left to right: ids, then classes, then element
+types. `#page p` scores `(1, 0, 1)` and `.intro` scores `(0, 1, 0)`, and the first column
+settles it before the second is looked at — one id beats any number of classes. Document
+order is real but it is the *tiebreak*, reached only when the triples are identical, so
+writing `.intro` last changes nothing here. Counting parts is the other tempting rule and
+it is not the rule: `article section div p` has four parts, scores `(0, 0, 4)`, and still
+loses to a single class.
+""",
+                    },
+                    {
+                        "q": "`body { font-family: system-ui; border: 1px solid; }` — what do the elements inside `body` get?",
+                        "opts": [
+                            "The font, because `font-family` inherits; the border stops at `body`",
+                            "Both, since any property set on an ancestor cascades down to its descendants",
+                            "Neither — `body` is not an ancestor for the purposes of inheritance",
+                            "The border, because box properties inherit while text properties are resolved per element",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Inheritance is a property-by-property fact, not a general one. Text properties —
+`color`, `font-family`, `font-size`, `line-height`, `text-align` — pass down the tree,
+which is why one declaration on `body` sets the typeface for the whole page. Box
+properties — `border`, `padding`, `margin`, `background`, `width`, `display` — do not,
+which is why the same rule draws exactly one rectangle and not one around every element
+on the page. The cascade and inheritance get conflated because both travel downwards in
+the file; the cascade decides which matching rule wins, and inheritance supplies a value
+when no rule matched at all.
+""",
+                    },
+                    {
+                        "q": "`@media (max-width: 640px) { … }` — when do the rules inside apply?",
+                        "opts": [
+                            "While the viewport is 640 CSS pixels wide or narrower, whatever the element",
+                            "While the viewport is wider than 640 pixels, the number being a floor and not a ceiling",
+                            "Never on a phone, because a phone reports its physical pixel count",
+                            "Whenever the element being styled has been measured at 640px or less",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`max-width` is a ceiling on the viewport: at 640 and below the block applies, above it
+the block is inert. Reading it as a floor is the error that produces a stylesheet whose
+two layouts are the wrong way round, and it survives review because both versions render
+something. The phone answer is worth taking seriously and is wrong for a specific reason:
+a device with 1080 physical pixels across and a device pixel ratio of 3 reports a
+360-pixel viewport to the media query, which is what `<meta name="viewport"
+content="width=device-width">` arranges, and what makes the numbers in a breakpoint mean
+anything. And the condition measures the viewport, never the element — a gallery in a
+300-pixel sidebar on a wide screen matches no `max-width: 640px` rule at all, which is
+the gap container queries exist to fill.
+""",
+                    },
+                    {
+                        "q": "Which length grows when the reader raises their browser's default font size?",
+                        "opts": [
+                            "`rem`, which is a multiple of the root font size",
+                            "`px`, which the browser scales along with the text",
+                            "`vh`, which tracks the viewport rather than the type",
+                            "`cm`, which is anchored to the physical display",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`1rem` is whatever the root element's font size currently is, so raising the default from
+16px to 20px widens every `rem` on the page by a quarter — text, padding and gaps
+together. `px` is the one that does not move: a CSS pixel is an absolute length, and
+sizing body text in `px` overrides a preference the reader deliberately set, which is the
+whole argument for `rem`. `vh` is one hundredth of the viewport height and answers to the
+window, not the reader. `cm` sounds physical and is not measured on any ruler either — it
+is pinned to 96 CSS pixels per inch regardless of the actual display.
+""",
+                    },
+                ],
+            }],
             "blanks": {
                 "title": "One stylesheet, two widths",
                 "minutes": 9,
@@ -1362,7 +2093,7 @@ Swap `auto-fill` for `auto-fit` and the empty tracks collapse instead, which is 
 arithmetic with the leftovers spent differently.
 ''',
             },
-            "lab": {
+            "lab": [{
                 "title": "A gallery that survives a 360px phone",
                 "runtime": "web",
                 "minutes": 45,
@@ -1641,7 +2372,165 @@ if (_doc.clientWidth > 0) {
 }
 '''},
                 ],
-            },
+            }, {
+                "title": "A card with shape",
+                "runtime": "web",
+                "minutes": 18,
+                "brief": r'''
+`index.html` is finished and read-only: an `<article class="card">` holding an
+avatar, a heading, a role line, a paragraph and a `<ul class="skills">` of three
+`.tag` items. `style.css` has the reset and the page background and nothing else.
+
+Write the rules that give the card a shape:
+
+- `.card` — a `border-radius`, at least **12px** of padding, a visible
+  `box-shadow`, and a background colour of its own so it lifts off the grey page
+- `.skills` — a flex row with a `gap` between the tags, and no bullets
+- `.tag` — horizontal padding and rounded corners, so each one reads as a pill
+- `h1` — any colour other than the default black
+
+Five checks read the computed styles back off the live page, so what they see is
+what the browser resolved, not what you typed: `border-radius: 16px` reads back
+as `16px`, and a colour reads back as `rgb(...)` whatever notation you wrote it
+in. Press Run and switch to Preview to watch it take shape.
+''',
+                "files": [
+                    {"name": "index.html", "ro": True, "content": r'''
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Card</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<article class="card">
+  <img class="avatar" width="96" height="96" alt="Portrait of Grace Hopper in naval uniform" src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Crect width='96' height='96' fill='%23d9e2ec'/%3E%3C/svg%3E">
+  <h1>Grace Hopper</h1>
+  <p class="role">Rear admiral, compiler pioneer</p>
+  <p>Believed that code should read like the language people already speak, and
+  invented the compiler to prove it.</p>
+  <ul class="skills">
+    <li class="tag">COBOL</li>
+    <li class="tag">Compilers</li>
+    <li class="tag">Leadership</li>
+  </ul>
+</article>
+
+</body>
+</html>
+'''},
+                    {"name": "style.css", "content": r'''
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 24px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #f0f2f5;
+}
+
+/* 1. .card    — radius, padding (12px or more), box-shadow, its own background
+   2. .skills  — flex row, a gap, no bullets and no list padding
+   3. .tag     — horizontal padding and a radius
+   4. h1       — a colour that is not the default black */
+'''},
+                ],
+                "main": "index.html",
+                "solution": [
+                    {"name": "style.css", "content": r'''
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 24px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #f0f2f5;
+}
+
+.card {
+  max-width: 26rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+
+.avatar { display: block; border-radius: 50%; }
+
+h1 {
+  margin: 0.75rem 0 0.25rem;
+  color: #c9530e;
+  font-size: 1.6rem;
+}
+
+.role { color: #5a6270; margin-top: 0; }
+
+.skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.tag {
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: #ffeadf;
+  color: #8a2f00;
+  font-size: 0.85rem;
+}
+'''},
+                ],
+                "hints": [
+                    "One rule per requirement. `.card { border-radius: 16px; padding: 1.5rem; background: #fff; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); }` covers the first four checks between them.",
+                    "A `<ul>` arrives with bullets and a large left padding, and neither goes away on its own: `list-style: none; padding: 0;` before `display: flex; gap: 0.5rem;`.",
+                    "A pill is padding plus a radius larger than the element is tall — `border-radius: 999px` is the usual way to say *as round as it can be* without measuring.",
+                    "The check compares against `rgb(0, 0, 0)`, because that is what the browser resolves the default `color` to. Any other colour passes.",
+                ],
+                "tests": [
+                    {"name": "The card has a shape of its own", "code": r'''
+var _card = document.querySelector('.card');
+assert(_card !== null, 'No .card element — index.html is read-only, so it should still be there');
+var _cs = getComputedStyle(_card);
+assert(parseFloat(_cs.borderTopLeftRadius) > 0, 'Give .card a border-radius, got ' + _cs.borderTopLeftRadius);
+assert(parseFloat(_cs.paddingTop) >= 12, '.card needs at least 12px of padding, got padding-top: ' + _cs.paddingTop);
+assert(parseFloat(_cs.paddingLeft) >= 12, '.card needs padding on the sides too, got padding-left: ' + _cs.paddingLeft);
+'''},
+                    {"name": "The card lifts off the page", "code": r'''
+var _cs = getComputedStyle(document.querySelector('.card'));
+assert(_cs.boxShadow && _cs.boxShadow !== 'none', 'Add a box-shadow to .card so it sits above the grey background');
+var _bg = _cs.backgroundColor;
+assert(_bg !== 'rgba(0, 0, 0, 0)' && _bg !== 'transparent', 'Give .card its own background colour — without one the page grey shows straight through');
+'''},
+                    {"name": "The skills flow as a flex row", "code": r'''
+var _s = getComputedStyle(document.querySelector('.skills'));
+assertEqual(_s.display, 'flex', '.skills should be display: flex, got ' + _s.display);
+assert(parseFloat(_s.columnGap) > 0, 'Add a gap between the tags, got column-gap: ' + _s.columnGap);
+assertEqual(_s.listStyleType, 'none', 'Drop the bullets from .skills, got list-style-type: ' + _s.listStyleType);
+assert(parseFloat(_s.paddingLeft) < 8, 'A <ul> starts with a large left padding for its bullets — with the bullets gone, set padding: 0. Got padding-left: ' + _s.paddingLeft);
+'''},
+                    {"name": "The tags read as pills", "code": r'''
+var _tags = document.querySelectorAll('.tag');
+assertEqual(_tags.length, 3, 'Expected the three .tag items from index.html, found ' + _tags.length);
+var _t = getComputedStyle(_tags[0]);
+assert(parseFloat(_t.paddingLeft) > 0, 'Each .tag needs horizontal padding, got padding-left: ' + _t.paddingLeft);
+assert(parseFloat(_t.borderTopLeftRadius) > 0, 'Round the .tag corners, got ' + _t.borderTopLeftRadius);
+var _r0 = _tags[0].getBoundingClientRect();
+var _r1 = _tags[1].getBoundingClientRect();
+assert(Math.abs(_r0.top - _r1.top) < 2, 'The tags should sit on one row while there is space for them, not stack');
+'''},
+                    {"name": "The heading carries a colour", "code": r'''
+var _c = getComputedStyle(document.querySelector('h1')).color;
+assert(_c !== 'rgb(0, 0, 0)', 'Move the h1 away from the default black — it reads back as ' + _c);
+'''},
+                ],
+            }],
         },
         # ------------------------------------------------------------ M3
         {
@@ -1991,8 +2880,370 @@ after `state.items` is emptied and `loadState()` called; and the fresh state, no
 throw, when storage holds junk.
 ''',
                 },
+                {
+                    "title": "Values, and the four things you do to them",
+                    "minutes": 11,
+                    "body": r'''
+A cart holds three items and the subtotal comes out as `120899249`. Nothing threw. The
+number is not a rounding error or an off-by-one; it is the three prices written down next
+to each other, because one of them arrived from an input as the string `'899'` and `+`
+had to decide what to do with a number and a string. It decided to make text. This
+reading is the small set of facts that make that decision predictable, and the four
+operations — transform, keep, fold, find — that most of the code in this module is built
+out of.
+
+## What a value is
+
+```js
+var prices = [120, '899', 249];
+var sum = 0;
+prices.forEach(function (p) { sum = sum + p; });
+console.log('sum: ' + sum + ' (a ' + typeof sum + ')');
+```
+
+`sum: 120899249 (a string)`. The first addition is `0 + 120` and both sides are numbers,
+so it is arithmetic. The second is `120 + '899'`, and `+` is the one operator that means
+two things: with two numbers it adds, and with a string on either side it joins. From
+that point on `sum` is a string and every later `+` joins as well.
+
+```js
+console.log('120 + "899" is ' + (120 + '899'));
+console.log('120 * "899" is ' + (120 * '899'));
+console.log('"5" == 5 is ' + ('5' == 5));
+console.log('"5" === 5 is ' + ('5' === 5));
+console.log('Number("899") + 1 is ' + (Number('899') + 1));
+console.log('Number("") is ' + Number(''));
+console.log('Number("12px") is ' + Number('12px'));
+console.log('NaN === NaN is ' + (NaN === NaN));
+```
+
+`120899`, then `107880`. Only `+` is ambiguous; `*`, `-` and `/` have no string meaning,
+so they convert and do arithmetic, which is exactly why the bug hides — a total computed
+as `price * qty` is fine and the same value added to a running sum is not.
+
+Then `true`, then `false`. `==` converts before comparing and `===` refuses to, and the
+whole of the difference is that one line. Use `===` and `!==` everywhere; the cases where
+`==` is what you wanted are rare enough to write out longhand.
+
+The last three are the boundary. `Number(...)` is where a string becomes a number, and it
+is worth doing once, at the edge where the value arrives, rather than hoping. `Number('')`
+is `0`, which is why an empty field can look like a legitimate zero. `Number('12px')` is
+`NaN`, and `NaN === NaN` is `false` — the only value in the language not equal to itself,
+so `Number.isNaN(x)` is how you ask.
+
+The types you will meet are `number` (one type: `42` and `4.2` are both it), `string`,
+`boolean`, `undefined` — a variable with no value yet — and `null`, which is the value
+you assign to mean *deliberately nothing*. `typeof` names them.
+
+## Naming, and the two keywords
+
+```js
+const taxRate = 0.25;
+let total = 0;
+total = total + 10;
+```
+
+`const` refuses reassignment; `let` allows it. Reach for `const` by default and change it
+to `let` at the moment you need to reassign, because a name that cannot be reassigned is
+one fewer thing to hold in your head while reading. `const` is not deep: `const cart = []`
+forbids `cart = somethingElse` and permits `cart.push(item)` all day, which is the
+behaviour you want and the one people expect least. `var` is the older keyword, scoped to
+the whole enclosing function rather than to its block, and it exists in this course only
+because the labs are written in it for consistency with the sandbox.
+
+Backticks make a template literal: `` `Hello, ${name}` `` splices any expression into a
+string, which beats a chain of `+` as soon as there are more than two pieces.
+
+## Functions, in two spellings
+
+```js
+function greet(name) {
+  return `Hello, ${name}`;
+}
+
+const double = (n) => n * 2;
+
+const describe = (item) => {
+  const label = item.name.toUpperCase();
+  return `${label}: ${item.price}`;
+};
+```
+
+An arrow function with a single expression and no braces returns that expression. Put
+braces around the body and you are writing statements, and a `return` becomes your
+responsibility — a function that ends without one returns `undefined`, which is how a
+`map` quietly produces an array of nothings.
+
+## Four things to do to a list
+
+```js
+var cart = [
+  { name: 'Wiper blades', price: 120, qty: 2 },
+  { name: 'Jack', price: 899, qty: 0 },
+  { name: 'Torch', price: 249, qty: 1 }
+];
+
+var total = cart.reduce(function (sum, item) { return sum + item.price * item.qty; }, 0);
+var available = cart.filter(function (item) { return item.qty > 0; });
+var names = available.map(function (item) { return item.name; });
+
+console.log('total: ' + total);
+console.log('in stock: ' + names.join(', '));
+console.log('cart still has ' + cart.length + ' entries');
+console.log('first over 200: ' + cart.find(function (i) { return i.price > 200; }).name);
+```
+
+`total: 489` — that is $120 \times 2 + 899 \times 0 + 249 \times 1$. `in stock: Wiper
+blades, Torch`. `cart still has 3 entries`, which is the point: `map`, `filter` and
+`reduce` each build a new array or a new value and leave the original where it was, so
+they chain without any of them being a hidden edit. `first over 200: Jack` — `find`
+returns the element itself, or `undefined` when nothing matched, which is why reading
+`.name` off it without a guard is a crash waiting for the empty case.
+
+The shapes are worth naming, because choosing between them is most of the work: `map` is
+one-in-one-out, `filter` is keep-or-drop with the elements unchanged, `reduce` folds the
+whole list into a single value, `find` returns the first match, and `forEach` returns
+nothing at all and exists for side effects. `push`, `splice` and `sort` are the mutating
+ones — they change the array in place and return something other than the new array,
+which is a common surprise.
+
+An object is a bag of named values, read with `item.price` or `item['price']` when the
+name is itself in a variable. `const { name, price } = item` pulls two of them into
+variables in one line, and `Object.entries(item)` gives an array of `[key, value]` pairs
+to loop over.
+
+## The mistake, and why it is tempting
+
+The one this reading opened with: taking a value out of the page and using it without
+converting it. Everything that comes back from the DOM is a string — `input.value`,
+`dataset.id`, `getAttribute(...)` — and a string behaves like a number under `*`, `-` and
+`/` for long enough that the code looks correct. Then a `+` appears, or a `===` against a
+real number fails silently, and the symptom shows up somewhere unrelated to the line that
+caused it. Convert at the boundary, with `Number(...)`, on the line the value arrives.
+
+## Where this stops holding
+
+`Number` and `parseInt` disagree on purpose: `parseInt('12px')` is `12` and
+`Number('12px')` is `NaN`, so the forgiving one is right for reading a CSS length and
+wrong for validating a form. Floating point is the same everywhere and still surprises:
+`0.1 + 0.2` is `0.30000000000000004`, so money is best held in whole pence, and
+`toFixed(2)` returns a **string** — which is exactly the ingredient the opening bug was
+made of.
+
+`typeof null` is `'object'`, a bug preserved since 1995 for compatibility; test for it
+with `x === null`. And `typeof []` is `'object'` too, so `Array.isArray(x)` is how you ask
+whether something is a list — the check the previous module's `loadState` runs on whatever
+came out of storage.
+
+## In the lab
+
+*Cart arithmetic that survives its inputs* gives you `cart.js` with four function bodies
+to fill in and no page at all: `cartTotal` folds price times quantity, `formatPrice`
+turns a number into `"$12.50"`, `applyDiscount` recognises two codes case-insensitively
+and passes everything else through unchanged, and `inStock` filters then maps. Four
+checks call them directly with the awkward inputs — an empty cart, an unknown code, a
+missing code, a whole number that still needs two decimals.
+''',
+                },
+                {
+                    "title": "Reaching into the page",
+                    "minutes": 11,
+                    "body": r'''
+`Uncaught TypeError: Cannot read properties of null (reading 'addEventListener')`, and
+the line it points at is `button.addEventListener('click', onAdd)`. The button is on the
+page — you can see it, you can click it, and the inspector shows it with the id the
+selector asked for. The problem is not the selector; it is the clock. The `<script>` tag
+was in the `<head>`, the parser stopped to fetch and run it, and at the moment it ran the
+`<body>` had not been parsed. `document.querySelector('#add')` looked in a document that
+did not contain the button yet and did what it always does when nothing matches: returned
+`null`.
+
+This reading is the DOM API those two lines belong to — how to find nodes, how to read
+and change them, how to build new ones, and how to hear about what someone does to them.
+The module's other reading argues for what to do with all of it: one state object, one
+`render()`, one delegated listener. This one is the vocabulary that argument is written
+in.
+
+## Finding things
+
+```js
+const title = document.querySelector('h1');
+const button = document.querySelector('#add');
+const rows = document.querySelectorAll('.item');
+```
+
+Both take a CSS selector — the same language as a stylesheet, so anything you can style
+you can find. `querySelector` returns the first match **in document order**, or `null`.
+`querySelectorAll` returns a `NodeList`, which is empty rather than `null` when nothing
+matches, and which has `forEach` but not `map` or `filter` — `Array.from(rows)` or
+`Array.prototype.slice.call(rows)` when you want those.
+
+`document.getElementById('add')` is the same lookup without the selector parsing, and it
+is the one to reach for when you have an id. Its cousin
+`document.getElementsByClassName('row')` is not equivalent to `querySelectorAll`, and the
+difference matters:
+
+```js
+var box = document.createElement('div');
+document.body.appendChild(box);
+['a', 'b', 'c'].forEach(function (t) {
+  var p = document.createElement('p');
+  p.className = 'row';
+  p.textContent = t;
+  box.appendChild(p);
+});
+
+var snapshot = box.querySelectorAll('.row');
+var live = box.getElementsByClassName('row');
+console.log('before: snapshot ' + snapshot.length + ', live ' + live.length);
+
+box.removeChild(box.firstElementChild);
+console.log('after one removal: snapshot ' + snapshot.length + ', live ' + live.length);
+
+for (var i = 0; i < live.length; i++) { live[i].remove(); }
+console.log('after the loop: ' + box.children.length + ' left, expected 0');
+```
+
+`before: snapshot 3, live 3`. Then `after one removal: snapshot 3, live 2` — the
+`NodeList` from `querySelectorAll` is a static list of the nodes that matched at the
+moment it was taken, and the `HTMLCollection` from `getElementsByClassName` is a live view
+that re-answers the question every time you ask. The last line reads `after the loop: 1
+left, expected 0`: removing `live[0]` shortens `live` under the loop, `i` moves to 1, the
+length is now 1, and the loop exits with one element still on the page. Iterate backwards,
+or take a snapshot first.
+
+## Reading and writing a node
+
+```js
+title.textContent = 'Inventory';
+input.value;
+img.src = 'photo.jpg';
+el.classList.add('done');
+el.classList.toggle('done', isDone);
+el.hidden = true;
+el.dataset.id;
+```
+
+`textContent` is the text of an element and everything inside it. `value` is the current
+contents of a form control and is not the same thing as its `value` **attribute**:
+
+```js
+var form = document.createElement('form');
+var input = document.createElement('input');
+input.setAttribute('value', 'Torch');
+form.appendChild(input);
+document.body.appendChild(form);
+
+input.value = 'Wiper blades';
+console.log('property: ' + input.value);
+console.log('attribute: ' + input.getAttribute('value'));
+```
+
+`property: Wiper blades`, `attribute: Torch`. The attribute is what the markup said and
+it does not move; the property is the live state. Every time someone types, the two drift
+apart, which is why reading a field with `getAttribute('value')` returns what it started
+as and why a form reset puts the attribute's value back. The same split shows up as
+`checked`, `disabled` and `hidden`: read and write the property, and treat the attribute
+as the initial value.
+
+`classList` has `add`, `remove`, `contains`, and `toggle` — whose two-argument form,
+`toggle('done', task.done)`, is a conditional add-or-remove and reads better than an `if`.
+`dataset.id` maps to the `data-id` attribute, and the mapping is camel-case both ways:
+`data-item-id` arrives as `dataset.itemId`. Everything it returns is a string.
+
+## Building nodes
+
+```js
+const li = document.createElement('li');
+li.className = 'item';
+li.textContent = task.title;
+list.append(li);
+li.remove();
+list.replaceChildren();
+```
+
+`createElement` makes a detached node — it exists, it is not on the page, and nothing is
+drawn until it is inserted. `append` adds at the end and `prepend` at the start; both
+accept several nodes at once, and both accept plain strings, which are inserted as text.
+`remove()` takes a node off the page. `replaceChildren()` with no arguments empties a
+container, and `el.textContent = ''` does the same thing; both are worth knowing because
+the third way, `el.innerHTML = ''`, is a habit that ends in the one place `innerHTML` must
+never be used.
+
+## Hearing about what happened
+
+```js
+button.addEventListener('click', function () {
+  count += 1;
+  render();
+});
+
+input.addEventListener('input', function (event) {
+  console.log(event.target.value);
+});
+
+form.addEventListener('submit', function (event) {
+  event.preventDefault();
+  addTask(input.value);
+});
+```
+
+`addEventListener(type, handler)` can be called any number of times on the same element
+for the same type, and every handler runs. The handler is given an event object: `type`,
+`target` — the deepest element the event actually landed on — and `currentTarget`, the
+element whose listener is running.
+
+The types cover most of what a page needs. `click` for buttons and links, and it fires for
+Enter and Space on a real `<button>` as well as for a mouse. `input` fires on every
+keystroke in a text field; `change` fires when a `<select>` or a checkbox settles, and for
+a text field only when it loses focus. `submit` fires on the form, not on the button, and
+its default action is a full page navigation — which `preventDefault()` cancels, and which
+is why a form handler that forgets that line appears to do nothing except reload.
+
+`preventDefault()` and `stopPropagation()` are different tools and get confused. The first
+cancels what the browser was going to do — navigate, submit, tick the checkbox — and lets
+the event carry on travelling. The second stops the event travelling and leaves the
+default action in place. Delegation depends on events travelling, so `stopPropagation` in
+a handler is how a delegated listener higher up silently stops firing.
+
+## The mistake, and why it is tempting
+
+The opening one: running the script before the elements exist. It is tempting because
+`<head>` is where a page's other resources go, and because moving the tag makes the error
+disappear without explaining anything. Two fixes are worth telling apart. Putting
+`<script src="app.js"></script>` immediately before `</body>` means the parser has already
+built everything above it, which is what the labs in this course do. Writing
+`<script defer src="app.js"></script>` in the `<head>` lets the file be fetched in
+parallel and runs it once the document is parsed — same guarantee, one less thing to
+remember, and it is the better default outside a teaching sandbox.
+
+## Where this stops holding
+
+`querySelector` searches the DOM, not your file, so an element added by a later render is
+found and an element in the file that a script removed is not.
+
+`event.target` is not always the element you bound to, and depends on the markup inside
+it: a click on the `<span>` inside a button has that span as its target, which is why
+`event.target.closest('button')` appears in every delegated handler in this course.
+`focus`, `blur`, `mouseenter` and `mouseleave` do not travel upwards at all, so they
+cannot be delegated; `focusin` and `focusout` are the versions that can.
+
+And a listener attached to a node is discarded with that node. A page that rebuilds its
+rows throws away every handler bound to them, which is the whole reason the next reading
+is about listening on the container instead.
+
+## In the lab
+
+Two labs run on this vocabulary. *A counter that renders from a variable* is the smallest
+possible version: one number, three buttons, and a `render()` that puts the number on the
+page — with a floor at zero, so the decrement button has a rule to obey. *A to-do list
+that counts what is left* adds the array: a `submit` handler that trims the input and
+refuses a blank, a delegated `click` on the list that toggles an item, and a count of the
+undone that is derived on every render rather than kept alongside.
+''',
+                },
             ],
-            "quiz": {
+            "quiz": [{
                 "title": "One truth, one render, one listener",
                 "minutes": 7,
                 "questions": [
@@ -2086,7 +3337,146 @@ throw, so the write is worth wrapping too.
 """,
                     },
                 ],
-            },
+            }, {
+                "title": "Values, nodes and handlers",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "`const cart = [];` is at the top of the file. Which line below it is refused?",
+                        "opts": [
+                            "`cart = [];` — the name cannot be pointed at a different array",
+                            "`cart.push(item);` — a `const` array is frozen against every change",
+                            "`cart.length = 0;` — `const` forbids writing any property",
+                            "Both `cart = []` and `cart.push(item)`, for the same reason",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`const` freezes the binding, not the value. The name `cart` will point at that one array
+for the rest of its scope, and the array itself stays as mutable as any other —
+`push`, `splice`, `sort` and `cart.length = 0` all work. That is the behaviour you want,
+and the one people expect least, which is why `const` is the sensible default for
+practically every declaration: it says *this name means one thing here*, which is the
+useful promise, without pretending the contents cannot move. Freezing the contents is a
+separate request — `Object.freeze(cart)` — and a write to a frozen array throws under
+strict mode and is discarded without a word outside it.
+""",
+                    },
+                    {
+                        "q": "Why prefer `===` over `==`?",
+                        "opts": [
+                            "`===` compares without converting first, so `'5' === 5` comes out false",
+                            "`==` was removed from the language and now throws in files using strict mode",
+                            "`===` is required whenever either side might be `null` or `undefined`",
+                            "They behave identically; `===` is a style preference some teams hold",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`==` converts its operands to a common type before comparing, so `'5' == 5` is true and
+`'' == 0` is true and `null == undefined` is true. Every value that comes out of the DOM
+is a string, so an id read from `dataset` compared with `==` against a number matches when
+you meant it to and also when you did not, and the failure is silent either way. `===`
+refuses the conversion and answers the question you asked. `==` is still in the language
+and always will be — nothing throws — and the two are emphatically not identical, which
+is the whole reason the rule exists.
+""",
+                    },
+                    {
+                        "q": "`[1, 2, 3].map(n => n * 2)` evaluates to what, and what becomes of the original array?",
+                        "opts": [
+                            "`[2, 4, 6]`, and the original is untouched",
+                            "`6`, the sum, with the original untouched",
+                            "`[2, 4, 6]`, with the original array rewritten in place",
+                            "`[1, 2, 3, 2, 4, 6]`, the original with the results appended",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`map` is one-in, one-out: it walks the array, calls the function on each element, and
+collects the return values into a **new** array of the same length. The original is left
+exactly as it was, which is what makes `map`, `filter` and `find` safe to chain — no step
+can quietly change the input of the one before it. Folding a list down to a single value
+is `reduce`, and it needs a starting value to fold into. The mutating methods are a
+separate group worth knowing by name: `push`, `pop`, `splice`, `sort` and `reverse` change
+the array in place and hand back something other than a new one.
+""",
+                    },
+                    {
+                        "q": "`document.querySelector('.item')` on a page that has no `.item` returns what?",
+                        "opts": [
+                            "`null`, which is why a guard belongs before the first property read",
+                            "An empty `NodeList`, so `.length` is `0` and a loop runs zero times",
+                            "`undefined`, the value of any lookup that found nothing",
+                            "The `<body>`, because the search falls back to the document root",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`querySelector` returns the first match or `null`, and `null` is where
+*Cannot read properties of null* comes from one line later. Its plural,
+`querySelectorAll`, is the one that returns an empty `NodeList` — never `null` — so a
+`forEach` over it is safe with no guard at all, and that difference is worth keeping
+straight because it decides whether you owe the next line a check. The commonest cause of
+a `null` here is not a wrong selector but a script that ran before the element was parsed:
+put the tag before `</body>`, or give it `defer`.
+""",
+                    },
+                    {
+                        "q": "A `submit` handler runs, and then the page reloads and everything typed is gone. What is missing?",
+                        "opts": [
+                            "`event.preventDefault()`, which cancels the browser's own navigation",
+                            "`event.stopPropagation()`, which keeps the event off the document",
+                            "`return false` at the end, which is what every form handler is required to end with",
+                            "An `action` on the `<form>`, without which the browser reloads the page",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Submitting a form has a default action — navigate to the form's target, sending the
+values — and it happens whether or not you listened for the event. `preventDefault()` is
+what cancels it, leaving your handler as the only thing that acts. `stopPropagation()` is
+the other tool and does the other job: it stops the event travelling up to ancestors and
+leaves the default action untouched, so the page still reloads and any delegated listener
+above quietly stops firing. `return false` cancels the default in old inline `onsubmit`
+attributes and means nothing to `addEventListener`. And a form with no `action` submits
+to the current URL, which is the reload you saw.
+""",
+                    },
+                    {
+                        "q": "The markup is `<input value=\"Torch\">` and someone types `Wiper blades`. What do `input.value` and `input.getAttribute('value')` read back?",
+                        "opts": [
+                            "`Wiper blades` and `Torch` — the property is live, the attribute is the initial value",
+                            "`Wiper blades` from both, because the attribute is kept in step with the property as it changes",
+                            "`Torch` from both, because the markup is what the browser keeps",
+                            "`Wiper blades` and `null`, the attribute being consumed at parse time",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The attribute is what the markup said and it does not move; the property is the control's
+current state. They start equal and part company the first time anyone types, which is why
+reading a field with `getAttribute('value')` returns a stale answer that looked correct in
+testing — before anybody had typed. The same split runs through `checked`, `selected` and
+`disabled`: write and read the property, and treat the attribute as the starting value.
+It is also what a form reset restores from, which is why resetting puts `Torch` back.
+""",
+                    },
+                    {
+                        "q": "`var live = box.getElementsByClassName('row');` then `for (var i = 0; i < live.length; i++) { live[i].remove(); }`. What happens to the rows?",
+                        "opts": [
+                            "Half the rows survive — the collection is live and shrinks under the loop",
+                            "Every row goes, since the collection was fixed when it was taken",
+                            "It throws, because a live collection cannot be changed while it is being read",
+                            "Nothing at all: a live collection is read-only and `remove()` is refused",
+                        ],
+                        "a": 0,
+                        "why": r"""
+An `HTMLCollection` from `getElementsByClassName` is a live view, not a list: it
+re-answers the question every time it is asked. Remove `live[0]` and everything shifts
+down while `i` moves up, so the loop skips every other element and stops early with half
+the rows still on the page — and nothing throws, which is what makes it hard to spot.
+`querySelectorAll` returns a static `NodeList` taken once, which is why it is the safe one
+to iterate while removing; the alternatives are to loop backwards, or to snapshot with
+`Array.from(live)` first.
+""",
+                    },
+                ],
+            }],
             "blanks": {
                 "title": "Delegation and render, line by line",
                 "minutes": 9,
@@ -2237,7 +3627,7 @@ people looking for delegation in the first place — the element it was attached
 longer exists.
 """,
             },
-            "lab": {
+            "lab": [{
                 "title": "A filterable reading list",
                 "runtime": "web",
                 "minutes": 55,
@@ -2708,7 +4098,464 @@ loadState();
 setFilter('all');
 '''},
                 ],
-            },
+            }, {
+                "title": "Cart arithmetic that survives its inputs",
+                "runtime": "js",
+                "minutes": 16,
+                "brief": r'''
+No page here — `cart.js` on its own, and four functions to fill in. An item is
+`{ name: "Jack", price: 899, qty: 2 }`.
+
+- **`cartTotal(items)`** — the sum of `price * qty` across the list. An empty
+  cart totals `0`, not `undefined`.
+- **`formatPrice(amount)`** — a string with a `$` and exactly two decimal places:
+  `formatPrice(12.5)` is `"$12.50"` and `formatPrice(1283)` is `"$1283.00"`.
+- **`applyDiscount(total, code)`** — `"SAVE10"` takes 10% off, `"HALF"` takes
+  50% off, and everything else — an unknown code, and `undefined` for no code at
+  all — comes back unchanged. Codes are case-insensitive.
+- **`inStock(items)`** — the **names** of the items whose `qty` is above zero, in
+  the order they appear.
+
+`reduce`, `filter` and `map` are built for the first and the last of those. The
+`console.log` calls at the bottom of the file print to the Console tab while you
+work; the checks call the functions directly, with the awkward inputs.
+''',
+                "files": [
+                    {"name": "cart.js", "content": r'''
+function cartTotal(items) {
+  // TODO: fold the list into one number: price * qty, summed. Empty cart -> 0.
+}
+
+function formatPrice(amount) {
+  // TODO: "$12.50" — a dollar sign and exactly two decimal places
+}
+
+function applyDiscount(total, code) {
+  // TODO: SAVE10 -> 10% off, HALF -> 50% off, anything else unchanged.
+  //       Case-insensitive, and `undefined` is one of the "anything else" cases.
+}
+
+function inStock(items) {
+  // TODO: the names of the items with qty > 0, in order
+}
+
+const cart = [
+  { name: "Wiper blades", price: 120, qty: 2 },
+  { name: "Jack", price: 899, qty: 0 },
+  { name: "Torch", price: 249, qty: 1 },
+];
+
+console.log(cartTotal(cart));
+console.log(formatPrice(cartTotal(cart)));
+console.log(applyDiscount(100, "save10"));
+console.log(inStock(cart));
+'''},
+                ],
+                "main": "cart.js",
+                "solution": [
+                    {"name": "cart.js", "content": r'''
+function cartTotal(items) {
+  return items.reduce((sum, item) => sum + item.price * item.qty, 0);
+}
+
+function formatPrice(amount) {
+  return `$${amount.toFixed(2)}`;
+}
+
+function applyDiscount(total, code) {
+  const normalised = (code || "").toUpperCase();
+  if (normalised === "SAVE10") return total * 0.9;
+  if (normalised === "HALF") return total * 0.5;
+  return total;
+}
+
+function inStock(items) {
+  return items.filter(item => item.qty > 0).map(item => item.name);
+}
+
+const cart = [
+  { name: "Wiper blades", price: 120, qty: 2 },
+  { name: "Jack", price: 899, qty: 0 },
+  { name: "Torch", price: 249, qty: 1 },
+];
+
+console.log(cartTotal(cart));
+console.log(formatPrice(cartTotal(cart)));
+console.log(applyDiscount(100, "save10"));
+console.log(inStock(cart));
+'''},
+                ],
+                "hints": [
+                    "`cartTotal` is a fold: `items.reduce((sum, item) => sum + item.price * item.qty, 0)`. The `0` is not decoration — it is what an empty cart returns.",
+                    "`toFixed(2)` gives exactly two decimal places and returns a **string**, so the `$` goes on with a template literal or a `+`. Anything it produces is text from then on.",
+                    "Normalise the code before comparing: `(code || \"\").toUpperCase()` turns `undefined` into `\"\"` and `\"half\"` into `\"HALF\"`, so one comparison covers both awkward cases.",
+                    "`inStock` is two steps in order — `filter` down to the items with stock, then `map` those to their names. Reversing the two would try to read `qty` off a string.",
+                ],
+                "tests": [
+                    {"name": "cartTotal folds price times quantity", "code": r'''
+assertEqual(cartTotal([{ name: "a", price: 120, qty: 2 }, { name: "b", price: 10, qty: 3 }]), 270, '120x2 + 10x3 should be 270');
+assertEqual(cartTotal([]), 0, 'An empty cart totals 0 — check the starting value of the fold');
+assertEqual(cartTotal([{ name: "a", price: 99, qty: 0 }]), 0, 'A quantity of zero contributes nothing');
+'''},
+                    {"name": "formatPrice always shows two decimals", "code": r'''
+assertEqual(formatPrice(12.5), "$12.50", 'One decimal place needs padding to two');
+assertEqual(formatPrice(1283), "$1283.00", 'A whole number still gets .00');
+assertEqual(formatPrice(0.1), "$0.10", 'And a value under a dollar');
+assertEqual(typeof formatPrice(5), "string", 'formatPrice returns a string, not a number');
+'''},
+                    {"name": "applyDiscount knows two codes and no others", "code": r'''
+assertEqual(applyDiscount(100, "SAVE10"), 90, 'SAVE10 takes ten per cent off');
+assertEqual(applyDiscount(100, "half"), 50, 'Codes are case-insensitive');
+assertEqual(applyDiscount(100, "NOPE"), 100, 'An unknown code changes nothing');
+assertEqual(applyDiscount(100, undefined), 100, 'No code at all changes nothing — and must not throw');
+assertEqual(applyDiscount(0, "HALF"), 0, 'Half of nothing is still nothing');
+'''},
+                    {"name": "inStock filters, then maps to names", "code": r'''
+assertEqual(inStock([{ name: "a", price: 1, qty: 0 }, { name: "b", price: 1, qty: 2 }, { name: "c", price: 1, qty: 1 }]), ["b", "c"], 'Only the items with stock, in the order they appear');
+assertEqual(inStock([]), [], 'An empty cart has nothing in stock');
+var _src = [{ name: "a", price: 1, qty: 0 }];
+inStock(_src);
+assertEqual(_src.length, 1, 'inStock must not remove anything from the array it was given — filter returns a new one');
+'''},
+                ],
+            }, {
+                "title": "A counter that renders from a variable",
+                "runtime": "web",
+                "minutes": 14,
+                "brief": r'''
+The smallest possible version of the pattern this module is about: one value,
+one function that draws it, and three buttons that change the value and ask for
+a redraw. `index.html` is read-only; everything goes in `app.js`.
+
+- `#count` shows `0` to begin with
+- `#increment` adds one; `#decrement` subtracts one, and the count never goes
+  below zero
+- `#reset` puts it back to zero
+- the number on screen is correct after every click
+
+Write `render()` so that it puts `count` on the page and does nothing else, and
+have every handler change `count` and then call it. Nothing but `render()` should
+touch `#count` — that is the habit the rest of the module is built on, and it is
+what makes the next two labs short.
+''',
+                "files": [
+                    {"name": "index.html", "ro": True, "content": r'''
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Counter</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; }
+  .counter { text-align: center; }
+  #count { font-size: 64px; font-weight: 700; margin: 0 0 12px; }
+  button { font: inherit; font-size: 18px; padding: 8px 18px; margin: 0 4px; border-radius: 8px; border: 1px solid #d7dce4; background: #fff; cursor: pointer; }
+  button:hover { background: #f4f4f6; }
+</style>
+</head>
+<body>
+
+<main class="counter">
+  <h1 id="count-label">Counter</h1>
+  <p id="count" aria-live="polite" aria-labelledby="count-label">0</p>
+  <button id="decrement" type="button">Subtract one</button>
+  <button id="increment" type="button">Add one</button>
+  <button id="reset" type="button">Reset</button>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
+'''},
+                    {"name": "app.js", "content": r'''
+let count = 0;
+
+const countEl = document.querySelector("#count");
+
+function render() {
+  // TODO: put `count` on the page. One line, and the only line that touches #count.
+}
+
+// TODO: wire the three buttons. Each one changes `count`, then calls render().
+
+render();
+'''},
+                ],
+                "main": "index.html",
+                "solution": [
+                    {"name": "app.js", "content": r'''
+let count = 0;
+
+const countEl = document.querySelector("#count");
+
+function render() {
+  countEl.textContent = count;
+}
+
+document.querySelector("#increment").addEventListener("click", () => {
+  count += 1;
+  render();
+});
+
+document.querySelector("#decrement").addEventListener("click", () => {
+  if (count > 0) {
+    count -= 1;
+  }
+  render();
+});
+
+document.querySelector("#reset").addEventListener("click", () => {
+  count = 0;
+  render();
+});
+
+render();
+'''},
+                ],
+                "hints": [
+                    "`render()` is one line: `countEl.textContent = count;`. Resist putting the arithmetic in it — it draws, it does not decide.",
+                    "Each button is the same three lines: `document.querySelector(\"#increment\").addEventListener(\"click\", () => { count += 1; render(); });`",
+                    "The floor belongs in the handler, not in `render()`: `if (count > 0) { count -= 1; }`. Clamping while drawing would leave the variable and the screen disagreeing.",
+                    "The final `render()` at the bottom is what puts the starting value on screen. Without it the page shows whatever the markup happened to say.",
+                ],
+                "tests": [
+                    {"name": "It starts at zero", "code": r'''
+document.querySelector('#reset').click();
+assertEqual(document.querySelector('#count').textContent.trim(), '0', 'The count should read 0 after a reset');
+'''},
+                    {"name": "Add one, twice", "code": r'''
+document.querySelector('#reset').click();
+var _c = document.querySelector('#count');
+document.querySelector('#increment').click();
+document.querySelector('#increment').click();
+assertEqual(_c.textContent.trim(), '2', 'After two clicks on Add one the count reads ' + _c.textContent.trim());
+'''},
+                    {"name": "Subtract one, and never below zero", "code": r'''
+document.querySelector('#reset').click();
+var _c = document.querySelector('#count');
+document.querySelector('#increment').click();
+document.querySelector('#increment').click();
+document.querySelector('#decrement').click();
+assertEqual(_c.textContent.trim(), '1', 'Two up and one down should read 1, got ' + _c.textContent.trim());
+for (var _i = 0; _i < 5; _i++) { document.querySelector('#decrement').click(); }
+assertEqual(_c.textContent.trim(), '0', 'The count must not fall below zero, got ' + _c.textContent.trim());
+'''},
+                    {"name": "Reset returns to zero", "code": r'''
+document.querySelector('#increment').click();
+document.querySelector('#increment').click();
+document.querySelector('#reset').click();
+assertEqual(document.querySelector('#count').textContent.trim(), '0', 'Reset should put the count back to 0');
+document.querySelector('#increment').click();
+assertEqual(document.querySelector('#count').textContent.trim(), '1', 'and the counter should keep working afterwards');
+'''},
+                ],
+            }, {
+                "title": "A to-do list that counts what is left",
+                "runtime": "web",
+                "minutes": 20,
+                "brief": r'''
+The counter with an array behind it. `index.html` is read-only; write `app.js`.
+
+- Submitting `#task-form` — by pressing Enter in the field or clicking **Add** —
+  appends the text of `#new-task` to `tasks` and clears the input.
+- A title that is empty or only spaces is refused: nothing is added, and the
+  input is left alone so the person can see what they typed.
+- Clicking a task's `<li>` toggles its `done` flag, and the row carries the class
+  `done` exactly when the flag is set.
+- `#remaining` always shows how many tasks are **not** done.
+
+The shape is the one from the counter, one size up. `tasks` is the truth,
+`render()` rebuilds `#tasks` from it and writes `#remaining`, and every handler
+changes `tasks` and calls `render()`. Two rules make the difference here: the
+submit handler needs `event.preventDefault()`, or the page reloads and the array
+goes with it; and the click listener belongs on `#tasks`, not on each `<li>`,
+because every render throws the rows away and a listener bound to a row goes
+with it.
+
+Give each row a `data-id` from the task's own id, and read it back with
+`Number(...)` — `dataset` hands you a string, and `"3" === 3` is false.
+''',
+                "files": [
+                    {"name": "index.html", "ro": True, "content": r'''
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Today</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 26rem; margin: 2.5rem auto; padding: 0 1rem; color: #1b1f27; }
+  form { display: flex; gap: 0.5rem; }
+  input { flex: 1; font: inherit; padding: 0.5rem 0.6rem; border: 1px solid #d7dce4; border-radius: 6px; }
+  button { font: inherit; padding: 0.5rem 0.9rem; border-radius: 6px; border: 0; background: #1b1f27; color: #fff; font-weight: 600; cursor: pointer; }
+  ul { list-style: none; padding: 0; }
+  li { padding: 0.6rem 0.7rem; border-bottom: 1px solid #eceff3; cursor: pointer; }
+  li.done { text-decoration: line-through; color: #8b93a1; }
+  .meta { color: #5a6270; font-size: 0.9rem; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<main>
+  <h1>Today</h1>
+
+  <form id="task-form">
+    <label class="sr-only" for="new-task">What needs doing?</label>
+    <input id="new-task" name="task" type="text" placeholder="What needs doing?" autocomplete="off">
+    <button type="submit">Add</button>
+  </form>
+
+  <ul id="tasks"></ul>
+  <p class="meta"><span id="remaining">0</span> left</p>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
+'''},
+                    {"name": "app.js", "content": r'''
+const form = document.querySelector("#task-form");
+const input = document.querySelector("#new-task");
+const list = document.querySelector("#tasks");
+const remaining = document.querySelector("#remaining");
+
+let tasks = [];      // { id, title, done }
+let nextId = 1;
+
+function render() {
+  // TODO: rebuild #tasks from `tasks` — one <li> per task, carrying data-id and
+  //       the class "done" when it is done — then write the undone count into
+  //       #remaining.
+}
+
+// TODO: a submit listener on the form that prevents the default, trims the
+//       input, refuses a blank title, appends, clears the field and renders.
+
+// TODO: one delegated click listener on `list` that finds the <li> the click
+//       landed in, toggles that task, and renders.
+
+render();
+'''},
+                ],
+                "main": "index.html",
+                "solution": [
+                    {"name": "app.js", "content": r'''
+const form = document.querySelector("#task-form");
+const input = document.querySelector("#new-task");
+const list = document.querySelector("#tasks");
+const remaining = document.querySelector("#remaining");
+
+let tasks = [];      // { id, title, done }
+let nextId = 1;
+
+function render() {
+  list.textContent = "";
+  tasks.forEach((task) => {
+    const li = document.createElement("li");
+    li.textContent = task.title;
+    li.dataset.id = String(task.id);
+    li.classList.toggle("done", task.done);
+    list.append(li);
+  });
+  remaining.textContent = tasks.filter((task) => !task.done).length;
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const title = input.value.trim();
+  if (!title) {
+    return;
+  }
+  tasks.push({ id: nextId, title: title, done: false });
+  nextId += 1;
+  input.value = "";
+  render();
+});
+
+list.addEventListener("click", (event) => {
+  const li = event.target.closest("li[data-id]");
+  if (!li) {
+    return;
+  }
+  const id = Number(li.dataset.id);
+  const task = tasks.find((t) => t.id === id);
+  if (!task) {
+    return;
+  }
+  task.done = !task.done;
+  render();
+});
+
+render();
+'''},
+                ],
+                "hints": [
+                    "`render()` in three moves: empty the list with `list.textContent = \"\"`, append one `<li>` per task, then write `tasks.filter(t => !t.done).length` into `#remaining`.",
+                    "The submit handler starts with `event.preventDefault()` and then `input.value.trim()`. Return early when the trimmed title is empty — before anything is pushed and before the field is cleared.",
+                    "`classList.toggle(\"done\", task.done)` adds or removes the class in one line from the flag, so the row can never disagree with the array.",
+                    "One listener on `list`, not one per row: `event.target.closest(\"li[data-id]\")` gives you the row a click landed in, or `null` when the click missed. `Number(li.dataset.id)` converts at the boundary.",
+                ],
+                "tests": [
+                    {"name": "Adding a task renders a row", "code": r'''
+tasks.length = 0;
+render();
+var _input = document.querySelector('#new-task');
+var _form = document.querySelector('#task-form');
+_input.value = 'Order oil filters';
+_form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+var _items = document.querySelectorAll('#tasks li');
+assertEqual(_items.length, 1, 'Expected one row after adding, found ' + _items.length);
+assert(_items[0].textContent.indexOf('Order oil filters') !== -1, 'The row should show the title, got: ' + _items[0].textContent);
+assert(_items[0].dataset.id, 'Each row needs a data-id, so a delegated handler can tell which task it is');
+assertEqual(_input.value, '', 'Clear the input after a successful add');
+'''},
+                    {"name": "A blank title is refused", "code": r'''
+tasks.length = 0;
+render();
+var _input = document.querySelector('#new-task');
+var _form = document.querySelector('#task-form');
+_input.value = '   ';
+_form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+assertEqual(document.querySelectorAll('#tasks li').length, 0, 'Whitespace is not a task — nothing should have been added');
+assertEqual(tasks.length, 0, 'and nothing should have reached the array either, got ' + tasks.length);
+_input.value = '  Check tyre stock  ';
+_form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+assertEqual(tasks.length, 1, 'A padded but real title should still be accepted');
+assertEqual(tasks[0].title, 'Check tyre stock', 'Store the trimmed title, got ' + JSON.stringify(tasks[0].title));
+'''},
+                    {"name": "Clicking a row toggles it, before and after a re-render", "code": r'''
+tasks.length = 0;
+render();
+var _input = document.querySelector('#new-task');
+var _form = document.querySelector('#task-form');
+_input.value = 'Sweep bay 2';
+_form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+document.querySelector('#tasks li').click();
+assert(document.querySelector('#tasks li').classList.contains('done'), 'A click should mark the row done');
+assertEqual(tasks[0].done, true, 'and the flag in the array should be true, got ' + tasks[0].done);
+document.querySelector('#tasks li').click();
+assert(!document.querySelector('#tasks li').classList.contains('done'), 'Clicking again should clear it — the handler must still fire on the row the last render built');
+assertEqual(tasks[0].done, false, 'and the flag should be back to false, got ' + tasks[0].done);
+'''},
+                    {"name": "Remaining counts what is not done", "code": r'''
+tasks.length = 0;
+render();
+var _input = document.querySelector('#new-task');
+var _form = document.querySelector('#task-form');
+['Order oil filters', 'Check tyre stock', 'Sweep bay 2'].forEach(function (title) {
+  _input.value = title;
+  _form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+});
+assertEqual(document.querySelector('#remaining').textContent.trim(), '3', 'Three open tasks should show 3, got ' + document.querySelector('#remaining').textContent.trim());
+document.querySelectorAll('#tasks li')[1].click();
+assertEqual(document.querySelector('#remaining').textContent.trim(), '2', '#remaining should fall to 2 when one is marked done, got ' + document.querySelector('#remaining').textContent.trim());
+document.querySelectorAll('#tasks li')[1].click();
+assertEqual(document.querySelector('#remaining').textContent.trim(), '3', 'and rise again when it is unmarked, got ' + document.querySelector('#remaining').textContent.trim());
+'''},
+                ],
+            }],
         },
         # ------------------------------------------------------------ M4
         {
@@ -3016,8 +4863,546 @@ spinner gone; the previous error cleared after the form is submitted for `meyer`
 all five books for a query of nothing at all.
 ''',
                 },
+                {
+                    "title": "Chains, bodies and origins",
+                    "minutes": 11,
+                    "body": r'''
+Most of the asynchronous code you will read was written before `await` existed or by
+someone who prefers not to use it, and it is built out of `.then`. The two are the same
+machinery with different punctuation, and the translation between them is worth having,
+because the places a chain goes wrong are not the places an `await` goes wrong. This
+reading is the chain, the second half of `fetch` — sending rather than reading — and the
+rule that decides whether a request to somebody else's server is allowed to happen at
+all.
+
+## Handing over a function to be called later
+
+```js
+setTimeout(function () { console.log('this line runs second'); }, 2000);
+console.log('this line runs first');
+```
+
+That is the whole of asynchrony in miniature. `setTimeout` does not wait; it files a
+function away to be run later and returns immediately, and the script carries on to its
+end. Reading a file, asking a server and waiting for a timer are the same shape: the
+browser refuses to freeze the page while something slow happens, so the slow thing takes
+a function and calls it when there is something to say.
+
+## A chain is a sequence of small handovers
+
+`p.then(fn)` registers `fn` to run when `p` settles, and — this is the part that makes
+chaining work — it **returns a new promise**. What that new promise settles with depends
+on what `fn` returned:
+
+```js
+function later(value, ms) {
+  return new Promise(function (resolve) { setTimeout(function () { resolve(value); }, ms); });
+}
+
+later(2, 10)
+  .then(function (n) { return n * 3; })
+  .then(function (n) { console.log('a value came back: ' + n); return later(n + 1, 10); })
+  .then(function (n) { console.log('a promise came back, and its value arrived: ' + n); })
+  .then(function (n) { console.log('nothing came back, so this step receives: ' + n); });
+
+console.log('the chain is only set up here; this line runs first');
+```
+
+The output reads:
+
+```text
+the chain is only set up here; this line runs first
+a value came back: 6
+a promise came back, and its value arrived: 7
+nothing came back, so this step receives: undefined
+```
+
+Three rules, one per line. Return an ordinary value and the next step receives it. Return
+a **promise** and the chain waits for it and passes on its value — which is what makes
+`fetch(url).then(function (r) { return r.json(); })` work, since `r.json()` is itself a
+promise. Return nothing and the next step receives `undefined`; that last line is the
+commonest defect in a chain, because a function body with braces that ends without a
+`return` looks finished.
+
+## One catch for the whole chain
+
+```js
+later(1, 5)
+  .then(function () { throw new Error('the body would not parse'); })
+  .then(function () { console.log('this step is skipped entirely'); })
+  .catch(function (err) { console.log('caught at the end of the chain: ' + err.message); })
+  .finally(function () { console.log('finally runs whichever way it went'); });
+```
+
+A rejection — or a thrown error, which becomes one — skips every `.then` after it until
+it reaches a `.catch`. So one `.catch` at the end covers every step above it, exactly the
+way one `try` block covers every line inside it. `.finally` runs on both paths and is
+where a spinner comes down.
+
+The translation is now mechanical:
+
+| Chain | `async` / `await` |
+|---|---|
+| `p.then(fn)` | `var v = await p;` then the body of `fn` |
+| returning a promise from a `.then` | `await` on the next line |
+| `.catch(fn)` | `catch (err) { ... }` around the awaits |
+| `.finally(fn)` | `finally { ... }` |
+
+`await` is the version to write. The chain is the version to be able to read, and the one
+you need when there is no `async` function to be inside.
+
+## Sending, not only reading
+
+`fetch(url)` with one argument makes a `GET` with no body. The second argument is where
+everything else goes:
+
+```js
+const response = await fetch("/api/todos", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ title: "Order brake pads" }),
+});
+```
+
+Three things are doing work. `method` chooses the verb. `body` must be a string — `fetch`
+will not serialise an object for you, and handing it one gives the server the characters
+`[object Object]`, which is the same trap `localStorage` sets. And the `Content-Type`
+header is how the server knows to parse those characters as JSON rather than as form
+fields; leave it out and a framework that reads by content type finds an empty body and
+reports a validation error about a field you definitely sent.
+
+The response comes back the same way it does for a `GET`: check `response.ok`, then
+`await response.json()`. A successful create answers `201`, not `200`, and `ok` covers
+both.
+
+## The wall between origins
+
+A page served from `https://shop.example` fetches `https://api.other.com/books` and the
+console says *blocked by CORS policy*. Nothing is wrong with your code. The browser
+enforces a rule that a page may not read a response from a different **origin** — scheme,
+host and port, all three — unless that server says it may, by sending
+`Access-Control-Allow-Origin` naming your page's origin or `*`. The request often reaches
+the server and runs; what is blocked is your page reading the answer.
+
+Two consequences follow. The failure surfaces as a rejected promise with a `TypeError`
+and no status code, indistinguishable from a dropped connection, because there was no
+response your code was allowed to see. And the fix is not on your side — it is a header
+the other server has to send, which is why the answer is either "ask them" or "call it
+from your own backend, where the rule does not apply". A browser is the only client that
+enforces it; `curl` from a terminal never sees it.
+
+## The mistake, and why it is tempting
+
+The forgotten `return` in a `.then`, and its bigger sibling: the forgotten `return` on the
+whole chain. A function that builds a chain and does not return it hands its caller
+nothing to wait on, so the caller carries on as though the work were finished, and a
+rejection in that chain has no `catch` anywhere above it — it becomes an *unhandled
+promise rejection* in the console, several seconds after the line that caused it. It is
+tempting because the code works whenever the request succeeds, which during development
+is every time.
+
+The same shape appears with `await`: calling an `async` function without awaiting it or
+returning it starts the work and abandons the result.
+
+## Where this stops holding
+
+`Promise.all([a, b, c])` waits for all three and rejects as soon as any one of them does,
+throwing away the two that succeeded; `Promise.allSettled` waits for all three and reports
+each outcome, which is what you want when a partial answer is still useful. This module's
+timing exercise counts what running requests together buys.
+
+An `async` function always returns a promise, so a `try`/`catch` **inside** it does not
+protect its caller from a rejection thrown after the awaits, and a `catch` in the caller
+is still owed. `fetch` sends no cookies to another origin unless you ask with
+`credentials: 'include'`, and asking makes the CORS rules stricter rather than looser.
+And `JSON.stringify` drops `undefined` values and functions, so a field you set to
+`undefined` does not arrive as null — it does not arrive.
+
+## In the lab
+
+*Load and render data* is the smallest complete round trip: a button, a stand-in for
+`fetch` that answers after 200ms, and three things to get right. `loadUsers()` is `async`
+and returns the array. The click handler puts *Loading…* on screen before it awaits,
+renders one row per user, and finishes with a count. And the failure path — a response
+whose `ok` is false — leaves the list empty and says so, instead of leaving the word
+*Loading* on the page forever.
+''',
+                },
+                {
+                    "title": "The request and the response",
+                    "minutes": 12,
+                    "body": r'''
+`window.fakeFetch` in this module's lab answers in thirty milliseconds from an array in
+memory, and it is shaped the way it is because of what it stands in for. On the other
+side of a real `fetch` there is a second computer, a text protocol both machines agree on,
+and a function someone wrote that turns one message into another. This reading is that
+protocol — enough of it to read a network panel, to choose a status code on purpose, and
+to write the handler the next lab asks for.
+
+## Two messages
+
+Every backend does the same job: receive a **request**, do some work, send a **response**.
+A request has four parts, in this order.
+
+```text
+POST /todos HTTP/1.1              <- method and path
+Host: api.example.com             <- headers: metadata about the message
+Content-Type: application/json
+                                  <- a blank line, which ends the headers
+{"title": "Order brake pads"}     <- the body, optional
+```
+
+A response mirrors it exactly, with a status line where the request had a method line:
+
+```text
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{"id": 7, "title": "Order brake pads", "done": false}
+```
+
+That is all `fetch` is doing. `response.status` is the number on the first line,
+`response.ok` is whether that number is in the 200s, and `response.json()` parses the
+body — which is why it is a separate promise: the headers arrive first and the body
+streams in after them.
+
+## Nothing is remembered
+
+HTTP is **stateless**: the server keeps no memory of the conversation between one request
+and the next. Two requests from the same person, one second apart, arrive as two
+unrelated messages. Everything that has to survive between them travels in the request
+itself — a cookie, an `Authorization` header carrying a token — or lives in a database
+the server reads on each one.
+
+That is a constraint and also the reason the web scales: any server in a pool can answer
+any request, because none of them is holding anything the others lack.
+
+## The verbs
+
+| Method | Meaning | Body? | Safe to repeat? |
+|---|---|---|---|
+| `GET` | read something | no | yes, and it changes nothing |
+| `POST` | create something new | yes | no — a second one creates a second thing |
+| `PUT` | replace something entirely | yes | yes |
+| `PATCH` | change part of something | yes | usually |
+| `DELETE` | remove something | no | yes |
+
+Two properties are hiding in that last column. A method is **safe** when it changes
+nothing — only `GET` is. It is **idempotent** when doing it twice leaves the world as it
+was after doing it once: `DELETE /todos/7` twice ends with the todo gone both times, and
+`PUT` writes the same four fields both times, while `POST` twice creates two rows. That
+is not pedantry; it decides whether a client, a proxy or a phone with a flaky connection
+may retry a request it is not sure arrived.
+
+## The status code
+
+| Code | Meaning | When |
+|---|---|---|
+| `200 OK` | here is your data | a successful read or update |
+| `201 Created` | made it | a successful `POST`, with the new thing in the body |
+| `204 No Content` | done, nothing to say | a successful `DELETE` |
+| `301` / `302` | it moved | redirects |
+| `400 Bad Request` | this request makes no sense | validation failed |
+| `401 Unauthorized` | who are you? | missing or bad credentials |
+| `403 Forbidden` | I know who you are, and no | authenticated but not permitted |
+| `404 Not Found` | no such thing | wrong path, or an id that is not there |
+| `405 Method Not Allowed` | not that verb, here | `DELETE /todos` on the collection |
+| `409 Conflict` | the current state forbids it | buying more stock than exists |
+| `500 Internal Server Error` | we crashed | your bug, not the caller's |
+
+The rule of thumb is worth memorising because it decides who goes and fixes it: **4xx
+means the client got it wrong, 5xx means the server did**. And the first digit is enough
+to know that much:
+
+```python
+def classify(code):
+    """Which family a status code belongs to, and whose problem it is."""
+    return {
+        1: ("informational", "nobody yet"),
+        2: ("success", "nobody"),
+        3: ("redirect", "the client, by following"),
+        4: ("client error", "the client"),
+        5: ("server error", "the server"),
+    }.get(code // 100, ("unknown", "nobody knows"))
+
+
+def route(method, path):
+    """The table below, as code: a noun in the path, the verb in the method."""
+    parts = [p for p in path.split("/") if p]
+    if parts == ["books"]:
+        return {"GET": 200, "POST": 201}.get(method, 405)
+    if len(parts) == 2 and parts[0] == "books":
+        if not parts[1].isdigit():
+            return 404
+        return {"GET": 200, "PUT": 200, "DELETE": 204}.get(method, 405)
+    return 404
+
+
+for method, path in [("GET", "/books"), ("POST", "/books"), ("DELETE", "/books"),
+                     ("GET", "/books/42"), ("DELETE", "/books/42"),
+                     ("GET", "/books/forty-two"), ("GET", "/authors")]:
+    code = route(method, path)
+    name, whose = classify(code)
+    print(f"{method:<7}{path:<18}-> {code} {name:<13} whose fault: {whose}")
+```
+
+Read the two 404s at the bottom against the 405 above them. `DELETE /books` is a path the
+server knows with a verb it does not support there, and 405 says so precisely — the caller
+has the right resource and the wrong method. `GET /books/forty-two` and `GET /authors` are
+paths the server has nothing at. Answering 404 to all three would be true and useless; the
+distinction is the difference between "you asked the wrong thing" and "you asked the right
+thing the wrong way".
+
+## REST is a naming convention
+
+```text
+GET    /books                             list them
+POST   /books                             create one
+GET    /books/42                          one of them
+PUT    /books/42                          replace it
+DELETE /books/42                          remove it
+GET    /books?author=le+guin&sort=title   filter and order the listing
+```
+
+The resources are **nouns** and the action is already in the method, which is why
+`GET /getBooks` and `POST /deleteBook` are the shapes to avoid — they put a verb in the
+path and then need a second convention to say what the method meant. A **path parameter**
+identifies one resource; a **query parameter** filters, sorts or pages a collection. Both
+of those are visible in the URL, so neither is a place for anything private.
+
+## The mistake, and why it is tempting
+
+Using `GET` for something that changes state — `GET /books/42/delete`, reached from a
+link. It is tempting because a link is the easiest thing to build and it works the first
+time you click it. Then a crawler follows every link on the page, or the browser
+prefetches one on hover, or a proxy caches the response and serves it to somebody else,
+and rows disappear with nobody having pressed anything. `GET` is defined as safe, and the
+whole infrastructure between your page and the server is entitled to act on that promise.
+Anything that changes state is a `POST`, `PUT`, `PATCH` or `DELETE`.
+
+## Where this stops holding
+
+Plenty of real APIs answer `200` with `{"error": ...}` in the body, so `response.ok` is
+true and the request failed — which is why an integration starts by reading the API's own
+documentation rather than assuming the conventions here. `ok` is exactly 200 to 299: a
+`304 Not Modified` is not ok even though nothing went wrong, a redirect has already been
+followed before your code sees anything, and a `204` is ok with no body, so calling
+`.json()` on it throws.
+
+The literal text above is HTTP/1.1. HTTP/2 and HTTP/3 send the same methods, paths,
+headers and status codes in a compressed binary framing, so everything in this reading
+holds and none of it is what goes down the wire. And REST is a set of conventions, not a
+specification anyone validates — which is what makes them worth following, since nothing
+enforces them for you.
+
+## In the lab
+
+*Build a REST handler* is that routing table as one function and no framework:
+`handle_request(method, path, body)` returning a `(status, data)` pair. `GET /todos`
+lists, `POST /todos` creates or rejects a missing title with 400, `GET`, `PATCH` and
+`DELETE` on `/todos/<id>` each find the row or 404, an unknown path is 404, and a known
+path with an unsupported verb is 405. Seven checks call it directly with each of those.
+''',
+                },
+                {
+                    "title": "What a framework does for you",
+                    "minutes": 11,
+                    "body": r'''
+The `handle_request(method, path, body)` you write in this module's REST lab is not a
+teaching stand-in for a framework. It **is** the part of a framework that matters, with
+the plumbing removed. A framework parses the raw bytes into a method, a path and a decoded
+body, looks your function up in a table, calls it, and turns whatever you returned back
+into bytes. This reading is that claim made concrete, and then the ring of things
+production adds around it — the ones that are nobody's favourite work and are the
+difference between a program and a service.
+
+## Thirty lines of framework
+
+```python
+class MicroApp:
+    """A route table and a lookup. That is the part a framework does for you."""
+
+    def __init__(self):
+        self.routes = {}
+
+    def route(self, method, path):
+        def register(fn):
+            self.routes[(method, path)] = fn
+            return fn
+        return register
+
+    def get(self, path):
+        return self.route("GET", path)
+
+    def post(self, path):
+        return self.route("POST", path)
+
+    def handle(self, method, path, body=None):
+        fn = self.routes.get((method, path))
+        if fn is None:
+            known_path = any(p == path for _, p in self.routes)
+            return (405 if known_path else 404), {"error": "no handler"}
+        return fn(body)
+
+
+app = MicroApp()
+TODOS = []
+
+
+@app.get("/todos")
+def list_todos(body):
+    return 200, TODOS
+
+
+@app.post("/todos")
+def create_todo(body):
+    title = (body or {}).get("title")
+    if not title:
+        return 400, {"error": "title is required"}
+    todo = {"id": len(TODOS) + 1, "title": title, "done": False}
+    TODOS.append(todo)
+    return 201, todo
+
+
+print(app.handle("POST", "/todos", {"title": "Order brake pads"}))
+print(app.handle("POST", "/todos", {}))
+print(app.handle("GET", "/todos"))
+print(app.handle("DELETE", "/todos"))
+print(app.handle("GET", "/nope"))
+```
+
+```text
+(201, {'id': 1, 'title': 'Order brake pads', 'done': False})
+(400, {'error': 'title is required'})
+(200, [{'id': 1, 'title': 'Order brake pads', 'done': False}])
+(405, {'error': 'no handler'})
+(404, {'error': 'no handler'})
+```
+
+`@app.get("/todos")` looks like magic and is a dictionary write. `app.get(path)` returns
+`register`, Python calls `register` with the function defined underneath it, `register`
+files that function under the key `("GET", "/todos")` and hands it straight back
+unchanged. That is the entire mechanism. The `if` chain in the lab's `handle_request`
+becomes a table lookup, and the 404-versus-405 distinction, which the chain expresses with
+a `return` at the end of a block, becomes a second question asked about the same table.
+
+## The same API, twice
+
+Two frameworks, side by side. Neither of them runs in this sandbox, so read them rather
+than pressing anything.
+
+```text
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+app = FastAPI()
+TODOS = []
+
+class TodoIn(BaseModel):
+    title: str
+
+@app.get("/todos")
+def list_todos():
+    return TODOS
+
+@app.post("/todos", status_code=201)
+def create_todo(todo: TodoIn):
+    new = {"id": len(TODOS) + 1, "title": todo.title, "done": False}
+    TODOS.append(new)
+    return new
+
+@app.get("/todos/{todo_id}")
+def get_todo(todo_id: int):
+    for t in TODOS:
+        if t["id"] == todo_id:
+            return t
+    raise HTTPException(404, "not found")
+```
+
+```text
+const express = require("express");
+const app = express();
+app.use(express.json());
+
+const TODOS = [];
+
+app.get("/todos", (req, res) => res.json(TODOS));
+
+app.post("/todos", (req, res) => {
+  if (!req.body.title) return res.status(400).json({ error: "title is required" });
+  const todo = { id: TODOS.length + 1, title: req.body.title, done: false };
+  TODOS.push(todo);
+  res.status(201).json(todo);
+});
+
+app.listen(3000);
+```
+
+Same verbs, same paths, same status codes, same shape as the toy above. What each adds is
+worth naming. FastAPI reads the type annotations: `todo: TodoIn` means the body is parsed
+and validated before your function is entered, and `todo_id: int` means the path segment
+is converted, so `/todos/abc` never reaches you. It generates interactive documentation at
+`/docs` from those same annotations. Express is thinner: `express.json()` is middleware
+you opt into to get a parsed `req.body` at all, and validation is yours to write, which is
+why the check is there in the handler. Flask sits close to Express in that respect and in
+Python. Pick the language the team already writes; the shape does not change.
+
+## What production adds around this
+
+- **Configuration from the environment.** Anything that differs between your laptop and
+  the server — `DATABASE_URL`, `SECRET_KEY`, `PORT` — is read at start-up with
+  `os.environ` or `process.env`. A local `.env` file supplies them in development and
+  never enters version control.
+- **Logging.** Every request and every error, with a timestamp and enough identity to
+  find one request among thousands. At two in the morning the logs are the only witness.
+- **A health check.** `GET /health` returning 200 and almost nothing, so a load balancer
+  can tell a live process from a hung one and stop routing to the hung one.
+- **A reverse proxy.** nginx, Caddy or the platform's own router sits in front,
+  terminates HTTPS and forwards plain HTTP to your app, so certificates are one concern
+  instead of one per service.
+- **A container.** A `Dockerfile` lists the steps — a base image, copy the code, install
+  the dependencies, the command to run — and the resulting image carries the app and its
+  exact dependency versions together. *Works on my machine* becomes *ships as my machine*.
+- **A host.** Platforms take a repository or an image, hold the environment variables in
+  their own settings, and give you a URL. Deployment becomes a push.
+
+## The mistake, and why it is tempting
+
+Writing configuration into the source: the database URL as a constant, the API key in a
+string. It is tempting because it works instantly, the file is already open, and adding a
+second way to read a value feels like ceremony for one line. Two costs arrive later. A
+secret committed once is in the repository's history permanently, and rotating it is the
+only real fix. And the moment there is a second environment, the two differ by an edit
+nobody wrote down, so the staging deploy quietly reads the production database. Read it
+from the environment on day one, while it costs one line.
+
+## Where this stops holding
+
+A framework's validation runs before your code and answers with **its** convention, not
+yours: FastAPI rejects a malformed body with `422`, where the handler you write by hand
+returns `400`. If a client depends on the number, the framework has changed your contract
+without asking.
+
+`uvicorn main:app --reload` and `flask run` are development servers — single-worker,
+verbose, and explicitly not for production, where a process manager runs several workers
+behind the proxy. A health check that returns 200 without touching anything reports that
+the process is alive and nothing about whether it can serve, so an app whose database
+connection has died keeps receiving traffic. And a container fixes your dependencies, not
+your data: the database lives outside it, because the image is thrown away and rebuilt on
+every deploy.
+
+## In the lab
+
+*A bookstore API, cleanly split* is the last of these: three files, with `db.py` owning
+the schema, `api.py` owning the routing and the SQL, and `main.py` doing nothing but a
+demonstration run. `handle_request(conn, method, path, body)` keeps the shape from the
+earlier lab and adds what a real service needs — validation of every field on both `POST`
+and `PUT`, a filter passed as a **parameter** rather than glued into the SQL, and a
+`purchase` sub-route that answers `409` when the stock will not cover the order.
+''',
+                },
             ],
-            "quiz": {
+            "quiz": [{
                 "title": "What settles, when, and what it means",
                 "minutes": 7,
                 "questions": [
@@ -3114,7 +5499,246 @@ tick is announced unreliably across screen readers. Styling is entirely separate
 """,
                     },
                 ],
-            },
+            }, {
+                "title": "Verbs, paths and status codes",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "A `POST` that created a row should answer with which status?",
+                        "opts": [
+                            "`201 Created`, with the new row in the response body",
+                            "`200 OK`, which covers every successful request",
+                            "`204 No Content`, since the client already has what it sent",
+                            "`301 Moved Permanently`, pointing at the new row",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`201` says a new resource exists that did not before, and the body carries it — which
+matters, because the server assigned the id and the client has no other way to learn it.
+`200` is not wrong in the sense of breaking anything, and it throws that distinction away:
+a client cannot tell a create from a read. `204` promises there is no body at all and
+belongs to `DELETE`, where there is genuinely nothing left to return. And a `3xx` is a
+redirect — an instruction to go and ask somewhere else, not a report that something was
+made.
+""",
+                    },
+                    {
+                        "q": "`404 Not Found` says what, exactly?",
+                        "opts": [
+                            "There is nothing at that path, or nothing with that id",
+                            "The server crashed part-way through building the response",
+                            "You are authenticated, and not permitted to see it",
+                            "The body was malformed and could not be parsed",
+                        ],
+                        "a": 0,
+                        "why": r"""
+404 is about the *thing being addressed*: the path names no route, or the route is right
+and the id matches no row. Both cases are the caller looking for something that is not
+there, which is why one code covers them. A crash while answering is `500`, and the
+difference is who has to act — a 404 is fixed by asking for something else, a 500 by
+fixing the server. A refusal from someone the server has identified is `403`, which is a
+statement about permission rather than existence. And an unparseable body is `400`: the
+address was fine and the message was not.
+""",
+                    },
+                    {
+                        "q": "A response comes back with a status in the 400s. Who goes and fixes it?",
+                        "opts": [
+                            "The client — the request was wrong, so the request changes",
+                            "The server — a 4xx is raised when a handler throws",
+                            "Neither: the 400s are redirects the browser follows itself",
+                            "Both, since 4xx covers a failure on either side of the wire",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The first digit is the whole answer: 4xx means the request was wrong and 5xx means the
+server was, and that single fact decides which of two people opens an editor. An
+unhandled exception in a handler produces `500`, not a 4xx — a framework catches it and
+reports the family that means *our fault*. Redirects are the 300s, and they are followed
+before your code sees anything. Splitting the blame between both sides is the tempting
+answer and it is what the two families exist to avoid: the code is the server's opinion
+about whose problem it is.
+""",
+                    },
+                    {
+                        "q": "Which request removes book 42, following the usual conventions?",
+                        "opts": [
+                            "`DELETE /books/42`",
+                            "`POST /deleteBook?id=42`",
+                            "`GET /books/delete/42`",
+                            "`REMOVE /book42`",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The path names a noun and the method supplies the verb, so the resource is `/books/42`
+whatever you are doing to it and `DELETE` says what that is. Putting the verb in the path
+needs a second convention to explain what the method meant, and then two of them disagree.
+The `GET` version is the dangerous one rather than the ugly one: `GET` is defined as safe,
+so a crawler, a link prefetcher or a caching proxy is entitled to follow it, and rows
+vanish with nobody having pressed anything. And `REMOVE` is not an HTTP method; a server
+that has never heard of a verb answers `501`.
+""",
+                    },
+                    {
+                        "q": "HTTP is stateless. What follows from that?",
+                        "opts": [
+                            "Anything that must survive between requests travels in the request or lives in a store",
+                            "A connection has to be held open for as long as someone is using the site",
+                            "Only `GET` may be used, since every other verb would need a memory of what came before it",
+                            "Two requests from one person are guaranteed to reach the same server process",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The server keeps no memory of the conversation, so each request has to carry or reference
+whatever context it needs: a cookie, a token in an `Authorization` header, or an id that
+sends the handler to a database. That is a constraint and also the reason the web scales
+— any server in a pool can answer any request, because none of them holds anything the
+others lack. Pinning a person to one server process is what statelessness frees you from
+rather than something it promises. The connection is a separate matter again: one may be
+reused for many requests as an optimisation, and the protocol never depends on it.
+""",
+                    },
+                    {
+                        "q": "`401` and `403` both refuse a request. What separates them?",
+                        "opts": [
+                            "`401` means the server does not know who you are; `403` means it does, and refuses",
+                            "`401` is reserved for admin-only routes, and `403` covers every other refusal there is",
+                            "`403` asks you to try again later, once the rate limit window has passed",
+                            "They are two spellings of the same refusal, and either may be sent",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`401` is about **authentication** — no credentials, or credentials the server could not
+verify — and the useful response to it is to log in. `403` is about **authorisation** —
+the server knows exactly who you are and this account may not have that thing — and
+logging in again changes nothing. Sending the wrong one wastes the caller's time in a
+specific way, by inviting a sign-in that cannot help. Neither is about rate limiting,
+which has its own code, `429`, with a `Retry-After` header saying how long to wait.
+""",
+                    },
+                    {
+                        "q": "`GET /books?author=le+guin&sort=title` — what is the query string doing?",
+                        "opts": [
+                            "Filtering, sorting or paging a collection that is already identified",
+                            "Identifying the single resource the request is about",
+                            "Carrying credentials, which is what a query string is designed to be used for",
+                            "Sending a body, for verbs that are not allowed to have one",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The path says *which* resource — here, the collection `/books` — and the query refines
+what comes back from it: which subset, in what order, which page. That division is why
+`/books/42` is a path parameter and `?author=…` is not; one identifies, the other narrows.
+The query string is emphatically not a place for credentials or anything else private: it
+is part of the URL, so it ends up in browser history, in server access logs and in the
+`Referer` header sent to the next site. And it is not a body — a `GET` has none, which is
+part of what makes it safe to repeat.
+""",
+                    },
+                ],
+            }, {
+                "title": "Frameworks, config and shipping",
+                "minutes": 5,
+                "questions": [
+                    {
+                        "q": "What does a web framework do that your own `handle_request` did not?",
+                        "opts": [
+                            "Parses the raw HTTP and routes to your function, then serialises what it returns",
+                            "Writes the business logic, so the handlers become configuration rather than code",
+                            "Replaces the database, holding the rows in memory between requests",
+                            "Hosts the application, so no server or platform is needed",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A framework owns the two edges: bytes in, turned into a method, a path and a decoded body;
+and whatever your function returned, turned back into a status line, headers and bytes
+out. The middle is yours, and it is the same `if` chain you wrote by hand — which is why
+that lab is worth doing before meeting a framework rather than after. The routing table
+is the visible difference: `@app.get("/todos")` writes your function into a dictionary
+under the key `("GET", "/todos")`, and the dispatch is a lookup. Storage and hosting are
+separate concerns that a framework has opinions about and does not provide.
+""",
+                    },
+                    {
+                        "q": "Where should a value like `DATABASE_URL` come from?",
+                        "opts": [
+                            "The environment, read at start-up",
+                            "A constant near the top of the file",
+                            "The README, copied in by hand",
+                            "The client, sent with each request",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Configuration is the set of values that differ between one machine and the next, so it
+belongs outside the code that is identical on all of them — `os.environ` or `process.env`
+at start-up, with a local `.env` file in development and the platform's own settings in
+production. A constant in the source is the tempting one because it works immediately,
+and it means every environment differs by an edit nobody recorded; if the value is a
+secret it is also in the repository's history for good. Anything sent by the client is
+worse still: a connection string the caller supplies is a connection string the caller
+chooses.
+""",
+                    },
+                    {
+                        "q": "Why does a service expose a `GET /health` endpoint?",
+                        "opts": [
+                            "So a load balancer or a monitor can tell a live process from a hung one",
+                            "So users have somewhere to sign in when the main page is unavailable",
+                            "So the cache stays warm and the first real request is not the slow one to arrive",
+                            "So the database connection pool is reset on a schedule by the prober",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A load balancer needs a cheap, frequent question it can ask every instance — *are you
+able to answer* — so that it stops sending traffic to a process that has hung or is still
+starting up. That is the whole job, which is why the endpoint returns almost nothing and
+touches almost nothing. The limit is worth knowing: a health check that returns 200
+without consulting anything reports that the process is alive and says nothing about
+whether it can serve, so an instance whose database connection has died keeps receiving
+requests until the check is made to test something real.
+""",
+                    },
+                    {
+                        "q": "What does packaging an application into a container image get you?",
+                        "opts": [
+                            "The app and its exact dependency versions, running the same everywhere",
+                            "A faster runtime, since the image is compiled ahead of time and then cached",
+                            "Free hosting, because platforms run images at no charge",
+                            "Automatic scaling, handled by the image format itself",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The image is the app plus the interpreter plus every library at a pinned version, built
+once and run unchanged on a laptop, in CI and in production. *Works on my machine*
+becomes *ships as my machine*, and the class of bug caused by a different Python or a
+library one minor version ahead disappears. Nothing is compiled and nothing is faster;
+a container is process isolation, not a translation step. Scaling and hosting are what a
+platform does with the image, and they cost what they cost. The one thing an image does
+not carry is your data — the database lives outside it, because the image is thrown away
+and rebuilt on every deploy.
+""",
+                    },
+                    {
+                        "q": "FastAPI sees `def create_todo(todo: TodoIn)` where `TodoIn` is a model. What does the annotation buy?",
+                        "opts": [
+                            "The body is parsed and validated before your function is entered",
+                            "The handler runs in a thread pool, one request at a time per model",
+                            "The response is cached, keyed on the fields the model declares",
+                            "The database table is created from the model's field types",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Declaring the shape once moves validation to the edge: a request missing `title`, or
+sending a number where a string was declared, is refused before a line of your code runs,
+and the same declaration generates the interactive documentation at `/docs`. The catch is
+worth knowing before a client depends on it — the framework answers `422 Unprocessable
+Entity` for that failure, where a handler you write by hand returns `400`, so adopting a
+framework can change a contract you thought you owned. Persistence is a separate library's
+job; a model that describes a request body creates no tables.
+""",
+                    },
+                ],
+            }],
             "blanks": {
                 "title": "Four outcomes, one function",
                 "minutes": 9,
@@ -3264,7 +5888,7 @@ worse than the real answer, and the version you get by accident, because writing
 buys the difference, and the connection limit is what stops it being free.
 """,
             },
-            "lab": {
+            "lab": [{
                 "title": "Book search against a flaky API",
                 "runtime": "web",
                 "minutes": 55,
@@ -3610,7 +6234,1089 @@ assertEqual(document.querySelectorAll('#results li').length, 5, 'and all five sh
 assertEqual(document.getElementById('empty').hidden, true, 'Five results is not the empty state');
 '''},
                 ],
-            },
+            }, {
+                "title": "Loading users, and saying so",
+                "runtime": "web",
+                "minutes": 20,
+                "brief": r'''
+The smallest complete round trip: press a button, wait, draw what came back.
+`index.html` is read-only and defines `window.fakeFetch(url)` — a stand-in for
+`fetch` that resolves after 200ms with an object carrying `ok`, `status` and
+`json()`. For `"/api/users"` the body is an array of three users with `id`,
+`name` and `role`; every other path answers **404**.
+
+In `app.js`:
+
+- `async function loadUsers()` — call `window.fakeFetch("/api/users")`, throw
+  when `response.ok` is false, and otherwise **return the array** the body holds.
+- `renderUsers(users)` — rebuild `#users` as one `<li>` per user showing the
+  name.
+- a `click` handler on `#load` that writes `Loading…` into `#status` **before**
+  it awaits, then renders and sets `#status` to `Loaded 3 users`. When
+  `loadUsers` throws, the list is left empty and `#status` reads
+  `Could not load users`.
+
+The last of those is the whole exercise. A page that only handles success
+leaves the word *Loading* on screen forever, and the person waiting has no way
+to tell a slow network from a broken one.
+''',
+                "files": [
+                    {"name": "index.html", "ro": True, "content": r'''
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Team</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 26rem; margin: 2.5rem auto; padding: 0 1rem; color: #1b1f27; }
+  button { font: inherit; padding: 0.5rem 0.9rem; border-radius: 6px; border: 0; background: #1b1f27; color: #fff; font-weight: 600; cursor: pointer; }
+  #status { color: #5a6270; min-height: 1.4em; }
+  ul { list-style: none; padding: 0; }
+  li { padding: 0.4rem 0; border-bottom: 1px solid #eceff3; }
+</style>
+</head>
+<body>
+
+<main>
+  <h1>Team</h1>
+  <button id="load" type="button">Load users</button>
+  <p id="status" aria-live="polite"></p>
+  <ul id="users"></ul>
+</main>
+
+<script>
+/* A stand-in for fetch(). This file is read-only. */
+(function () {
+  var DB = {
+    '/api/users': [
+      { id: 1, name: 'Ada Lovelace', role: 'Analyst' },
+      { id: 2, name: 'Grace Hopper', role: 'Compiler engineer' },
+      { id: 3, name: 'Linus Torvalds', role: 'Kernel maintainer' }
+    ]
+  };
+
+  window.fakeFetch = function (url) {
+    return new Promise(function (resolve) {
+      setTimeout(function () {
+        var data = DB[url];
+        resolve({
+          ok: data !== undefined,
+          status: data !== undefined ? 200 : 404,
+          json: function () {
+            return Promise.resolve(data !== undefined ? data : { error: 'Not found' });
+          }
+        });
+      }, 200);
+    });
+  };
+})();
+</script>
+<script src="app.js"></script>
+</body>
+</html>
+'''},
+                    {"name": "app.js", "content": r'''
+const loadButton = document.querySelector("#load");
+const statusEl = document.querySelector("#status");
+const list = document.querySelector("#users");
+
+async function loadUsers() {
+  // TODO: await window.fakeFetch("/api/users"), throw when the response is not
+  //       ok, and return the array the body holds.
+}
+
+function renderUsers(users) {
+  // TODO: rebuild #users as one <li> per user, showing the name
+}
+
+// TODO: a click handler on #load. Set the status to "Loading…" before awaiting,
+//       then render and report the count — or, on a failure, leave the list
+//       empty and say "Could not load users".
+'''},
+                ],
+                "main": "index.html",
+                "solution": [
+                    {"name": "app.js", "content": r'''
+const loadButton = document.querySelector("#load");
+const statusEl = document.querySelector("#status");
+const list = document.querySelector("#users");
+
+async function loadUsers() {
+  const response = await window.fakeFetch("/api/users");
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  return await response.json();
+}
+
+function renderUsers(users) {
+  list.textContent = "";
+  for (const user of users) {
+    const li = document.createElement("li");
+    li.textContent = user.name;
+    list.append(li);
+  }
+}
+
+loadButton.addEventListener("click", async () => {
+  statusEl.textContent = "Loading…";
+  try {
+    const users = await loadUsers();
+    renderUsers(users);
+    statusEl.textContent = `Loaded ${users.length} users`;
+  } catch (error) {
+    renderUsers([]);
+    statusEl.textContent = "Could not load users";
+  }
+});
+'''},
+                ],
+                "hints": [
+                    "`loadUsers` is three lines: `const response = await window.fakeFetch(\"/api/users\");`, then `if (!response.ok) { throw new Error(...); }`, then `return await response.json();`.",
+                    "A rejected promise reaches you as an ordinary exception at the line of the `await`, so the caller's `try` / `catch` is what turns a failure into a message.",
+                    "The handler has to be `async` itself before it can `await loadUsers()`. Write it as `async () => { ... }`.",
+                    "The status line goes on the page *before* the await, not after it. Set after, it appears for one frame at the moment it has stopped being true.",
+                ],
+                "tests": [
+                    {"name": "loadUsers is async and resolves with the array", "code": r'''
+assertEqual(typeof loadUsers, 'function', 'Define a function called loadUsers');
+var _p = loadUsers();
+assert(_p && typeof _p.then === 'function', 'loadUsers should be async, so calling it returns a promise');
+var _users = await _p;
+assert(Array.isArray(_users), 'loadUsers should resolve with the array of users, got ' + JSON.stringify(_users));
+assertEqual(_users.length, 3, 'The catalogue holds three users, got ' + _users.length);
+assertEqual(_users[0].name, 'Ada Lovelace', 'and in the order the body sent them, got ' + _users[0].name);
+'''},
+                    {"name": "Clicking Load renders one row per name", "code": r'''
+document.querySelector('#users').textContent = '';
+document.querySelector('#load').click();
+await new Promise(function (r) { setTimeout(r, 450); });
+var _items = document.querySelectorAll('#users li');
+assertEqual(_items.length, 3, 'Expected three rows after loading, found ' + _items.length);
+assert(_items[1].textContent.indexOf('Grace Hopper') !== -1, 'Each row should show the user name, got: ' + _items[1].textContent);
+'''},
+                    {"name": "The status says loading first, then the count", "code": r'''
+var _st = document.querySelector('#status');
+document.querySelector('#load').click();
+await new Promise(function (r) { setTimeout(r, 30); });
+assert(_st.textContent.indexOf('Loading') === 0, 'The status should read Loading... straight away, before the await. Got: "' + _st.textContent + '"');
+await new Promise(function (r) { setTimeout(r, 450); });
+assertEqual(_st.textContent, 'Loaded 3 users', 'After the load the status should read "Loaded 3 users", got "' + _st.textContent + '"');
+'''},
+                    {"name": "A failing request leaves an empty list and says so", "code": r'''
+var _real = window.fakeFetch;
+window.fakeFetch = function () { return _real('/api/missing'); };
+document.querySelector('#load').click();
+await new Promise(function (r) { setTimeout(r, 450); });
+window.fakeFetch = _real;
+assertEqual(document.querySelector('#status').textContent, 'Could not load users', 'On a 404 the status should read "Could not load users", got "' + document.querySelector('#status').textContent + '"');
+assertEqual(document.querySelectorAll('#users li').length, 0, 'and the list should be empty, found ' + document.querySelectorAll('#users li').length + ' row(s)');
+'''},
+                ],
+            }, {
+                "title": "A REST handler with no framework",
+                "runtime": "python",
+                "minutes": 28,
+                "brief": r'''
+The routing table from the reading, as one function and nothing else.
+Implement `handle_request(method, path, body=None)` returning a
+`(status, data)` pair. The module-level list `TODOS` is the database and
+`next_id()` hands out ids; a todo is `{"id": 1, "title": "...", "done": False}`.
+
+| Request | Answer |
+|---|---|
+| `GET /todos` | `(200, [every todo])` |
+| `POST /todos` with `{"title": "..."}` | append, then `(201, the new todo)` |
+| `POST /todos` with no title, or an empty one | `(400, {"error": "title is required"})` |
+| `GET /todos/<id>` | `(200, todo)`, or `(404, {"error": "not found"})` |
+| `PATCH /todos/<id>` with `{"done": True}` | update `done`, then `(200, todo)`, or 404 |
+| `DELETE /todos/<id>` | remove it, then `(204, None)`, or 404 |
+| any other path | `(404, {"error": "not found"})` |
+| a known path, an unsupported verb | `(405, {"error": "method not allowed"})` |
+
+That last row is the one worth getting right. `DELETE /todos` is not a missing
+resource — it is a resource that does not accept that verb, and 405 is what says
+so. Split the path with `path.split("/")`, and remember that the id arrives as a
+string.
+''',
+                "files": [
+                    {"name": "main.py", "content": r'''
+TODOS = []
+_id_counter = 0
+
+
+def next_id():
+    global _id_counter
+    _id_counter += 1
+    return _id_counter
+
+
+def handle_request(method, path, body=None):
+    """Return a (status, data) tuple for the to-do API."""
+    # TODO: split the path, then handle the collection and the item separately.
+    return (404, {"error": "not found"})
+
+
+print(handle_request("POST", "/todos", {"title": "Order brake pads"}))
+print(handle_request("GET", "/todos"))
+'''},
+                ],
+                "main": "main.py",
+                "solution": [
+                    {"name": "main.py", "content": r'''
+TODOS = []
+_id_counter = 0
+
+
+def next_id():
+    global _id_counter
+    _id_counter += 1
+    return _id_counter
+
+
+def find_todo(todo_id):
+    for todo in TODOS:
+        if todo["id"] == todo_id:
+            return todo
+    return None
+
+
+def handle_request(method, path, body=None):
+    """Return a (status, data) tuple for the to-do API."""
+    parts = [p for p in path.split("/") if p]
+
+    if parts == ["todos"]:
+        if method == "GET":
+            return (200, TODOS)
+        if method == "POST":
+            title = (body or {}).get("title")
+            if not title:
+                return (400, {"error": "title is required"})
+            todo = {"id": next_id(), "title": title, "done": False}
+            TODOS.append(todo)
+            return (201, todo)
+        return (405, {"error": "method not allowed"})
+
+    if len(parts) == 2 and parts[0] == "todos" and parts[1].isdigit():
+        todo = find_todo(int(parts[1]))
+        if todo is None:
+            return (404, {"error": "not found"})
+        if method == "GET":
+            return (200, todo)
+        if method == "PATCH":
+            if body and "done" in body:
+                todo["done"] = bool(body["done"])
+            return (200, todo)
+        if method == "DELETE":
+            TODOS.remove(todo)
+            return (204, None)
+        return (405, {"error": "method not allowed"})
+
+    return (404, {"error": "not found"})
+
+
+print(handle_request("POST", "/todos", {"title": "Order brake pads"}))
+print(handle_request("GET", "/todos"))
+'''},
+                ],
+                "hints": [
+                    "`parts = [p for p in path.split(\"/\") if p]` drops the empty strings the leading slash produces, so `/todos` becomes `[\"todos\"]` and `/todos/3` becomes `[\"todos\", \"3\"]`.",
+                    "Write a `find_todo(todo_id)` helper first — three of the routes need it, and it is the one place that decides what 'not found' means.",
+                    "Treat the collection and the item as two blocks. Inside each, dispatch on the method and end the block with the 405; fall out of both blocks to the final 404.",
+                    "The id in the path is a string. `parts[1].isdigit()` guards the conversion, and `int(parts[1])` does it — `\"3\" == 3` is False, so comparing without converting finds nothing and reports nothing wrong.",
+                ],
+                "tests": [
+                    {"name": "POST creates a todo and answers 201", "code": r'''
+TODOS.clear()
+_status, _todo = handle_request("POST", "/todos", {"title": "Order brake pads"})
+assert _status == 201, f"A successful create answers 201, got {_status}"
+assert isinstance(_todo, dict), f"The body should be the new todo, got {_todo!r}"
+assert _todo["title"] == "Order brake pads", f"Got {_todo!r}"
+assert _todo["done"] is False, f"A new todo starts not done, got {_todo!r}"
+assert "id" in _todo, f"The server assigns the id, so it has to come back: {_todo!r}"
+'''},
+                    {"name": "GET /todos lists them in the order they arrived", "code": r'''
+TODOS.clear()
+handle_request("POST", "/todos", {"title": "a"})
+handle_request("POST", "/todos", {"title": "b"})
+_status, _list = handle_request("GET", "/todos")
+assert _status == 200, f"A successful read answers 200, got {_status}"
+assert [t["title"] for t in _list] == ["a", "b"], f"Got {_list!r}"
+'''},
+                    {"name": "A missing or empty title is refused with 400", "code": r'''
+TODOS.clear()
+_status, _err = handle_request("POST", "/todos", {})
+assert _status == 400, f"A body with no title should give 400, got {_status}"
+assert "error" in _err, f"Say what was wrong: {_err!r}"
+assert handle_request("POST", "/todos", {"title": ""})[0] == 400, "An empty title is not a title"
+assert TODOS == [], f"A refused create must not append anything, got {TODOS!r}"
+'''},
+                    {"name": "GET /todos/<id> finds one, or 404s", "code": r'''
+TODOS.clear()
+_todo = handle_request("POST", "/todos", {"title": "find me"})[1]
+_status, _found = handle_request("GET", "/todos/" + str(_todo["id"]))
+assert _status == 200 and _found["title"] == "find me", f"Got {(_status, _found)!r}"
+assert handle_request("GET", "/todos/999999")[0] == 404, "An id that is not there gives 404"
+'''},
+                    {"name": "PATCH updates done and returns the todo", "code": r'''
+TODOS.clear()
+_todo = handle_request("POST", "/todos", {"title": "x"})[1]
+_status, _updated = handle_request("PATCH", "/todos/" + str(_todo["id"]), {"done": True})
+assert _status == 200, f"A successful update answers 200, got {_status}"
+assert _updated["done"] is True, f"Got {_updated!r}"
+assert handle_request("PATCH", "/todos/999999", {"done": True})[0] == 404
+'''},
+                    {"name": "DELETE removes it with 204, and then it is gone", "code": r'''
+TODOS.clear()
+_todo = handle_request("POST", "/todos", {"title": "x"})[1]
+_id = str(_todo["id"])
+assert handle_request("DELETE", "/todos/" + _id) == (204, None), "DELETE answers (204, None) — nothing left to send"
+assert handle_request("GET", "/todos/" + _id)[0] == 404, "The deleted todo should be gone"
+assert handle_request("DELETE", "/todos/" + _id)[0] == 404, "Deleting it twice leaves the world the same, and says 404 the second time"
+'''},
+                    {"name": "Unknown path 404, unsupported verb 405", "code": r'''
+TODOS.clear()
+assert handle_request("GET", "/nope")[0] == 404, "A path the server has nothing at gives 404"
+assert handle_request("DELETE", "/todos")[0] == 405, "The collection exists and does not accept DELETE — that is 405, not 404"
+_todo = handle_request("POST", "/todos", {"title": "x"})[1]
+assert handle_request("POST", "/todos/" + str(_todo["id"]))[0] == 405, "An item does not accept POST either"
+'''},
+                ],
+            }, {
+                "title": "A task board with three columns",
+                "runtime": "web",
+                "minutes": 55,
+                "brief": r'''
+The state-and-render pattern at the size of a small application: three columns,
+cards that move between them, and counts that cannot drift because nothing
+stores them. You are given a skeleton in three files and the structure the
+checks look for; the rest is yours.
+
+## Structure
+
+- a `.board` container laid out with **grid or flex**
+- three `.column` elements with `data-status` of `todo`, `doing` and `done`,
+  each holding an `<h2>` containing a `.count` span, and a `<ul class="cards">`
+- the form `#new-card` with the text input `#card-title` and a submit button —
+  both are already in `index.html`
+
+## Behaviour
+
+- Submitting the form adds a `.card` to the **todo** column showing the title.
+  A blank title is ignored; a successful add clears the input.
+- Every card carries a `.move` button that sends it one step along
+  todo → doing → done. Cards already in **done** have no `.move` button.
+- Every card carries a `.delete` button that removes it.
+- Each column's `.count` shows how many cards are in that column.
+- It should look like a board: columns side by side, headers you can read,
+  cards that read as cards.
+
+## Approach
+
+Keep an array of `{ id, title, status }` and one `render()` that rebuilds all
+three columns from it and writes all three counts. Write the three
+`<section class="column">` blocks into `index.html` by hand — only the cards are
+dynamic. Delegate both buttons from `.board`, since every render throws the old
+buttons away, and put the card's id on the `<li>` as `data-id` so a handler can
+find its way back to the array.
+
+Derive the counts inside `render()` from the same filtered list that built the
+column. A count stored anywhere else is the second copy of the truth this
+module opened with.
+''',
+                "files": [
+                    {"name": "index.html", "content": r'''
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Task board</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>Task board</h1>
+  <form id="new-card">
+    <label class="sr-only" for="card-title">New task</label>
+    <input id="card-title" name="title" type="text" placeholder="New task" autocomplete="off">
+    <button type="submit">Add</button>
+  </form>
+</header>
+
+<main class="board">
+  <!-- Three <section class="column"> blocks go here. Each needs a data-status of
+       todo, doing or done, an <h2> holding a <span class="count">, and a
+       <ul class="cards"> for the cards to be rendered into. -->
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
+'''},
+                    {"name": "style.css", "content": r'''
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f0f2f5; color: #171a21; }
+header { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; background: #fff; border-bottom: 1px solid #d7dce4; }
+h1 { margin: 0; font-size: 1.25rem; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Lay out .board, then style .column, .cards and .card. */
+'''},
+                    {"name": "app.js", "content": r'''
+const board = document.querySelector(".board");
+const form = document.querySelector("#new-card");
+const input = document.querySelector("#card-title");
+
+const ORDER = ["todo", "doing", "done"];
+let cards = [];       // { id, title, status }
+let nextId = 1;
+
+function render() {
+  // TODO: for each status in ORDER, find that column, rebuild its ul.cards from
+  //       the cards with that status, and write the number into its .count.
+  //       A card is an <li class="card" data-id="N"> holding the title, a
+  //       .delete button, and a .move button unless it is already done.
+}
+
+// TODO: a submit listener on the form: prevent the default, trim the title,
+//       refuse a blank one, append with status "todo", clear the input, render.
+
+// TODO: one delegated click listener on `board` that finds the .card the click
+//       landed in, then acts on .move or .delete and renders.
+
+render();
+'''},
+                ],
+                "main": "index.html",
+                "solution": [
+                    {"name": "index.html", "content": r'''
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Task board</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>Task board</h1>
+  <form id="new-card">
+    <label class="sr-only" for="card-title">New task</label>
+    <input id="card-title" name="title" type="text" placeholder="New task" autocomplete="off">
+    <button type="submit">Add</button>
+  </form>
+</header>
+
+<main class="board">
+  <section class="column" data-status="todo">
+    <h2>To do <span class="count">0</span></h2>
+    <ul class="cards"></ul>
+  </section>
+  <section class="column" data-status="doing">
+    <h2>Doing <span class="count">0</span></h2>
+    <ul class="cards"></ul>
+  </section>
+  <section class="column" data-status="done">
+    <h2>Done <span class="count">0</span></h2>
+    <ul class="cards"></ul>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
+'''},
+                    {"name": "style.css", "content": r'''
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f0f2f5; color: #171a21; }
+header { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; background: #fff; border-bottom: 1px solid #d7dce4; }
+h1 { margin: 0; font-size: 1.25rem; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+#new-card { display: flex; gap: 0.5rem; margin-left: auto; }
+#card-title { font: inherit; padding: 0.5rem 0.6rem; border: 1px solid #d7dce4; border-radius: 6px; min-width: 14rem; }
+#new-card button { font: inherit; padding: 0.5rem 0.9rem; border: 0; border-radius: 6px; background: #1b1f27; color: #fff; font-weight: 600; cursor: pointer; }
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  padding: 1.25rem;
+  align-items: start;
+}
+
+.column { background: #e4e7ec; border-radius: 12px; padding: 0.75rem; }
+
+.column h2 {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #4e5766;
+  margin: 0.25rem 0.25rem 0.75rem;
+}
+
+.count { background: #fff; border-radius: 999px; padding: 0 0.5rem; font-size: 0.75rem; }
+
+.cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; min-height: 2.5rem; }
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.card .title { flex: 1; }
+
+.card button { font: inherit; border: 0; background: #f0f2f5; border-radius: 6px; padding: 0.2rem 0.5rem; cursor: pointer; font-size: 0.8rem; }
+
+.card button:hover { background: #d7dce4; }
+
+.card .delete { color: #a5271f; }
+
+@media (max-width: 700px) {
+  .board { grid-template-columns: 1fr; }
+  header { flex-wrap: wrap; }
+  #new-card { margin-left: 0; width: 100%; }
+}
+'''},
+                    {"name": "app.js", "content": r'''
+const board = document.querySelector(".board");
+const form = document.querySelector("#new-card");
+const input = document.querySelector("#card-title");
+
+const ORDER = ["todo", "doing", "done"];
+let cards = [];       // { id, title, status }
+let nextId = 1;
+
+function cardElement(card) {
+  const li = document.createElement("li");
+  li.className = "card";
+  li.dataset.id = String(card.id);
+
+  const title = document.createElement("span");
+  title.className = "title";
+  title.textContent = card.title;
+  li.append(title);
+
+  if (card.status !== "done") {
+    const move = document.createElement("button");
+    move.type = "button";
+    move.className = "move";
+    move.textContent = "Move on";
+    li.append(move);
+  }
+
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "delete";
+  del.textContent = "Delete";
+  li.append(del);
+
+  return li;
+}
+
+function render() {
+  for (const status of ORDER) {
+    const column = board.querySelector(`.column[data-status="${status}"]`);
+    const list = column.querySelector(".cards");
+    const inColumn = cards.filter((card) => card.status === status);
+
+    list.textContent = "";
+    for (const card of inColumn) {
+      list.append(cardElement(card));
+    }
+    column.querySelector(".count").textContent = inColumn.length;
+  }
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const title = input.value.trim();
+  if (!title) {
+    return;
+  }
+  cards.push({ id: nextId, title: title, status: "todo" });
+  nextId += 1;
+  input.value = "";
+  render();
+});
+
+board.addEventListener("click", (event) => {
+  const cardEl = event.target.closest(".card[data-id]");
+  if (!cardEl) {
+    return;
+  }
+  const id = Number(cardEl.dataset.id);
+  const card = cards.find((c) => c.id === id);
+  if (!card) {
+    return;
+  }
+
+  if (event.target.closest(".move")) {
+    const next = ORDER[ORDER.indexOf(card.status) + 1];
+    if (next) {
+      card.status = next;
+    }
+  } else if (event.target.closest(".delete")) {
+    cards = cards.filter((c) => c.id !== id);
+  } else {
+    return;
+  }
+  render();
+});
+
+render();
+'''},
+                ],
+                "hints": [
+                    "Write the three `<section class=\"column\">` blocks into `index.html` by hand. Only the cards change at runtime, so the columns are markup, not output.",
+                    "`render()` is a loop over `ORDER`. For each status: find `.column[data-status=\"...\"]`, empty its `.cards`, append one `<li>` per matching card, and write the length into `.count`. Deriving the count from the same filtered array is what keeps it honest.",
+                    "Build the `<li>` with `document.createElement` and `textContent`, and set `li.dataset.id = String(card.id)`. Append the `.move` button only when the status is not `done` — that is the whole of the last check.",
+                    "One `click` listener on `board`. `event.target.closest(\".card[data-id]\")` gives the card, and `event.target.closest(\".move\")` or `.closest(\".delete\")` says which button was hit. Return early when neither matched, or a click on the column background re-renders for nothing.",
+                ],
+                "tests": [
+                    {"name": "Three columns, with the structure the checks read", "code": r'''
+var _cols = document.querySelectorAll('.board .column');
+assertEqual(_cols.length, 3, 'Found ' + _cols.length + ' .column elements inside .board — three are needed');
+var _statuses = Array.prototype.map.call(_cols, function (c) { return c.dataset.status; });
+['todo', 'doing', 'done'].forEach(function (s) {
+  assert(_statuses.indexOf(s) !== -1, 'No column with data-status="' + s + '" — found ' + JSON.stringify(_statuses));
+});
+Array.prototype.forEach.call(_cols, function (c) {
+  assert(c.querySelector('h2 .count') !== null, 'The ' + c.dataset.status + ' column needs a .count span inside its <h2>');
+  assert(c.querySelector('ul.cards') !== null, 'The ' + c.dataset.status + ' column needs a <ul class="cards">');
+});
+'''},
+                    {"name": "The board is laid out as a board", "code": r'''
+var _d = getComputedStyle(document.querySelector('.board')).display;
+assert(_d === 'grid' || _d === 'flex', '.board should use grid or flex so the columns sit side by side, got display: ' + _d);
+var _cols = document.querySelectorAll('.board .column');
+var _tops = Array.prototype.map.call(_cols, function (c) { return Math.round(c.getBoundingClientRect().top); });
+assert(_tops[0] === _tops[1] && _tops[1] === _tops[2], 'The three columns should start at the same height, got tops ' + JSON.stringify(_tops));
+'''},
+                    {"name": "Adding puts a card in To do, and a blank title does not", "code": r'''
+var _guard = 0;
+while (document.querySelector('.card .delete') && _guard < 60) { document.querySelector('.card .delete').click(); _guard += 1; }
+assertEqual(document.querySelectorAll('.card').length, 0, 'Could not clear the board through the delete buttons — check that .delete removes a card');
+var _input = document.querySelector('#card-title');
+var _form = document.querySelector('#new-card');
+_input.value = 'Price the winter tyres';
+_form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+var _todo = document.querySelectorAll('.column[data-status="todo"] .card');
+assertEqual(_todo.length, 1, 'A new card belongs in the todo column, found ' + _todo.length + ' there');
+assert(_todo[0].textContent.indexOf('Price the winter tyres') !== -1, 'The card should show its title, got: ' + _todo[0].textContent);
+assert(_todo[0].dataset.id, 'Each card needs a data-id so a delegated handler can find it in the array');
+assertEqual(_input.value, '', 'Clear the input after a successful add');
+_input.value = '   ';
+_form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+assertEqual(document.querySelectorAll('.card').length, 1, 'A blank title should add nothing');
+'''},
+                    {"name": "The counts follow the columns", "code": r'''
+var _guard = 0;
+while (document.querySelector('.card .delete') && _guard < 60) { document.querySelector('.card .delete').click(); _guard += 1; }
+var _input = document.querySelector('#card-title');
+var _form = document.querySelector('#new-card');
+['Price the winter tyres', 'Sweep bay 2'].forEach(function (t) {
+  _input.value = t;
+  _form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+});
+var _todo = document.querySelector('.column[data-status="todo"]');
+assertEqual(_todo.querySelector('.count').textContent.trim(), '2', 'Two cards in todo should show a count of 2, got ' + _todo.querySelector('.count').textContent.trim());
+assertEqual(document.querySelector('.column[data-status="doing"] .count').textContent.trim(), '0', 'An empty column shows 0');
+'''},
+                    {"name": "Move walks a card along the pipeline", "code": r'''
+var _guard = 0;
+while (document.querySelector('.card .delete') && _guard < 60) { document.querySelector('.card .delete').click(); _guard += 1; }
+var _input = document.querySelector('#card-title');
+var _form = document.querySelector('#new-card');
+_input.value = 'Order oil filters';
+_form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+var _first = document.querySelector('.column[data-status="todo"] .card .move');
+assert(_first !== null, 'A card in todo needs a .move button');
+_first.click();
+assertEqual(document.querySelectorAll('.column[data-status="doing"] .card').length, 1, 'One move should land the card in doing');
+var _again = document.querySelector('.column[data-status="doing"] .card .move');
+assert(_again !== null, 'A card in doing needs a .move button too');
+_again.click();
+var _done = document.querySelectorAll('.column[data-status="done"] .card');
+assertEqual(_done.length, 1, 'A second move should land it in done');
+assert(_done[0].querySelector('.move') === null, 'A card in done has nowhere to go, so it carries no .move button');
+'''},
+                    {"name": "Delete removes exactly one card", "code": r'''
+var _guard = 0;
+while (document.querySelector('.card .delete') && _guard < 60) { document.querySelector('.card .delete').click(); _guard += 1; }
+var _input = document.querySelector('#card-title');
+var _form = document.querySelector('#new-card');
+['one', 'two', 'three'].forEach(function (t) {
+  _input.value = t;
+  _form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+});
+var _del = document.querySelector('.card .delete');
+assert(_del !== null, 'Every card needs a .delete button');
+_del.click();
+assertEqual(document.querySelectorAll('.card').length, 2, 'Deleting one card should leave two, found ' + document.querySelectorAll('.card').length);
+assert(document.body.textContent.indexOf('one') === -1 || document.querySelectorAll('.card').length === 2, 'Delete should remove the card that was clicked');
+'''},
+                    {"name": "Every count matches the column it sits in", "code": r'''
+Array.prototype.forEach.call(document.querySelectorAll('.column'), function (col) {
+  var _n = col.querySelectorAll('.card').length;
+  var _shown = col.querySelector('.count').textContent.trim();
+  assertEqual(_shown, String(_n), 'The ' + col.dataset.status + ' column holds ' + _n + ' card(s) and shows "' + _shown + '" — derive the count in render() from the same list that built the column');
+});
+'''},
+                ],
+            }, {
+                "title": "A bookstore API, cleanly split",
+                "runtime": "python",
+                "minutes": 65,
+                "brief": r'''
+The handler from the earlier lab, grown into something with a database behind it
+and split the way a service is: `db.py` owns the schema, `api.py` owns the
+routing and the SQL, and `main.py` does nothing but a demonstration run. The
+checks import your modules and call
+`handle_request(conn, method, path, body)` directly.
+
+## `db.py`
+
+`init_db(conn)` creates the table
+`books (id INTEGER PRIMARY KEY, title TEXT, author TEXT, price REAL, stock INTEGER)`.
+It must be safe to call twice — `CREATE TABLE IF NOT EXISTS`.
+
+## `api.py` — `handle_request(conn, method, path, body=None)` returns `(status, data)`
+
+A book travels as `{"id", "title", "author", "price", "stock"}`.
+
+- `GET /books` → `(200, [...])`, ordered by id
+- `GET /books?author=X` → only that author, matched case-insensitively, and
+  **passed as a parameter rather than glued into the SQL** — one check sends an
+  injection string and expects an empty list back
+- `POST /books` → validate first: `title` and `author` non-empty strings,
+  `price` a number at least 0, `stock` an integer at least 0. Valid inserts and
+  answers `(201, book)`; invalid answers `(400, {"error": "..."})`
+- `GET /books/<id>` → `(200, book)` or `(404, {"error": "not found"})`
+- `PUT /books/<id>` → the same validation, then replace all four fields →
+  `(200, book)`, or 404
+- `DELETE /books/<id>` → `(204, None)`, or 404
+- `POST /books/<id>/purchase` with `{"quantity": n}` — `n` an integer of 1 or
+  more, else 400. When `stock` is below `n`, `(409, {"error": "insufficient stock"})`;
+  otherwise reduce the stock and answer `(200, book)`
+- an unknown path is 404; a known path with an unsupported verb is 405
+
+## A suggested order
+
+`init_db`, then a `row_to_book` helper, then `POST` and `GET /books`, then the
+three routes on `/books/<id>`, then the author filter, then `purchase`. Write
+one `validate(body)` returning an error string or `None` and call it from both
+`POST` and `PUT`, so there is exactly one definition of a valid book.
+''',
+                "files": [
+                    {"name": "db.py", "content": r'''
+def init_db(conn):
+    """Create the books table. Safe to call more than once."""
+    pass
+'''},
+                    {"name": "api.py", "content": r'''
+def row_to_book(row):
+    """(id, title, author, price, stock) -> dict."""
+    pass
+
+
+def validate(body):
+    """Return an error string, or None when the body is a valid book."""
+    pass
+
+
+def handle_request(conn, method, path, body=None):
+    """Route a request to the right SQL and return (status, data)."""
+    return (404, {"error": "not found"})
+'''},
+                    {"name": "main.py", "content": r'''
+import sqlite3
+from db import init_db
+from api import handle_request
+
+conn = sqlite3.connect(":memory:")
+init_db(conn)
+
+print(handle_request(conn, "POST", "/books",
+                     {"title": "The Dispossessed", "author": "Le Guin",
+                      "price": 129.0, "stock": 3}))
+print(handle_request(conn, "GET", "/books"))
+'''},
+                ],
+                "main": "main.py",
+                "solution": [
+                    {"name": "db.py", "content": r'''
+def init_db(conn):
+    """Create the books table. Safe to call more than once."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS books (
+            id INTEGER PRIMARY KEY,
+            title TEXT,
+            author TEXT,
+            price REAL,
+            stock INTEGER
+        )
+    """)
+    conn.commit()
+'''},
+                    {"name": "api.py", "content": r'''
+COLUMNS = "id, title, author, price, stock"
+
+
+def row_to_book(row):
+    """(id, title, author, price, stock) -> dict."""
+    return {
+        "id": row[0],
+        "title": row[1],
+        "author": row[2],
+        "price": row[3],
+        "stock": row[4],
+    }
+
+
+def validate(body):
+    """Return an error string, or None when the body is a valid book."""
+    body = body or {}
+    title = body.get("title")
+    author = body.get("author")
+    price = body.get("price")
+    stock = body.get("stock")
+    if not isinstance(title, str) or not title.strip():
+        return "title is required"
+    if not isinstance(author, str) or not author.strip():
+        return "author is required"
+    if not isinstance(price, (int, float)) or isinstance(price, bool) or price < 0:
+        return "price must be a number >= 0"
+    if not isinstance(stock, int) or isinstance(stock, bool) or stock < 0:
+        return "stock must be an integer >= 0"
+    return None
+
+
+def get_book(conn, book_id):
+    row = conn.execute(
+        f"SELECT {COLUMNS} FROM books WHERE id = ?", (book_id,)
+    ).fetchone()
+    return row_to_book(row) if row else None
+
+
+def handle_collection(conn, method, query, body):
+    if method == "GET":
+        if query.startswith("author="):
+            author = query[len("author="):].replace("+", " ")
+            rows = conn.execute(
+                f"SELECT {COLUMNS} FROM books WHERE LOWER(author) = LOWER(?) ORDER BY id",
+                (author,),
+            ).fetchall()
+        else:
+            rows = conn.execute(f"SELECT {COLUMNS} FROM books ORDER BY id").fetchall()
+        return (200, [row_to_book(r) for r in rows])
+    if method == "POST":
+        error = validate(body)
+        if error:
+            return (400, {"error": error})
+        cursor = conn.execute(
+            "INSERT INTO books (title, author, price, stock) VALUES (?, ?, ?, ?)",
+            (body["title"], body["author"], body["price"], body["stock"]),
+        )
+        conn.commit()
+        return (201, get_book(conn, cursor.lastrowid))
+    return (405, {"error": "method not allowed"})
+
+
+def handle_purchase(conn, book, body):
+    quantity = (body or {}).get("quantity")
+    if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity < 1:
+        return (400, {"error": "quantity must be an integer >= 1"})
+    if book["stock"] < quantity:
+        return (409, {"error": "insufficient stock"})
+    conn.execute(
+        "UPDATE books SET stock = stock - ? WHERE id = ?", (quantity, book["id"])
+    )
+    conn.commit()
+    return (200, get_book(conn, book["id"]))
+
+
+def handle_item(conn, method, book_id, book, body):
+    if method == "GET":
+        return (200, book)
+    if method == "PUT":
+        error = validate(body)
+        if error:
+            return (400, {"error": error})
+        conn.execute(
+            "UPDATE books SET title = ?, author = ?, price = ?, stock = ? WHERE id = ?",
+            (body["title"], body["author"], body["price"], body["stock"], book_id),
+        )
+        conn.commit()
+        return (200, get_book(conn, book_id))
+    if method == "DELETE":
+        conn.execute("DELETE FROM books WHERE id = ?", (book_id,))
+        conn.commit()
+        return (204, None)
+    return (405, {"error": "method not allowed"})
+
+
+def handle_request(conn, method, path, body=None):
+    """Route a request to the right SQL and return (status, data)."""
+    path, _, query = path.partition("?")
+    parts = [p for p in path.split("/") if p]
+
+    if parts == ["books"]:
+        return handle_collection(conn, method, query, body)
+
+    if len(parts) >= 2 and parts[0] == "books" and parts[1].isdigit():
+        book_id = int(parts[1])
+        book = get_book(conn, book_id)
+
+        if len(parts) == 3 and parts[2] == "purchase":
+            if method != "POST":
+                return (405, {"error": "method not allowed"})
+            if book is None:
+                return (404, {"error": "not found"})
+            return handle_purchase(conn, book, body)
+
+        if len(parts) == 2:
+            if book is None:
+                return (404, {"error": "not found"})
+            return handle_item(conn, method, book_id, book, body)
+
+    return (404, {"error": "not found"})
+'''},
+                    {"name": "main.py", "content": r'''
+import sqlite3
+from db import init_db
+from api import handle_request
+
+conn = sqlite3.connect(":memory:")
+init_db(conn)
+
+print(handle_request(conn, "POST", "/books",
+                     {"title": "The Dispossessed", "author": "Le Guin",
+                      "price": 129.0, "stock": 3}))
+print(handle_request(conn, "GET", "/books"))
+print(handle_request(conn, "POST", "/books/1/purchase", {"quantity": 2}))
+print(handle_request(conn, "GET", "/books/1"))
+'''},
+                ],
+                "hints": [
+                    "Split the query string before anything else: `path, _, query = path.partition(\"?\")` leaves `path` as `/books` and `query` as `author=le+guin`, so the routing below never has to think about it.",
+                    "`row_to_book` keeps the tuple-index juggling in exactly one place. Every route that returns a book goes through it, so the field order is written down once.",
+                    "One `validate(body)` returning an error string or `None` serves both `POST` and `PUT`. Beware `isinstance(True, int)` — it is `True` in Python, so a boolean passes an integer check unless you rule it out.",
+                    "`purchase` is a sub-route: `parts == [\"books\", \"<id>\", \"purchase\"]`. Test for it before the plain `/books/<id>` block, or the two-part branch will never see it.",
+                    "The author filter is `WHERE LOWER(author) = LOWER(?)` with the value passed as a parameter. Gluing it into the string with an f-string is what makes `' OR '1'='1` a query instead of a name.",
+                ],
+                "tests": [
+                    {"name": "init_db creates the table, twice if asked", "code": r'''
+import sqlite3 as _sq
+from db import init_db
+_c = _sq.connect(":memory:")
+init_db(_c)
+init_db(_c)
+_c.execute("SELECT id, title, author, price, stock FROM books")
+'''},
+                    {"name": "POST creates; GET lists in id order", "code": r'''
+import sqlite3 as _sq
+from db import init_db
+from api import handle_request
+_c = _sq.connect(":memory:")
+init_db(_c)
+_s1, _b1 = handle_request(_c, "POST", "/books", {"title": "The Dispossessed", "author": "Le Guin", "price": 129.0, "stock": 3})
+assert _s1 == 201, f"A successful create answers 201, got {_s1}"
+assert _b1.get("id"), f"The server assigns the id, so it has to come back: {_b1!r}"
+assert _b1["stock"] == 3, f"Got {_b1!r}"
+handle_request(_c, "POST", "/books", {"title": "Kindred", "author": "Butler", "price": 149.0, "stock": 2})
+_s2, _list = handle_request(_c, "GET", "/books")
+assert _s2 == 200 and [b["title"] for b in _list] == ["The Dispossessed", "Kindred"], f"Got {_list!r}"
+'''},
+                    {"name": "POST validates every field", "code": r'''
+import sqlite3 as _sq
+from db import init_db
+from api import handle_request
+_c = _sq.connect(":memory:")
+init_db(_c)
+_bad_bodies = [
+    {},
+    {"title": "", "author": "x", "price": 1, "stock": 1},
+    {"title": "x", "author": "", "price": 1, "stock": 1},
+    {"title": "x", "author": "y", "price": -1, "stock": 1},
+    {"title": "x", "author": "y", "price": 1, "stock": "many"},
+    {"title": "x", "author": "y", "price": 1, "stock": -2},
+]
+for _bad in _bad_bodies:
+    _s, _e = handle_request(_c, "POST", "/books", _bad)
+    assert _s == 400, f"{_bad!r} should be refused with 400, got {_s}"
+    assert "error" in _e, f"Say what was wrong: {_e!r}"
+assert handle_request(_c, "GET", "/books")[1] == [], "A refused create must not insert anything"
+'''},
+                    {"name": "GET and DELETE by id, with their 404s", "code": r'''
+import sqlite3 as _sq
+from db import init_db
+from api import handle_request
+_c = _sq.connect(":memory:")
+init_db(_c)
+_b = handle_request(_c, "POST", "/books", {"title": "Dune", "author": "Herbert", "price": 99.0, "stock": 1})[1]
+_id = str(_b["id"])
+assert handle_request(_c, "GET", "/books/" + _id)[0] == 200
+assert handle_request(_c, "GET", "/books/424242")[0] == 404, "An id that is not there gives 404"
+assert handle_request(_c, "DELETE", "/books/" + _id) == (204, None), "DELETE answers (204, None)"
+assert handle_request(_c, "GET", "/books/" + _id)[0] == 404, "The deleted book should be gone"
+'''},
+                    {"name": "PUT replaces, after validating", "code": r'''
+import sqlite3 as _sq
+from db import init_db
+from api import handle_request
+_c = _sq.connect(":memory:")
+init_db(_c)
+_b = handle_request(_c, "POST", "/books", {"title": "Dune", "author": "Herbert", "price": 99.0, "stock": 1})[1]
+_s, _u = handle_request(_c, "PUT", "/books/" + str(_b["id"]), {"title": "Dune", "author": "Herbert", "price": 129.0, "stock": 4})
+assert _s == 200 and _u["price"] == 129.0 and _u["stock"] == 4, f"Got {(_s, _u)!r}"
+assert handle_request(_c, "PUT", "/books/" + str(_b["id"]), {"title": ""})[0] == 400, "PUT validates the same way POST does"
+assert handle_request(_c, "GET", "/books/" + str(_b["id"]))[1]["price"] == 129.0, "A refused PUT must leave the row alone"
+assert handle_request(_c, "PUT", "/books/424242", {"title": "x", "author": "y", "price": 1, "stock": 1})[0] == 404
+'''},
+                    {"name": "The author filter is case-insensitive and injection-proof", "code": r'''
+import sqlite3 as _sq
+from db import init_db
+from api import handle_request
+_c = _sq.connect(":memory:")
+init_db(_c)
+handle_request(_c, "POST", "/books", {"title": "The Dispossessed", "author": "Le Guin", "price": 129.0, "stock": 3})
+handle_request(_c, "POST", "/books", {"title": "The Left Hand of Darkness", "author": "Le Guin", "price": 119.0, "stock": 2})
+handle_request(_c, "POST", "/books", {"title": "Kindred", "author": "Butler", "price": 149.0, "stock": 2})
+_s, _hits = handle_request(_c, "GET", "/books?author=LE GUIN")
+assert _s == 200 and len(_hits) == 2, f"A case-insensitive filter should find two, got {_hits!r}"
+_s2, _inj = handle_request(_c, "GET", "/books?author=' OR '1'='1")
+assert _s2 == 200 and _inj == [], "Passed as a parameter, the injection string is only a strange author name — expected an empty list"
+'''},
+                    {"name": "Purchase reduces the stock, and 409s when it cannot", "code": r'''
+import sqlite3 as _sq
+from db import init_db
+from api import handle_request
+_c = _sq.connect(":memory:")
+init_db(_c)
+_b = handle_request(_c, "POST", "/books", {"title": "Dune", "author": "Herbert", "price": 99.0, "stock": 3})[1]
+_p = "/books/" + str(_b["id"]) + "/purchase"
+_s, _u = handle_request(_c, "POST", _p, {"quantity": 2})
+assert _s == 200 and _u["stock"] == 1, f"Two of three bought should leave one, got {(_s, _u)!r}"
+assert handle_request(_c, "POST", _p, {"quantity": 5})[0] == 409, "Buying more than the stock is a conflict, not a bad request"
+assert handle_request(_c, "GET", "/books/" + str(_b["id"]))[1]["stock"] == 1, "A refused purchase must not touch the stock"
+assert handle_request(_c, "POST", _p, {"quantity": 0})[0] == 400, "A quantity has to be a positive integer"
+assert handle_request(_c, "POST", "/books/424242/purchase", {"quantity": 1})[0] == 404
+'''},
+                ],
+            }],
         },
     ],
     # ---------------------------------------------------------------- capstone
