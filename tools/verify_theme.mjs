@@ -174,7 +174,7 @@ const LITERAL_EXEMPT = [
   { re: /^\.preview-(wrap|frame)$/, why: 'same iframe' },
   { re: /^\.(wb-bar|wb-panel|wb-foot|mobile-tabs|mobile-tabs button|ftab:hover|ftab\.active|ptab\.active|ptab \.badge|ptab \.badge\.bad|wbar|rt-status\.ready i|ftab\.active::before)$/, why: 'the workbench chrome sits on --editor, which is dark in both themes' },
   { re: /^\.(pq-b\.ok|pq-b\.next|dg-i)$/, why: 'ink on a saturated amber or green chip that does not flip' },
-  { re: /^\.(track-card|course-card):hover$/, why: 'a lift shadow; black at low alpha is the shadow in both themes' },
+  { re: /^\.course-card:hover$/, why: 'a lift shadow; black at low alpha is the shadow in both themes' },
   { re: /^\.btn\.run:disabled$/, why: 'the workbench run button, which sits on --editor; same list' },
   { re: /^\.(resume \.rr::before|spark i\.hi|weekchart \.d\.today i|rowlink \.ic|strip i\.now|lv-Intermediate|lv-Advanced|pcard\.warn \.dot|btn\.primary:hover|btn\.run:hover|prof-av)$/, why: 'accent tint or glow outside this cycle subsystem — see GAUNTLET_LOG cycle 5' },
 ];
@@ -416,26 +416,6 @@ const FLOOR = { text: 4.5, large: 3.0, graphic: 3.0, state: 1.1 };
       asList(m.lab).forEach((lab, li) => { if (lab) nums.push('' + (mi + 1) + (li ? '·L' + (li + 1) : '')); });
     });
   }
-  /* the foundation tracks in src/tracks.js use the other format — app.js:23 */
-  {
-    const tj = fs.readFileSync(path.join(ROOT, 'src', 'tracks.js'), 'utf8');
-    const arrayAt = (text, from) => {
-      let d = 0, j = from;
-      for (; j < text.length; j++) { if (text[j] === '[') d++; else if (text[j] === ']' && --d === 0) break; }
-      return text.slice(from, j);
-    };
-    for (const mm of tj.matchAll(/modules:\s*\[/g)) {
-      const block = arrayAt(tj, mm.index + mm[0].length - 1);
-      let mi = 0;
-      for (const lm of block.matchAll(/lessons:\s*\[/g)) {
-        const lessons = arrayAt(block, lm.index + lm[0].length - 1);
-        const n = (lessons.match(/\{\s*id:/g) || []).length;
-        for (let li = 0; li < n; li++) nums.push((mi + 1) + '.' + (li + 1));
-        mi++;
-      }
-    }
-  }
-
   const longestOf = a => a.reduce((x, y) => (y.length > x.length ? y : x), '');
   const COLUMNS = [
     { name: 'the course id column', row: '.rail-course', cell: '.rail-course .cid',

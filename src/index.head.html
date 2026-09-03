@@ -505,13 +505,6 @@ input{font-family:inherit}
 .rail-track .t-name{font-weight:600;font-size:var(--t-read);letter-spacing:-.01em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rail-track .t-pct{font-family:var(--mono);font-size:var(--t-label);color:var(--ink-4)}
 .rail-module{padding:4px 0 6px}
-/* a track nested inside a band: its lessons indent one step further than a course, and
-   its id cell carries the disclosure chevron rather than a course id. It was 9px — the
-   only expand/collapse affordance in the rail, at the smallest size in the file. */
-.rail-sub>button .cid{font-size:var(--t-label)}
-.rail-module.sub{padding:2px 0 4px}
-.rail-module.sub h4{margin-left:67px}
-.rail-module.sub .rail-lesson{padding-left:12px}
 /* was 9.5px, the smallest type in the application, on a module title — the same
    inversion the reading surface's 9.5px table headers were raised out of. */
 .rail-module h4{margin:9px 18px 5px 55px;font-family:var(--mono);font-size:var(--t-label);letter-spacing:var(--tr-caps);text-transform:uppercase;color:var(--ink-4);font-weight:500}
@@ -522,9 +515,8 @@ input{font-family:inherit}
 }
 /* 30px against an 8px right pad held 22px of glyph, which is 3.6 characters of
    JetBrains Mono at the 10px this row used to be. A lesson number is written by
-   app.js in one of two forms — "<module>·<kind><n>" for a catalogue course
-   (app.js:181), "<module>.<lesson>" for a foundation track (app.js:23) — and 596
-   of the 1990 the rail can draw are four or five characters ("1·r2", "10·r2").
+   app.js as "<module>·<kind><n>" for a catalogue course (unitLessonId/labLessonId),
+   and 596 of the 1990 the rail can draw are four or five characters ("1·r2", "10·r2").
    Because the cell is text-align:right inside overflow:hidden it does not
    ellipsise, it cuts the LEADING glyph: "10·r2" was drawn as "0·r2", the number
    of a different module. 30% of the rail showed a number belonging to another
@@ -715,19 +707,6 @@ kbd{font-family:var(--mono);font-size:var(--t-label);padding:1px 5px;border-radi
 .rowlink .tx span{font-size:var(--t-meta);color:var(--ink-4)}
 .rowlink .go{color:var(--ink-4)}
 
-/* track cards (dashboard) */
-.tracks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
-.track-card{
-  border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);padding:16px 18px;
-  display:flex;flex-direction:column;gap:0;text-align:left;color:var(--ink);
-  transition:border-color .18s,transform .18s var(--pop),box-shadow .18s;
-}
-.track-card:hover{border-color:var(--lime-30);transform:translateY(-2px);box-shadow:0 10px 30px rgba(0,0,0,.35)}
-.track-card .head{display:flex;align-items:center;justify-content:space-between}
-.track-card .t-icon{width:auto;height:auto;background:none;border:0;font-size:var(--t-body)}
-.track-card h3{margin:14px 0 0;font-size:var(--t-read);font-weight:600;letter-spacing:-.015em}
-.track-card .tag{margin:4px 0 0;font-family:var(--mono);font-size:var(--t-label);color:var(--ink-4);min-height:0}
-.track-card .foot{display:none}
 .strip{display:flex;flex-wrap:wrap;gap:3px;margin-top:12px}
 .strip i{width:8px;height:8px;border-radius:2px;background:rgba(255,255,255,.07)}
 [data-theme=light] .strip i{background:rgba(15,25,5,.10)}
@@ -1673,25 +1652,6 @@ body.ckt-expanded .frame{z-index:auto}
 .depmap .de{stroke:var(--line-2);fill:none}
 .depmap .de.hot{stroke:var(--lime-30)}
 
-/* track page */
-.track-head{display:flex;gap:18px;align-items:flex-start;margin-bottom:24px}
-.track-head .t-icon{width:52px;height:52px;flex:none;border-radius:14px;display:grid;place-items:center;font-size:24px;background:var(--surface);border:1px solid var(--line)}
-.track-head h1{margin:0 0 8px;font-size:clamp(25px,3.6vw,34px);font-weight:600;letter-spacing:-.03em;line-height:1.06}
-.track-head p{margin:0 0 14px;color:var(--ink-3);font-size:var(--t-body);max-width:58ch}
-.module{margin:0 0 22px}
-.module h2{display:flex;align-items:center;gap:10px;margin:0 0 6px;font-size:var(--t-body);font-weight:600;letter-spacing:-.01em}
-.module h2 .mnum{font-family:var(--mono);font-size:var(--t-label);font-weight:700;color:var(--accent-ink);background:var(--lime-08);border:1px solid var(--lime-30);padding:3px 7px;border-radius:5px}
-.module .desc{margin:0 0 10px;color:var(--ink-4);font-size:var(--t-ui)}
-.lesson-row{
-  display:grid;grid-template-columns:26px 40px 1fr auto auto;align-items:center;gap:12px;width:100%;
-  padding:11px 16px;margin:6px 0;text-align:left;color:var(--ink);
-  border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);transition:all .18s;
-}
-.lesson-row:hover{border-color:var(--lime-30);background:var(--lime-05)}
-.lesson-row .num{font-family:var(--mono);font-size:var(--t-label);color:var(--ink-4)}
-.lesson-row .ttl{font-size:var(--t-read);font-weight:500}
-.lesson-row .min{font-family:var(--mono);font-size:var(--t-label);color:var(--ink-4)}
-
 /* ---------- lesson: article ---------- */
 .lesson-read{max-width:780px;margin:0 auto;padding:32px 40px 70px;animation:fadeUp .45s var(--ease) both}
 .crumb{display:flex;gap:7px;align-items:center;font-family:var(--mono);font-size:var(--t-label);color:var(--ink-4);margin-bottom:12px;flex-wrap:wrap}
@@ -2223,8 +2183,6 @@ body.ckt-expanded .frame{z-index:auto}
   .workbench.mode-code .wb-panel{display:none}
   .workbench.mode-code .wb-editor{flex:1 1 auto}
   .wb-resize{display:none}
-  .lesson-row{grid-template-columns:26px 1fr auto;gap:10px}
-  .lesson-row .num,.lesson-row .min{display:none}
   .cap-cols{grid-template-columns:1fr}
 }
 @media (max-width:640px){

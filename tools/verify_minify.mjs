@@ -54,7 +54,7 @@ if (!tk.some((k) => k.t === 're')) problems.push('awkward: the regex holding a c
 say(`awkward  ${AWKWARD.length} inputs`);
 
 /* ---- 1 + 2. every script that ships ---- */
-const scripts = ['lang.js', 'tracks.js', 'engine.js', 'studio.js', 'mathinput.js', 'mcu.js', 'circuit.js', 'desk.js', 'app.js'];
+const scripts = ['lang.js', 'engine.js', 'studio.js', 'mathinput.js', 'mcu.js', 'circuit.js', 'desk.js', 'app.js'];
 let before = 0, after = 0;
 mkdirSync(TMP, { recursive: true });
 for (const f of scripts) {
@@ -62,7 +62,7 @@ for (const f of scripts) {
   const out = stripJs(src);
   before += Buffer.byteLength(src); after += Buffer.byteLength(out);
   if (significantJs(out) !== significantJs(src)) problems.push(`${f}: token stream differs after stripping`);
-  if (/\/\*[\s\S]*?\*\//.test(out.replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, '')) && f !== 'tracks.js') {
+  if (/\/\*[\s\S]*?\*\//.test(out.replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, ''))) {
     /* a block comment left outside any string: the tokenizer missed one */
     const m = out.replace(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g, '').match(/\/\*[\s\S]{0,60}/);
     problems.push(`${f}: a block comment survived: ${JSON.stringify(m && m[0])}`);

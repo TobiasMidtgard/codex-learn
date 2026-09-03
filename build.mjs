@@ -9,8 +9,6 @@
  *   src/lang.js           language model, inference, completion, highlighting
  *   src/studio.js         maths rendering, symbolic checking, sandboxes
  *   src/circuit.js        schematic editor and the MNA circuit solver
- *   src/bundle.*.txt      the "@@ key" content bundle for the foundation tracks
- *   src/tracks.js         the TRACKS array
  *   src/engine.js         utilities, highlighter, markdown, editor, runners, store
  *   src/app.js            state, routing, every view
  *   catalog/_spine.json   the degree programme table
@@ -58,33 +56,6 @@ const problems = [];
 const notes = [];
 
 const read = (p) => readFileSync(p, 'utf8');
-
-/* ---------------------------------------------------------------- bundle */
-const bundleParts = readdirSync(SRC)
-  .filter((f) => /^bundle\.\d+\.txt$/.test(f))
-  .sort((a, b) => Number(a.match(/\d+/)[0]) - Number(b.match(/\d+/)[0]));
-if (!bundleParts.length) problems.push('no src/bundle.N.txt files found');
-const bundleText = bundleParts.map((f) => read(join(SRC, f))).join('\n\n');
-
-/* A raw </script would close the host <script type="text/plain"> tag early.
-   The bundle deliberately writes them as <\/script ; parseBundle unescapes.
-   `<!--` and `<script` matter here for the same reason they matter in the app script
-   below: they flip the HTML tokenizer into an escaped state in which `</script>` stops
-   closing the tag, and the rest of the document is swallowed with nothing on screen. */
-if (/<\/script/i.test(bundleText)) {
-  problems.push('bundle contains a raw </script — it must be written as <\\/script');
-}
-if (bundleText.includes('<' + '!--')) {
-  problems.push('bundle contains a literal <!-- — it puts the HTML tokenizer into ' +
-    'script-data-escaped state, and a following <script then reaches double-escaped, ' +
-    'where </script> no longer closes the tag and the rest of the page is swallowed. ' +
-    'The bundle already writes them as <\\!-- ; write this one the same way');
-}
-/* A bare `<script` is deliberately NOT flagged. It is only dangerous after a literal
-   `<!--`, which the check above makes unreachable — and the foundation bundle teaches
-   HTML, so it contains seven of them, every one paired with an escaped <\/script>. */
-const bundleKeys = [...bundleText.matchAll(/^@@[ \t]+(\S+)[ \t]*$/gm)].map((m) => m[1]);
-notes.push(`bundle: ${bundleParts.length} parts, ${bundleKeys.length} keys`);
 
 /* ---------------------------------------------------------------- degree */
 /* Every catalog/_spine*.json describes one programme. A course is placed by
@@ -146,8 +117,8 @@ for (const file of spineFiles) {
   let bundled = 0;
 
   for (const id of order) {
-    /* The lesson keyspace is flat and shared with the foundation track ids, so a
-       duplicate here would silently overwrite a course rather than fail. */
+    /* The lesson keyspace is flat and shared across every programme, so a duplicate
+       here would silently overwrite a course rather than fail. */
     if (seenId.has(id)) {
       problems.push(`duplicate course id "${id}" in ${file} — already used by ${seenId.get(id)}`);
       continue;
@@ -350,7 +321,6 @@ if (!programs.length) notes.push('catalog: no _spine*.json — building without 
 
 /* ---------------------------------------------------------------- scripts */
 const langJs = read(join(SRC, 'lang.js'));
-const tracksJs = read(join(SRC, 'tracks.js'));
 const engineJs = read(join(SRC, 'engine.js'));
 const appJs = read(join(SRC, 'app.js'));
 /* The desk (notepad + calculator) is optional: the app guards every call to it with a
@@ -375,7 +345,7 @@ const headSrc = read(join(SRC, 'index.head.html'));
    the same tokens. */
 const shipped = {};
 let rawKb = 0, shippedKb = 0;
-for (const [name, text] of Object.entries({ langJs, tracksJs, engineJs, studioJs, mathInputJs, mcuJs, circuitJs, deskJs, appJs })) {
+for (const [name, text] of Object.entries({ langJs, engineJs, studioJs, mathInputJs, mcuJs, circuitJs, deskJs, appJs })) {
   shipped[name] = text ? stripJs(text) : '';
   rawKb += Buffer.byteLength(text, 'utf8') / 1024;
   shippedKb += Buffer.byteLength(shipped[name], 'utf8') / 1024;
@@ -408,7 +378,6 @@ const circuitLibName = `circuit.${createHash('sha256').update(circuitLib).digest
 function assemble(label, degreeLiteral, chunkLiteral, withCircuit) {
   const appScript = [
     shipped.langJs,
-    shipped.tracksJs,
     'const DEGREE_DATA = ' + degreeLiteral + ';\n',
     /* Always emitted, even empty: app.js guards it with typeof, but an undeclared
        identifier is a ReferenceError that `node --check` cannot see, and it would
@@ -457,10 +426,6 @@ function assemble(label, degreeLiteral, chunkLiteral, withCircuit) {
 
   return [
     head,
-    '',
-    '<script type="text/plain" id="bundle">',
-    bundleText,
-    '</' + 'script>',
     '',
     '<script>',
     appScript,

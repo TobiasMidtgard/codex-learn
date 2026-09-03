@@ -23,9 +23,9 @@ import { El, windowShim } from './dom_stub.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = (f) => readFileSync(join(ROOT, 'src', f), 'utf8');
 
-/* the order build.mjs concatenates them in: app.js reads TRACKS at the top and reaches
-   MathML out of studio.js the moment any prose is rendered */
-export const LOAD_ORDER = ['lang.js', 'tracks.js', 'studio.js', 'engine.js', 'app.js'];
+/* the order build.mjs concatenates them in: app.js reaches MathML out of studio.js the
+   moment any prose is rendered */
+export const LOAD_ORDER = ['lang.js', 'studio.js', 'engine.js', 'app.js'];
 
 /**
  * @param {object} opts

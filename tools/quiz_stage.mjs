@@ -48,7 +48,7 @@ export function stage() {
   const { app } = loadApp({
     exports: {
       renderQuiz: 'renderQuiz', LESSON_INDEX: 'LESSON_INDEX',
-      TRACK_LESSONS: 'TRACK_LESSONS', mdInline: 'mdInline', quizProse: 'quizProse',
+      LESSONS_OF: 'LESSONS_OF', mdInline: 'mdInline', quizProse: 'quizProse',
       seed: 'function (s) { P.seed = s; }',
       best: 'function (id) { return P.quiz[id]; }',
       forget: 'function (id) { delete P.quiz[id];' +
@@ -73,7 +73,7 @@ export function stage() {
         program: 'stage', band: 1, modules: [{ title: 'staged', lessons: [lesson] }] },
       module: { title: 'staged' }, mi: 0,
     };
-    app.TRACK_LESSONS.stage = [lesson];
+    app.LESSONS_OF.stage = [lesson];
     const root = new El('div');
     app.renderQuiz(root, lesson);
     return root;

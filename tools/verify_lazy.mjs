@@ -58,7 +58,7 @@ const say = (s) => console.log(s);
 
 /* ---- 1. the two indexes agree ---- */
 const EXPORTS = { LESSON_INDEX: 'LESSON_INDEX', COURSE_OF: 'COURSE_OF', DEGREE: 'DEGREE',
-  hydrateCourse: 'hydrateCourse', nOf: 'nOf', TRACK_LESSONS: 'TRACK_LESSONS',
+  hydrateCourse: 'hydrateCourse', nOf: 'nOf', LESSONS_OF: 'LESSONS_OF',
   loadDegreeChunks: 'loadDegreeChunks', catalogLoaded: 'catalogLoaded', MISSING_PROGRAMS: 'MISSING_PROGRAMS' };
 
 globalThis.DEGREE_DATA = { programs, courses: JSON.parse(JSON.stringify(courses)) };
@@ -110,7 +110,7 @@ for (const id of fullIds) {
   }
 }
 for (const c of courses) {
-  const a = full.TRACK_LESSONS[c.id] || [], b = lazy.TRACK_LESSONS[c.id] || [];
+  const a = full.LESSONS_OF[c.id] || [], b = lazy.LESSONS_OF[c.id] || [];
   if (a.map((l) => l.id).join(',') !== b.map((l) => l.id).join(',')) {
     problems.push(`${c.id}: the unit order differs between the two indexes`);
   }
@@ -135,7 +135,7 @@ for (const c of courses) {
   if (!lc.modules.every((m) => Array.isArray(m.concepts))) problems.push(`${c.id}: concept lists did not arrive`);
   if (!lc.capstone || !Array.isArray(lc.capstone.rubric)) problems.push(`${c.id}: the capstone brief did not arrive`);
   hydrated++;
-  for (const l of lazy.TRACK_LESSONS[c.id]) {
+  for (const l of lazy.LESSONS_OF[c.id]) {
     if (before[l.id] !== l) problems.push(`${l.id}: hydration replaced the lesson object`);
     const want = HEAVY[l.type] || [];
     const ref = full.LESSON_INDEX[l.id].lesson;

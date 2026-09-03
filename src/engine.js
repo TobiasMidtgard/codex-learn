@@ -33,22 +33,6 @@ function langOfFile(name) {
   return (m && EXT_LANG[m[1].toLowerCase()]) || 'text';
 }
 
-/* ---------- content bundle ---------- */
-let BUNDLE = {};
-function parseBundle(raw) {
-  const text = String(raw).replace(/<\\\/script/g, '<' + '/script').replace(/<\\!--/g, '<' + '!--');
-  const parts = text.split(/^@@[ \t]+(\S+)[ \t]*$/m);
-  const map = {};
-  for (let i = 1; i < parts.length; i += 2) {
-    map[parts[i]] = parts[i + 1].replace(/^\n+/, '').replace(/\s+$/, '');
-  }
-  return map;
-}
-function bundleFile(key) {
-  if (!(key in BUNDLE)) return '# missing: ' + key + '\n';
-  return BUNDLE[key] + '\n';
-}
-
 /* ---------- syntax highlighting ----------
    Colour is information, so tokens are split by role rather than by shape: a
    keyword that declares reads differently from one that branches, a name being

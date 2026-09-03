@@ -17,13 +17,10 @@ JetBrains Mono carries code, labels and every figure.
 
 **[Open it →](https://tobiasmidtgard.github.io/codex-learn/)** — nothing to install.
 
-It ships two things:
-
-1. **Five foundation tracks** — Python, Web, Backend, Data Structures & Algorithms,
-   and the Developer Toolkit. Readings, quizzes and auto-checked coding tasks.
-2. **A five-year Computer Science degree catalog** — 32 courses from first
-   principles to a capstone engineering project, each with 3–5 modules, an
-   interactive lab per module, and a portfolio-grade capstone with a marking rubric.
+It ships a **five-year Computer Science degree catalog** and a graduate **Electrical
+Engineering** M.S. — courses from first principles to a capstone engineering project,
+each with 3–5 modules, readings, quizzes and auto-checked coding tasks per module, and
+a portfolio-grade capstone with a marking rubric.
 
 Everything a student writes is checked by tests that actually execute their code.
 
@@ -94,8 +91,6 @@ src/
   index.head.html    doctype, design tokens, all styles, theme bootstrap
   lang.js            language model, type inference, completion, highlighting
   studio.js          LaTeX->MathML, symbolic answer checking, sandbox visualisers
-  bundle.1-3.txt     foundation-track content ("@@ key" sections)
-  tracks.js          the TRACKS array — foundation curriculum
   engine.js          utilities, highlighter, markdown, editor, runners, storage
   app.js             state, routing, and every view
 catalog/
@@ -345,7 +340,7 @@ Engineering** M.S. A course is placed by `(program, band)`, where a band is a *y
 in CS and a *track* in EE — one neutral word so a track is never labelled "Year 1".
 Each programme is a `catalog/_spine*.json`; the build stamps `program` and `band` onto
 every course and refuses duplicate ids, because the lesson keyspace is flat and shared
-with the foundation track ids.
+across every programme.
 
 ## The graduate teaching loop
 

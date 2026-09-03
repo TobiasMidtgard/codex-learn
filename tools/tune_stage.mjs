@@ -60,7 +60,7 @@ export function stage() {
     raf, cancelAnimationFrame: caf, ResizeObserver: RO,
     exports: {
       renderTune: 'renderTune', LESSON_INDEX: 'LESSON_INDEX',
-      TRACK_LESSONS: 'TRACK_LESSONS', Tune: 'Tune', Sandbox: 'Sandbox',
+      LESSONS_OF: 'LESSONS_OF', Tune: 'Tune', Sandbox: 'Sandbox',
       save: 'function (id, v) { P.tune = P.tune || {}; P.tune[id] = { v: v }; }',
       savedOf: 'function (id) { return P.tune && P.tune[id] ? P.tune[id].v : null; }',
       forget: 'function (id) { if (P.tune) delete P.tune[id];' +
@@ -91,7 +91,7 @@ export function stage() {
         program: 'stage', band: 1, modules: [{ title: 'staged', lessons: [lesson] }] },
       module: { title: 'staged' }, mi: 0,
     };
-    app.TRACK_LESSONS.stage = [lesson];
+    app.LESSONS_OF.stage = [lesson];
     const root = new El('div');
     app.renderTune(root, lesson);
     /* the canvas is the one element whose measured size the renderer reads; give it the

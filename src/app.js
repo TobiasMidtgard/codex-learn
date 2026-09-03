@@ -3,71 +3,15 @@
 /* ---------- app state ---------- */
 /* What each unit kind is called where a learner sees it. The type name is also a
    CSS class, so these are the words and those are the colours. */
-/* disclosure glyphs, kept out of the markup so the arrows stay consistent */
-const UNI = { right: '▸', down: '▾' };
 const UNIT_KIND = { read: 'Read', sandbox: 'Explore', quiz: 'Quiz', blanks: 'Fill in',
   match: 'Match', numeric: 'Solve', tune: 'Design', derive: 'Derive', build: 'Build',
   code: 'Lab', project: 'Capstone' };
 const XP = { read: 10, sandbox: 15, blanks: 20, match: 20, numeric: 25, quiz: 25, tune: 30, derive: 35, build: 35, code: 40, project: 120 };
 const LESSON_INDEX = {};
-const TRACK_LESSONS = {};
-const TRACK_OF = {};
+/* Every course's units, flattened into the order a learner meets them, keyed by course
+   id. Filled by buildDegreeIndex; read by courseUnits, lessonNav and moduleRun. */
+const LESSONS_OF = {};
 const teardownFns = [];
-
-(function buildTrackIndex() {
-  for (const t of TRACKS) {
-    const flat = [];
-    t.modules.forEach(function (m, mi) {
-      m.lessons.forEach(function (l, li) {
-        l.trackId = t.id;
-        l.num = (mi + 1) + '.' + (li + 1);
-        LESSON_INDEX[l.id] = { lesson: l, track: t, module: m, mi: mi };
-        flat.push(l);
-      });
-    });
-    TRACK_LESSONS[t.id] = flat;
-    TRACK_OF[t.id] = t;
-  }
-})();
-
-/* ---------- the foundation tracks sit in the year that teaches their subject ----------
-   They were a parallel structure once: their own rail section, their own progress
-   block, their own place in the dashboard. Then they became a band 0 of their own,
-   which was better but still said they were a stage before the degree started.
-
-   They are not a stage. Each is the practical half of something the degree teaches
-   anyway, so each one joins the year that formalises it: Python Foundations beside
-   Introduction to Programming, the algorithms track beside Data Structures and
-   Algorithms, the two web tracks beside Full-Stack Development. A learner meeting
-   HTTP in the backend track and again in year three meets it twice on purpose.
-
-   Modelled as ordinary courses so the planner, the rail, search and every total treat
-   them the same way as everything else — the only difference left is that opening one
-   goes to the track view, because a track's lessons are not a course's modules. */
-const TRACK_BAND = { python: 1, tools: 1, cs: 2, web: 3, backend: 3 };
-function adoptTracksInto(programId) {
-  for (const t of TRACKS) {
-    t.kind = 'track';
-    t.program = programId;
-    /* A track with no entry here would land in a band the programme does not have,
-       and vanish from the planner without erroring. */
-    t.band = TRACK_BAND[t.id];
-    if (t.band === undefined) {
-      throw new Error('track "' + t.id + '" has no year in TRACK_BAND');
-    }
-    t.title = t.name;
-    t.id = t.id;
-    t.level = t.level || 'Beginner';
-    t.credits = t.credits || 0;
-    t.hours = t.hours || Math.round(TRACK_LESSONS[t.id]
-      .reduce(function (n, l) { return n + (l.min || 10); }, 0) / 60);
-    t.summary = t.summary || t.blurb || '';
-    t.prereqs = [];
-    t.stack = t.stack || [];
-    COURSE_OF[t.id] = t;
-    DEGREE.courses.push(t);
-  }
-}
 
 /* ---------- degree catalog ---------- */
 const DEGREE = (typeof DEGREE_DATA !== 'undefined' && DEGREE_DATA) ? DEGREE_DATA : { programs: [], courses: [] };
@@ -270,8 +214,7 @@ function buildDegreeIndex(courses) {
       flat.push(lesson);
     }
 
-    TRACK_LESSONS[c.id] = flat;
-    TRACK_OF[c.id] = c;
+    LESSONS_OF[c.id] = flat;
 
     for (const p of (c.prereqs || [])) {
       (COURSE_DEPENDENTS[p] = COURSE_DEPENDENTS[p] || []).push(c.id);
@@ -280,7 +223,6 @@ function buildDegreeIndex(courses) {
 }
 /* the inlined build arrives with them already here; the split build adds to this */
 buildDegreeIndex(DEGREE.courses);
-if (PROGRAMS.length) adoptTracksInto(PROGRAMS[0].id);
 
 /* ---------- fetching the degree payloads ----------
    One request per programme, in parallel, each with its own timeout and one retry. */
@@ -311,10 +253,10 @@ async function fetchChunk(url, ms) {
   } finally { clearTimeout(timer); }
 }
 
-/* Only a fetched course counts as the catalog having arrived: the foundation tracks
-   are inlined and are already spread through the cs-degree years. */
+/* Nothing is inlined beside the catalog any more, so a single course in hand is the
+   whole of the question: has any of it arrived? */
 function catalogLoaded() {
-  return DEGREE.courses.some(function (c) { return c.kind !== 'track'; });
+  return DEGREE.courses.length > 0;
 }
 function markMissing(id) { if (!programMissing(id)) MISSING_PROGRAMS.push(id); }
 function markArrived(id) {
@@ -356,7 +298,7 @@ async function loadDegreeChunks() {
     if (!fresh.length) throw new Error('the index added no courses');
     /* Index BEFORE exposing. Every renderer enumerates DEGREE.courses, and it is
        buildDegreeIndex that stamps c.kind, the synthesised lesson ids and
-       TRACK_LESSONS — a course visible for even one frame before that is a page
+       LESSONS_OF — a course visible for even one frame before that is a page
        that breaks without throwing anything to catch. */
     buildDegreeIndex(fresh);
     for (const c of fresh) DEGREE.courses.push(c);
@@ -481,9 +423,7 @@ function coursesInBand(programId, n) {
 function coursesInProgram(programId) {
   return DEGREE.courses.filter(function (c) { return c.program === programId; });
 }
-function courseUnits(c) { return TRACK_LESSONS[c.id] || []; }
-/* A course keeps its labs in modules[].lab; a foundation track keeps them as units of
-   type 'code'. Both mean "the parts a machine checks", so ask the units, not the shape. */
+function courseUnits(c) { return LESSONS_OF[c.id] || []; }
 /* Two different quantities were being printed as one.
 
    `c.hours` is the academic workload of the subject: a 10-credit course is about 120
@@ -505,9 +445,6 @@ function guidedTime(c) {
 }
 
 function courseLabs(c) {
-  if (c && c.kind === 'track') {
-    return courseUnits(c).filter(function (l) { return l.type === 'code' || l.type === 'project'; }).length;
-  }
   /* one module can carry more than one lab now, so count labs and not modules */
   return (c && c.modules ? c.modules : []).reduce(function (n, m) {
     return n + asList(m.lab).length;
@@ -557,7 +494,6 @@ function frontRoute() {
   return { view: 'degree', program: prog };
 }
 let route = { view: 'degree', program: '' };
-const openTracks = {};
 /* keyed "&lt;programId&gt;:&lt;band&gt;" — two programmes both have a band 1, and a bare
    number would open and close them together */
 const openBands = {};
@@ -598,13 +534,6 @@ function checksPassed() {
     if (info) n += nOf(info.lesson, 'tests');
   }
   return n;
-}
-
-const TOTAL = { lessons: 0, tasks: 0, projects: 0 };
-for (const t of TRACKS) for (const m of t.modules) for (const l of m.lessons) {
-  TOTAL.lessons++;
-  if (l.type === 'code') TOTAL.tasks++;
-  if (l.type === 'project') TOTAL.projects++;
 }
 
 /* ---------- dom helpers ---------- */
@@ -763,11 +692,8 @@ function completeLesson(id) {
   saveSoon();
   return true;
 }
-function trackDone(tid) {
-  return (TRACK_LESSONS[tid] || []).reduce(function (n, l) { return n + (P.completed[l.id] ? 1 : 0); }, 0);
-}
-function firstIncomplete(tid) {
-  for (const l of (TRACK_LESSONS[tid] || [])) if (!P.completed[l.id]) return l;
+function firstIncomplete(cid) {
+  for (const l of (LESSONS_OF[cid] || [])) if (!P.completed[l.id]) return l;
   return null;
 }
 function typeChip(type) {
@@ -1073,12 +999,10 @@ function renderDegradeBanner() {
 
 function renderRail() {
   const rail = $('#rail');
-  /* The foundation tracks used to head this rail as their own unlabelled section.
-     They are Computer Science's own courses now, drawn in their own years, once. */
   let h = '';
 
   for (const pr of PROGRAMS) {
-    if (!coursesInProgram(pr.id).filter(function (c) { return c.kind !== 'track'; }).length) {
+    if (!coursesInProgram(pr.id).length) {
       /* A programme whose payload failed keeps its heading and says so. Dropping the
          section entirely reads as "not written yet", which is the opposite of true. */
       if (programMissing(pr.id)) {
@@ -1107,37 +1031,6 @@ function renderRail() {
         for (const c of list) {
           const units = courseUnits(c).length;
           const d = courseDone(c);
-          if (c.kind === 'track') {
-            /* A track keeps its lessons here rather than behind a page: they are the
-               unit of work, the same way a course's modules are. */
-            const topen = !!openTracks[c.id];
-            h += '<div class="rail-sub' + (topen ? ' open' : '') + '" data-track="' + esc(c.id) + '">' +
-              /* the same disclosure, one level down: the chevron is the whole cue */
-              '<button class="rail-course" data-toggle="' + esc(c.id) + '"' +
-                ' aria-expanded="' + (topen ? 'true' : 'false') + '">' +
-                '<span class="cid" aria-hidden="true">' + (topen ? UNI.down : UNI.right) + '</span>' +
-                '<span class="gmark ' + (units && d === units ? 'done' : (d > 0 ? 'part' : '')) + '"></span>' +
-                '<span class="ttl">' + esc(c.title) + '</span>' +
-                '<span class="lk">' + d + '/' + units + '</span>' +
-              '</button>';
-            if (topen) {
-              c.modules.forEach(function (m) {
-                h += '<div class="rail-module sub"><h4>' + esc(m.title) + '</h4>';
-                for (const l of m.lessons) {
-                  const la = route.view === 'lesson' && route.id === l.id;
-                  const lm = P.completed[l.id] ? 'done' : (la ? 'now' : '');
-                  h += '<button class="rail-lesson' + (la ? ' active' : '') + '" data-lesson="' + esc(l.id) + '">' +
-                    '<span class="num">' + l.num + '</span>' +
-                    '<span class="gmark ' + lm + '"></span>' +
-                    '<span class="ttl">' + esc(l.title) + '</span>' +
-                  '</button>';
-                }
-                h += '</div>';
-              });
-            }
-            h += '</div>';
-            continue;
-          }
           const active = route.view === 'course' && route.id === c.id;
           const mark = units && d === units ? 'done' : (d > 0 ? 'part' : (active ? 'now' : ''));
           h += '<button class="rail-course' + (active ? ' active' : '') + '" data-course="' + c.id + '">' +
@@ -1154,13 +1047,6 @@ function renderRail() {
   }
 
   rail.innerHTML = h;
-  $all('[data-toggle]', rail).forEach(function (b) {
-    b.addEventListener('click', function () {
-      const id = b.dataset.toggle;
-      openTracks[id] = !openTracks[id];
-      renderRail();
-    });
-  });
   $all('[data-band]', rail).forEach(function (b) {
     b.addEventListener('click', function () {
       const k = bandKey(b.dataset.program, +b.dataset.band);
@@ -1188,10 +1074,7 @@ function renderRail() {
   $all('[data-course]', rail).forEach(function (b) {
     b.addEventListener('click', function () {
       const land = leaveDrawer();
-      const c = COURSE_OF[b.dataset.course];
-      go(c && c.kind === 'track'
-        ? { view: 'track', track: b.dataset.course }
-        : { view: 'course', id: b.dataset.course });
+      go({ view: 'course', id: b.dataset.course });
       land();
     });
   });
@@ -1232,8 +1115,7 @@ function go(r) {
     const seq = goSeq;
     const what = needInfo ? needInfo.track : { id: 'Playground', title: 'the circuit editor' };
     const back = needInfo
-      ? { label: 'Back to the course', route: needInfo.track.kind === 'course'
-          ? { view: 'course', id: needInfo.track.id } : { view: 'track', track: needInfo.track.id } }
+      ? { label: 'Back to the course', route: { view: 'course', id: needInfo.track.id } }
       : { label: 'Back to the study plan', route: frontRoute() };
     paintWaiting(what, r);
     Promise.all(waits).then(
@@ -1246,13 +1128,11 @@ function go(r) {
     const info = LESSON_INDEX[r.id];
     if (!info) { route = frontRoute(); }
     else {
-      if (info.track.kind === 'course') openBands[bandKey(info.track.program, info.track.band)] = true;
-      else openTracks[info.track.id] = true;
+      openBands[bandKey(info.track.program, info.track.band)] = true;
       P.last = r.id;
       saveSoon();
     }
   }
-  if (r.view === 'track') openTracks[r.track] = true;
   if (r.view === 'course' && COURSE_OF[r.id]) {
     const cc = COURSE_OF[r.id];
     openBands[bandKey(cc.program, cc.band)] = true;
@@ -1261,7 +1141,7 @@ function go(r) {
 
   /* icon-rail active state */
   const section = (route.view === 'course' || route.view === 'programs') ? 'degree'
-    : (route.view === 'track' || route.view === 'lesson') ? navSectionFor(route)
+    : route.view === 'lesson' ? navSectionFor(route)
     : route.view;
   /* The class was the only "you are here" signal, so a screen reader met four
      identically-described buttons with nothing to say which one it was on. */
@@ -1298,8 +1178,7 @@ function go(r) {
   main.classList.toggle('split', isSplit);
   main.classList.toggle('bleed', route.view === 'degree');
   main.scrollTop = 0;
-  if (route.view === 'track') renderTrack(main, TRACK_OF[route.track]);
-  else if (route.view === 'programs') renderPrograms(main);
+  if (route.view === 'programs') renderPrograms(main);
   else if (route.view === 'degree') renderDegree(main, route.program);
   else if (route.view === 'course') renderCourse(main, COURSE_OF[route.id]);
   else if (route.view === 'progress') renderProgress(main);
@@ -1369,7 +1248,7 @@ function focusLesson(r) {
 /* The units of the module the learner is inside, in order. That is the run: a
    handful of questions on one idea, not the whole course. */
 function moduleRun(info) {
-  const flat = TRACK_LESSONS[info.lesson.trackId] || [];
+  const flat = LESSONS_OF[info.lesson.trackId] || [];
   return flat.filter(function (x) {
     const xi = LESSON_INDEX[x.id];
     return xi && xi.track === info.track && xi.mi === info.mi;
@@ -1414,9 +1293,7 @@ function paintRunner(info) {
   });
 
   $('#rb-x').addEventListener('click', function () {
-    go(info.track.kind === 'course'
-      ? { view: 'course', id: info.track.id }
-      : { view: 'track', track: info.track.id });
+    go({ view: 'course', id: info.track.id });
   });
 
   /* Pull the answer controls out of the article and into a bar that is always on
@@ -1444,7 +1321,7 @@ function paintRunner(info) {
 }
 
 function navSectionFor(r) {
-  if (r.view === 'degree' || r.view === 'course' || r.view === 'track') return 'degree';
+  if (r.view === 'degree' || r.view === 'course') return 'degree';
   if (r.view === 'programs') return 'programs';
   if (r.view === 'progress') return 'progress';
   if (r.view === 'play') return 'play';
@@ -1467,10 +1344,6 @@ function screenMeta(r) {
   if (r.view === 'progress') return { title: 'Progress', crumb: 'Level ' + level() + ' · ' + P.xp.toLocaleString('en-GB') + ' XP' };
   if (r.view === 'play') return { title: 'Playground', crumb: 'Scratchpad · nothing is checked' };
   if (r.view === 'profile') return { title: 'Profile', crumb: (P.name || 'Unnamed learner') + ' · Level ' + level() };
-  if (r.view === 'track') {
-    const t = TRACK_OF[r.track];
-    return { title: t ? t.name : 'Track', crumb: t ? trackDone(t.id) + ' of ' + TRACK_LESSONS[t.id].length + ' complete' : '' };
-  }
   if (r.view === 'course') {
     const c = COURSE_OF[r.id];
     const cpr = c ? programOf(c) : null;
@@ -1480,7 +1353,7 @@ function screenMeta(r) {
   if (r.view === 'lesson') {
     const info = LESSON_INDEX[r.id];
     if (!info) return { title: 'Lesson', crumb: '' };
-    return { title: info.lesson.title, crumb: (info.track.kind === 'course' ? info.track.id : info.track.name) + ' · ' + info.module.title };
+    return { title: info.lesson.title, crumb: info.track.id + ' · ' + info.module.title };
   }
   return { title: 'Codex Learn', crumb: '' };
 }
@@ -1496,7 +1369,7 @@ function searchHits(q) {
     if ((c.id + ' ' + c.title + ' ' + (c.summary || '')).toLowerCase().indexOf(q) !== -1) {
       const pr = programOf(c);
       courses.push({ course: c.id, title: c.id + ' · ' + c.title, type: 'course',
-        sub: c.kind === 'track' ? 'Foundation track' : (pr ? (pr.short || pr.name) + ' · ' + bandLabel(pr, c.band) : '') });
+        sub: pr ? (pr.short || pr.name) + ' · ' + bandLabel(pr, c.band) : '' });
     }
   }
   for (const id in LESSON_INDEX) {
@@ -1510,10 +1383,8 @@ function searchHits(q) {
   return courses.concat(byTitle, byPlace);
 }
 function openHit(h) {
-  if (h.course) {
-    const c = COURSE_OF[h.course];
-    go(c && c.kind === 'track' ? { view: 'track', track: h.course } : { view: 'course', id: h.course });
-  } else go({ view: 'lesson', id: h.id });
+  if (h.course) go({ view: 'course', id: h.course });
+  else go({ view: 'lesson', id: h.id });
 }
 /* The results list under the search box: painted on every keystroke, walked with
    the arrow keys, opened with Enter or a click. The input is a combobox for a
@@ -1599,21 +1470,17 @@ function runSearch(q) {
   openHit(top);
 }
 function lessonNav(l) {
-  const flat = TRACK_LESSONS[l.trackId];
+  const flat = LESSONS_OF[l.trackId];
   const i = flat.indexOf(l);
   return { prev: i > 0 ? flat[i - 1] : null, next: i < flat.length - 1 ? flat[i + 1] : null };
 }
 function crumbHtml(l) {
   const info = LESSON_INDEX[l.id];
-  if (info.track.kind === 'course') {
-    const lpr = programOf(info.track);
-    return '<div class="crumb"><button data-go="home">Study plan</button><span>›</span>' +
-      '<button data-go="degree">' + esc(lpr ? (lpr.short || lpr.name) : 'Programmes') + '</button><span>›</span>' +
-      '<button data-go="course">' + esc(info.track.id) + '</button><span>›</span>' +
-      '<span>' + esc(info.module.title) + '</span></div>';
-  }
+  const lpr = programOf(info.track);
   return '<div class="crumb"><button data-go="home">Study plan</button><span>›</span>' +
-    '<button data-go="track">' + esc(info.track.name) + '</button><span>›</span><span>' + esc(info.module.title) + '</span></div>';
+    '<button data-go="degree">' + esc(lpr ? (lpr.short || lpr.name) : 'Programmes') + '</button><span>›</span>' +
+    '<button data-go="course">' + esc(info.track.id) + '</button><span>›</span>' +
+    '<span>' + esc(info.module.title) + '</span></div>';
 }
 function wireCrumb(root, l) {
   const info = LESSON_INDEX[l.id];
@@ -1622,8 +1489,7 @@ function wireCrumb(root, l) {
       const k = b.dataset.go;
       if (k === 'home') go(frontRoute());
       else if (k === 'degree') go({ view: 'degree', program: info.track.program });
-      else if (k === 'course') go({ view: 'course', id: info.track.id });
-      else go({ view: 'track', track: info.track.id });
+      else go({ view: 'course', id: info.track.id });
     });
   });
 }
@@ -1663,7 +1529,7 @@ function typeChipText(type) {
 /* ---------- progress ---------- */
 function renderProgress(main) {
   const dt = degreeTotals();
-  let allUnits = TOTAL.lessons + dt.units;
+  let allUnits = dt.units;
   let doneUnits = 0;
   for (const id in P.completed) if (LESSON_INDEX[id]) doneUnits++;
   const pct = allUnits ? Math.round(doneUnits / allUnits * 100) : 0;
@@ -1681,9 +1547,7 @@ function renderProgress(main) {
     }
   }
 
-  /* One row per band of each programme. The foundation tracks used to get their own
-     five rows on top of this; they are Computer Science's own courses now, so those rows
-     were the same units counted twice. */
+  /* One row per band of each programme. */
   const mastery = PROGRAMS.flatMap(function (pr) { return pr.bands.map(function (y) {
     const list = coursesInBand(pr.id, y.n);
     const u = list.reduce(function (s, c) { return s + courseUnits(c).length; }, 0);
@@ -2148,7 +2012,7 @@ function wireAccountCard(main) {
 function renderProfile(main) {
   const note = storageNote();
   const dt = degreeTotals();
-  const allUnits = TOTAL.lessons + dt.units;
+  const allUnits = dt.units;
   let doneUnits = 0;
   for (const id in P.completed) if (LESSON_INDEX[id]) doneUnits++;
 
@@ -2325,42 +2189,6 @@ function badgeSet() {
   });
 }
 
-/* ---------- track ---------- */
-function renderTrack(main, t) {
-  const next = firstIncomplete(t.id);
-  let modules = '';
-  t.modules.forEach(function (m, mi) {
-    let rows = '';
-    for (const l of m.lessons) {
-      const mark = P.completed[l.id] ? 'done' : (next && next.id === l.id ? 'now' : '');
-      rows += '<button class="lesson-row" data-lesson="' + l.id + '">' +
-        '<span class="gmark ' + mark + '"></span>' +
-        '<span class="num">' + l.num + '</span>' +
-        '<span class="ttl">' + esc(l.title) + '</span>' +
-        typeChip(l.type) +
-        '<span class="min">~' + l.min + 'm</span>' +
-      '</button>';
-    }
-    modules += '<div class="module"><h2><span class="mnum">M' + (mi + 1) + '</span>' + esc(m.title) + '</h2>' +
-      '<p class="desc">' + esc(m.desc) + '</p>' + rows + '</div>';
-  });
-  main.innerHTML = '<div class="page">' +
-    '<div class="crumb"><button data-go="home">Study plan</button><span>›</span><span>' + esc(t.name) + '</span></div>' +
-    '<div class="track-head">' +
-      '<span class="t-icon" style="--tt:' + t.tint + '">' + t.icon + '</span>' +
-      '<div><h1>' + esc(t.name) + '</h1><p>' + esc(t.tagline) + '</p>' +
-      '<button class="btn primary" id="track-start">' + (next ? (trackDone(t.id) ? 'Continue: ' + esc(next.title) : 'Start the track') : 'Track complete — revisit') + ' →</button></div>' +
-    '</div>' +
-    '<div class="outcomes"><h3>You will be able to</h3><ul>' + t.outcomes.map(function (o) { return '<li>' + esc(o) + '</li>'; }).join('') + '</ul></div>' +
-    modules +
-  '</div>';
-  $('[data-go="home"]', main).addEventListener('click', function () { go(frontRoute()); });
-  $('#track-start').addEventListener('click', function () { go({ view: 'lesson', id: (next || TRACK_LESSONS[t.id][0]).id }); });
-  $all('.lesson-row', main).forEach(function (b) {
-    b.addEventListener('click', function () { go({ view: 'lesson', id: b.dataset.lesson }); });
-  });
-}
-
 /* ---------- degree: programme overview ---------- */
 const degFilters = {};
 function degFilterFor(programId) {
@@ -2519,8 +2347,8 @@ function renderDegree(main, programId) {
        not arrive over the network. */
     main.innerHTML = fetchesCatalog()
       ? '<div class="page"><h1>The catalog did not load</h1><p>This build fetches the ' +
-        'course catalog, and none of it arrived. Check the connection and try again \u2014 ' +
-        'the foundation tracks in the panel on the left do not need it.</p></div>'
+        'course catalog, and none of it arrived. Check the connection and use ' +
+        '<b>Try again</b> in the bar at the top.</p></div>'
       : '<div class="page"><h1>No catalog loaded</h1><p>The degree catalog was not bundled into this build.</p></div>';
     return;
   }
@@ -2588,9 +2416,7 @@ function renderDegree(main, programId) {
         '<span title="Guided work in this course. The subject itself is '
           + (c.hours || 0) + ' h of study.">◷ ' + guidedTime(c) + '</span>' +
         '<span class="dot">\u00b7</span>' +
-        '<span>' + (c.kind === 'track'
-          ? units + ' unit' + (units === 1 ? '' : 's')
-          : (c.credits || 0) + ' credits') + '</span>' +
+        '<span>' + (c.credits || 0) + ' credits</span>' +
       '</div>' +
       segBar(done, units, 12) +
       '<div class="sj-state ' + cls + '"><i></i>' + state +
@@ -2734,13 +2560,10 @@ function renderDegree(main, programId) {
     b.addEventListener('click', function () {
       const c = COURSE_OF[b.dataset.subj];
       if (c && c.band === st.band && c.program === prog.id) { st.sel = c.id; renderDegree(main, prog.id); }
-      else if (c) go(c.kind === 'track' ? { view: 'track', track: c.id } : { view: 'course', id: c.id });
+      else if (c) go({ view: 'course', id: c.id });
     });
   });
-  const openWhere = function (id) {
-    const c = COURSE_OF[id];
-    return c && c.kind === 'track' ? { view: 'track', track: id } : { view: 'course', id: id };
-  };
+  const openWhere = function (id) { return { view: 'course', id: id }; };
   const openBtn = $('[data-open]', main);
   if (openBtn) openBtn.addEventListener('click', function () { go(openWhere(openBtn.dataset.open)); });
   const prevBtn = $('[data-preview]', main);
@@ -3203,9 +3026,9 @@ function renderQuiz(main, l) {
 }
 
 /* ---------- code / project ---------- */
-/* files may carry inline `content` (degree labs) or a bundle `key` (track lessons) */
-function fileText(f) { return (typeof f.content === 'string') ? f.content : bundleFile(f.key); }
-function lessonMd(l) { return (typeof l.mdText === 'string') ? l.mdText : (BUNDLE[l.md] || ''); }
+/* a lab's files carry their starter text inline */
+function fileText(f) { return (typeof f.content === 'string') ? f.content : ''; }
+function lessonMd(l) { return (typeof l.mdText === 'string') ? l.mdText : ''; }
 function starterFiles(l) {
   return l.files.map(function (f) {
     return { name: f.name, content: fileText(f), ro: !!f.ro };
@@ -5251,8 +5074,6 @@ function renderPlayground(main) {
 
 /* ---------- boot ---------- */
 async function boot() {
-  const bundleEl = document.getElementById('bundle');
-  BUNDLE = parseBundle(bundleEl ? bundleEl.textContent : '');
   const saved = await Store.load();
   /* Store.load already refuses anything that will not parse. What it cannot refuse is a
      document that parses and is the wrong shape — a half-written entry, a hand-edited
@@ -5280,8 +5101,7 @@ async function boot() {
   renderDegradeBanner();
   if (fetchesCatalog() && !catalogLoaded()) {
     /* Something on screen while the payloads are in flight. renderShell has already
-       painted the chrome and the foundation rail; this fills the one panel that has
-       nothing to show yet. */
+       painted the chrome; this fills the one panel that has nothing to show yet. */
     const m = $('#main');
     if (m) {
       m.innerHTML = '<div class="boot-wait"><div>Loading the course catalog\u2026</div>' +
@@ -5310,11 +5130,9 @@ async function boot() {
       syncState.error = String((e && e.message) || e);
     }
   }
-  openTracks.python = true;
   if (P.last && LESSON_INDEX[P.last]) {
     const info = LESSON_INDEX[P.last];
-    if (info.track.kind === 'course') openBands[bandKey(info.track.program, info.track.band)] = true;
-    else openTracks[info.track.id] = true;
+    openBands[bandKey(info.track.program, info.track.band)] = true;
   }
   go(frontRoute());
   setTimeout(checkForNewBuild, 2000);
@@ -5342,5 +5160,5 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined' && !(typeof
   else start();
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseBundle: parseBundle, renderMd: renderMd, Highlight: Highlight, dedent: dedent, mdInline: mdInline, TRACKS: TRACKS, LESSON_INDEX: LESSON_INDEX, DEGREE: DEGREE };
+  module.exports = { renderMd: renderMd, Highlight: Highlight, dedent: dedent, mdInline: mdInline, LESSON_INDEX: LESSON_INDEX, DEGREE: DEGREE };
 }

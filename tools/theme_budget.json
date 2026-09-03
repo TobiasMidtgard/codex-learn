@@ -195,7 +195,7 @@
    {"px":21,"why":".q-prompt — the question itself, the one line every graded unit is built around; and .article h2"},
    {"px":22,"why":".ring b — the percentage inside the 110px degree ring"},
    {"px":23,"why":".deg-stats .stat b and the task pane's lesson title"},
-   {"px":24,"why":".track-head .t-icon and .prof-av are emoji and avatar boxes, not text"},
+   {"px":24,"why":".prof-av is an avatar box, not text"},
    {"px":25,"why":".pd-title, and .q-prompt promoted in focus mode"},
    {"px":26,"why":".resume h3 — the card that names where the learner left off"},
    {"px":27,"why":".stat .val b, the dashboard's own numbers; and the hero h1 at phone width"},
