@@ -60,6 +60,222 @@ COURSE = {
                 "Fresnel reflection at normal incidence — 3.5 per cent per bare silica–air face, which is a real term in a real budget.",
                 "Why total internal reflection is lossless in magnitude but not in phase, and why that phase is the whole story in module 2.",
             ],
+            "read": [
+                {
+                    "title": "A fifty-millimetre disc on a card, and the meter facing the other way",
+                    "minutes": 16,
+                    "body": r'''
+A metre of step-index multimode fibre lies on the bench with both ends cleaved square.
+Core index 1.48, cladding 1.46. The source is launched into it deliberately badly —
+overfilled, so that every angle the fibre will take is present at the input. A white
+card stands 100.0 mm from the far end, normal to the axis.
+
+On the card is a disc of light 50.0 mm across, and its edge is sharp. Slide the card out
+to 200 mm and the disc is 100 mm across; the edge stays sharp. The fibre is not smearing
+light into a haze. It is pouring it into a cone with a definite half-angle, and outside
+that angle there is nothing.
+
+Turn the experiment round and hold a power meter against the input face. Of 1.000 mW
+arriving at the cleaved end, 0.9650 mW goes in and 0.0350 mW comes straight back out — a
+return loss of 14.56 dB from a flat piece of glass with nothing on it and nothing wrong
+with it.
+
+The width of that cone and the size of that reflection are the two numbers a fibre data
+sheet is quoting when it prints an NA and an end-face loss. Both come out of one
+inequality on an angle.
+
+## Reading the cone backwards
+
+Half the disc is 25.0 mm at a range of 100.0 mm, so the half-angle in air is
+$\arctan(0.2500) = 14.03°$. That much is a triangle. The question is why the fibre has
+an edge to its cone at all, and what fixes where it falls.
+
+Follow one ray in. It crosses the flat end face at $\theta_a$ from the axis and refracts
+to $\theta_r$ inside the core, so $n_0\sin\theta_a = n_1\sin\theta_r$. It then runs down
+the core and strikes the core–cladding wall — and it strikes it at $90° - \theta_r$ from
+*that* wall's normal, because the wall is parallel to the axis while the end face is
+perpendicular to it. That change of reference, from the axis to the wall's normal, is
+the whole of the geometry here, and it is where a cosine goes missing if one is going to.
+
+At the wall, Snell again: $n_1\sin(90° - \theta_r) = n_2\sin\theta_t$. As $\theta_r$
+grows the left side shrinks and so does $\theta_t$; run it the other way and there is an
+angle at which $\theta_t$ reaches $90°$ and the refracted ray lies flat along the
+interface. Past it the equation has no real solution, the transmitted wave stops
+carrying power away, and the reflection is total. That is the critical angle,
+$\sin\theta_c = n_2/n_1$, and for 1.48 against 1.46 it is 1.406211640313002 rad, or
+80.570° — measured from the normal, so a ray meeting the wall at 80.6° to its normal is
+running only 9.4° off the fibre axis.
+
+A ray survives when $90° - \theta_r \ge \theta_c$, which is $\sin\theta_r \le
+\cos\theta_c$. Push that back out through the end face:
+
+$$n_0\sin\theta_a \;\le\; n_1\cos\theta_c \;=\; n_1\sqrt{1 - \frac{n_2^2}{n_1^2}}
+\;=\; \sqrt{n_1^2 - n_2^2}$$
+
+The right-hand side contains no $n_0$ and no angle. It is a property of the fibre alone,
+it is what $\mathrm{NA}$ names, and what it bounds is $\sin\theta_a$ rather than
+$\theta_a$. That is why a data sheet quotes a number and not an angle: the angle depends
+on what you launch through, and the number does not.
+
+```python
+import math
+
+n0, n1, n2 = 1.0, 1.48, 1.46          # air, core, cladding
+
+na = math.sqrt(n1 * n1 - n2 * n2)
+theta_c = math.asin(n2 / n1)
+theta_a = math.asin(na / n0)
+
+print(f"NA                {na:.16f}")
+print(f"critical angle    {theta_c:.15f} rad = {math.degrees(theta_c):.4f} deg")
+print(f"acceptance cone   {theta_a:.10f} rad = {math.degrees(theta_a):.4f} deg")
+print(f"disc 100.0 mm out {200.0 * math.tan(theta_a):.4f} mm across")
+
+r = ((n2 - n0) / (n2 + n0)) ** 2      # the facet is cladding-grade silica against air
+print(f"facet reflects    {100 * r:.4f} per cent")
+print(f"return loss       {-10 * math.log10(r):.2f} dB")
+print(f"one facet costs   {-10 * math.log10(1 - r):.5f} dB")
+print(f"launched in gel   {math.degrees(math.asin(na / 1.45)):.4f} deg")
+```
+
+The disc comes to 49.9894 mm, which on a card held by hand is the 50.0 mm the bench
+showed. The acceptance half-angle is 14.0334°. And the same fibre entered through
+index-matching gel at $n_0 = 1.45$ instead of air accepts only 9.6269° — the NA did not
+move, the cone did, because what was fixed was the product $n_0\sin\theta_a$.
+
+## The mistake: subtracting the indices
+
+$\mathrm{NA} = n_1 - n_2$ is the most common wrong formula in this subject, and on the
+fibre above it is wrong by a factor of twelve.
+
+It is tempting for three separate reasons, which is why naming it once does not
+inoculate anyone. The quantity fabrication actually controls *is* a difference:
+$\Delta = (n_1 - n_2)/n_1$ is what a preform is specified to and what a data sheet
+prints. The difference is genuinely inside the NA, since
+$n_1^2 - n_2^2 = (n_1 - n_2)(n_1 + n_2)$ — it is in there, under a root and multiplied
+by roughly $2n_1$. And both expressions go to zero together when the guiding stops, so
+the one check that costs nothing to run is the one check that passes.
+
+The card settles it.
+
+```python
+import math
+
+n1, n2 = 1.48, 1.46
+
+for name, value in (("sqrt(n1^2 - n2^2)", math.sqrt(n1 * n1 - n2 * n2)),
+                    ("n1 - n2", n1 - n2),
+                    ("n1*sqrt(2*Delta)", n1 * math.sqrt(2 * (n1 - n2) / n1))):
+    half = math.asin(value)
+    print(f"{name:>18}:  NA = {value:.7f}   cone {math.degrees(half):6.3f} deg"
+          f"   disc {200 * math.tan(half):7.3f} mm")
+
+print(f"the two NAs differ by a factor of "
+      f"{math.sqrt(n1 * n1 - n2 * n2) / (n1 - n2):.5f}")
+```
+
+An NA of 0.0200 predicts a disc 4.001 mm across. There is a disc 50 mm across on the
+card. Nothing about the factor 12.12436 is subtle, and no amount of care further down
+the budget survives it.
+
+The third line is there for a different reason. The weakly-guiding form
+$\mathrm{NA} \approx n_1\sqrt{2\Delta}$, which the derivation *From Snell's law to the
+numerical aperture* reaches at its third step, gives 0.2433105 against the exact
+0.2424871 — high by 0.34 per cent, or 0.18 mm on a 50 mm disc, which is less than the
+width of the pencil line you would draw round it. That is what the approximation costs
+at $\Delta = 1.35$ per cent. The approximation earns its place; the subtraction does not.
+
+## The meter, and why an index step is a load
+
+The 3.5 per cent has nothing to do with guiding. It happens at the flat face, at normal
+incidence, before the angle argument has started.
+
+EMAG520 spent a course on what a mismatched load does, and a dielectric boundary is one.
+The wave impedance of a medium is $\eta = \eta_0/n$, so silica against air presents a
+normalised load of 1.46 read from the glass side, and
+
+$$\Gamma = \frac{n_2 - n_0}{n_2 + n_0} = \frac{0.46}{2.46} = 0.186992,
+\qquad R = |\Gamma|^2 = 0.0349660$$
+
+is the entire derivation. The sandbox *An index step is a mismatched load* opens on a
+load of 73 Ω, which is $1.46 \times 50\ \Omega$, and reports $|\Gamma| = 0.187$ with
+14.6 dB of return loss for precisely this reason. Drag its load resistance down to 50 Ω
+and the dot collapses onto the centre of the chart: that is index-matching gel, and that
+is the whole of why the gel exists.
+
+In decibels the face costs $-10\log_{10}(1 - R) = 0.15457$ dB on the way in, and the
+same again on the way out, because $R$ is symmetric in the two indices. Module 4 needs
+the pair together and calls it 0.30915 dB.
+
+The lab *The acceptance cone and the end face* asks for these as five one-line
+functions, and its tests pin the critical angle to 1.406211640313002 and the NA to
+0.2424871130596432 — the digits printed above, because it is the same calculation read
+twice. Its fifth function, `single_mode_half_width`, is borrowed from the next module,
+and the reason it has to be borrowed is the last section here.
+
+## Where the ray picture stops
+
+**It has no wavelength in it.** Every formula above is built from indices and angles.
+None of them mentions $\lambda$. So the ray picture cannot say how many modes the fibre
+carries or whether it is single-mode, because those answers depend on wavelength and
+this model has no wavelength to depend on. The lab's bound
+$a \le \lambda_0/(4\,\mathrm{NA})$ — 1.598 µm at 1550 nm for this fibre — has a
+wavelength in its numerator and could not have come from anything on this page. Module 2
+pays for it by discarding the rays and solving the wave equation instead.
+
+**Total internal reflection is not a hard mirror.** Beyond $\theta_c$ the reflection is
+total in magnitude, and the argument above stops at magnitude. It is not total in phase:
+the wave returns with a lag that depends on the angle, and there is a real field in the
+cladding, decaying with distance, carrying no net power away. A ray can represent
+neither, and between them they are the whole content of the next module — the phase
+becomes the eigenvalue equation, and the evanescent tail is why a mode has an effective
+index rather than a bounce angle.
+
+**Normal incidence is a special case.** The 3.5 per cent is for light arriving square
+on. Off normal, the two polarisations part company.
+
+```python
+import math
+
+
+def fresnel(ni, nt, theta_i):
+    """Power reflectance at one interface, for each polarisation."""
+    theta_t = math.asin(ni * math.sin(theta_i) / nt)
+    ci, ct = math.cos(theta_i), math.cos(theta_t)
+    rs = (ni * ci - nt * ct) / (ni * ci + nt * ct)
+    rp = (nt * ci - ni * ct) / (nt * ci + ni * ct)
+    return rs * rs, rp * rp
+
+
+for deg in (0.0, 14.0334, 45.0, 80.0):
+    rs, rp = fresnel(1.0, 1.46, math.radians(deg))
+    print(f"{deg:7.4f} deg into silica:  s {100 * rs:6.3f} %   p {100 * rp:6.3f} %"
+          f"   mean {100 * (rs + rp) / 2:6.3f} %")
+```
+
+At the edge of the acceptance cone the two polarisations differ by 0.59 percentage
+points and their mean is 3.502 per cent, which rounds to the same 3.5 the normal
+calculation gave — so the single number in the budget survives out to 14°. At 80° it
+does not survive at all: the mean is 38.043 per cent and a polished face is a mirror.
+That is also the mechanism an angled-polish connector uses. Tilting the face by 8°
+does not reduce the reflection; it aims it outside the acceptance cone, so the reflected
+power leaves the fibre instead of travelling back down it to the laser.
+
+**A step index is an idealisation.** Graded-index fibre has no single critical angle
+because it has no single boundary. Rays follow curved paths and turn round where the
+local index falls to meet their own invariant, and the NA becomes a local quantity —
+largest on the axis, zero at the cladding. A graded fibre quoting one NA is quoting the
+on-axis value.
+
+**A short fibre measures wider than it is.** The disc on the card was measured after a
+metre. Measure it after 100 mm and the disc is larger, because light launched outside
+the acceptance cone has refracted into the cladding and is still travelling there,
+unguided but not yet gone. This is why a standards-body loss measurement specifies a
+launch condition and a mode stripper, and why two laboratories measuring the same fibre
+will disagree if one of them does not.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "An index step is a mismatched load",
                 "visualiser": "smith",
@@ -391,6 +607,466 @@ assert single_mode_half_width(1.31e-6, 1.48, 1.46) < _a, \
                 "The normalised guide index $b = (w/V)^2$, and recovering $n_e$ from it.",
                 "Why the circular step-index fibre has the same structure with cutoff at $V = 2.405$, the first zero of $J_0$.",
             ],
+            "read": [
+                {
+                    "title": "Two dips in a prism coupler, and an equation with no formula",
+                    "minutes": 17,
+                    "body": r'''
+A rutile prism is clamped onto a slab waveguide on the stage of a prism coupler. The
+slab is a 4.069 µm film of doped silica at $n_1 = 1.48$, buried on both sides in
+cladding at $n_2 = 1.46$, so the structure is symmetric. The instrument sweeps the angle
+at which a 1550 nm beam enters the prism and watches the power that comes back out.
+
+At almost every angle, all of it comes back. At two angles — two, and no others — the
+reflected power collapses into a narrow dip, because at those angles the field leaking
+across the air gap under the prism travels along the surface at the same speed as
+something the slab can carry, and the light goes in. Convert the two angles into axial
+phase indices and the instrument reads
+
+```text
+n_e = 1.474723        and        n_e = 1.462048
+```
+
+Two dips. Both between the cladding index and the core index, neither equal to either.
+Nothing in module 1 predicts that. A ray has a bounce angle, bounce angles form a
+continuum, and a continuum would have smeared the dips into a band from $\theta_c$ to
+grazing. The instrument shows two lines.
+
+This module is about where the discreteness comes from, and about why the equation that
+produces those two numbers has no closed-form solution at all.
+
+## The wall is not a mirror, and that is the whole difference
+
+EMAG510 solved a guide with conducting walls, where the tangential field had to vanish
+at the metal, $k_x$ was forced to $m\pi/a$, and every cutoff was a one-line formula.
+None of that survives here: the wall is a dielectric and the field does not vanish at it.
+
+Write the mode as $e^{-j\beta z}$ with $\beta = k_0n_e$. Across the guide the field
+oscillates with transverse wavenumber $\kappa = k_0\sqrt{n_1^2 - n_e^2}$, and beyond the
+wall the transverse wavenumber is $k_{x2} = k_0\sqrt{n_2^2 - n_e^2}$. For a guided mode
+$n_e > n_2$, so that second root is imaginary: $k_{x2} = j\gamma$ with $\gamma$ real,
+and the field outside is $e^{-\gamma|x|}$ — decaying with distance, carrying no power
+away, and very much not zero at the wall.
+
+Reflection at a step in transverse wavenumber has the same form for TE as reflection at
+a step in impedance, which EMAG520 worked to death:
+
+$$\Gamma = \frac{\kappa - k_{x2}}{\kappa + k_{x2}} = \frac{\kappa - j\gamma}{\kappa + j\gamma}$$
+
+Numerator and denominator are complex conjugates of one another, so $|\Gamma| = 1$
+exactly — for every mode, at every angle past critical. Total internal reflection, in
+this language, is the statement that the load has gone purely reactive. That is the rim
+of the Smith chart, and it is where the sandbox *A mode is a round trip that closes*
+opens: $R$ on its floor, $X$ at 120 Ω, $|\Gamma| = 0.988$, with the missing two per cent
+being the 2 Ω the slider refuses to give up.
+
+What survives a reflection of unit magnitude is the phase, and here it is
+$\arg\Gamma = -2\arctan(\gamma/\kappa)$.
+
+```python
+import cmath
+import math
+
+n1, n2, lam0 = 1.48, 1.46, 1.55e-6
+k0 = 2.0 * math.pi / lam0
+
+# one guided mode of the finished slab, taken on trust for a moment
+n_e = 1.474723299977725
+kappa = k0 * math.sqrt(n1 * n1 - n_e * n_e)
+gamma = k0 * math.sqrt(n_e * n_e - n2 * n2)
+
+refl = (kappa - 1j * gamma) / (kappa + 1j * gamma)
+print(f"kappa = {kappa:.6e} 1/m,  gamma = {gamma:.6e} 1/m")
+print(f"|Gamma| at the wall  = {abs(refl):.15f}")
+print(f"phase of Gamma       = {cmath.phase(refl):.10f} rad")
+print(f"-2*arctan(gamma/kappa) = {-2.0 * math.atan(gamma / kappa):.10f} rad")
+print(f"decay length 1/gamma = {1e6 / gamma:.4f} um")
+```
+
+The magnitude is 1 to fifteen decimals and the phase is $-2.0597330586$ rad, or $-118°$.
+The cladding field falls to $1/e$ in 1.1868 µm, over half the core half-width — so a
+substantial part of this mode is not in the core at all.
+
+## A mode is a round trip that closes
+
+Now put the phase to work. Start a wave at one wall travelling across, let it reach the
+other wall, reflect, come back, and reflect again. It has covered $4a$ of transverse
+path and picked up two reflections. If the field is to reproduce itself — which is what
+"a mode" means — the total has to be a whole number of turns:
+
+$$4\kappa a - 4\arctan\frac{\gamma}{\kappa} = 2m\pi$$
+
+Write $u = \kappa a$ and $w = \gamma a$, divide by two, and rearrange the arctangent:
+
+$$u - \arctan\frac{w}{u} = \frac{m\pi}{2}
+\qquad\Longrightarrow\qquad
+u\tan\!\left(u - \frac{m\pi}{2}\right) = w$$
+
+That is the symmetric slab eigenvalue equation, and everything about it is now
+explained. The integer $m$ is there because a whole number of turns is a whole number.
+The $\arctan$ is there because the wall is glass rather than metal; set $\gamma \to
+\infty$, which is what a perfect conductor would be, and the arctangent goes to $\pi/2$
+and the equation collapses back to EMAG510's. And the reason it cannot be solved for $u$
+is that $u$ appears both inside a tangent and outside it, which no rearrangement fixes.
+
+The sandbox makes the round trip visible. Take its line-length slider from 0 to
+0.5 $\lambda$ and the dot completes exactly one circuit of the chart: half a wavelength
+of line is $360°$ of *round-trip* phase, because the wave crosses it twice. A mode is a
+transverse angle at which that circuit closes on itself.
+
+One equation is not enough, because $u$ and $w$ are both unknown. The second comes from
+adding their definitions, which the derivation *Normalised frequency and the single-mode
+condition* does in one step: $\kappa^2 + \gamma^2 = k_0^2(n_1^2 - n_2^2)$, so
+
+$$u^2 + w^2 = V^2, \qquad V = k_0a\,\mathrm{NA} = \frac{2\pi a}{\lambda_0}\sqrt{n_1^2 - n_2^2}$$
+
+A circle of radius $V$, and a family of tangent branches spaced $\pi/2$ apart along $u$.
+The modes are the intersections, and the count follows from the spacing alone:
+$\lfloor 2V/\pi\rfloor + 1$. The exercise *Only some angles survive the round trip* runs
+the same argument in the full-width convention, where the circle has radius $V/2$;
+mixing the two changes a mode count by exactly a factor of two.
+
+## The two dips
+
+Bisection is enough, because the bracketing does the hard part. On the interval
+$(m\pi/2,\ \min((m{+}1)\pi/2,\ V))$ the tangent runs from zero up to its pole, so the
+residual $\sqrt{V^2 - u^2} - u\tan(u - m\pi/2)$ starts positive and ends negative, and
+there is exactly one root between.
+
+```python
+import math
+
+n1, n2, lam0 = 1.48, 1.46, 1.55e-6
+na = math.sqrt(n1 * n1 - n2 * n2)
+
+
+def v_number(a):
+    return 2.0 * math.pi * a * na / lam0
+
+
+def mode_count(v):
+    return int(2.0 * v / math.pi) + 1
+
+
+def residual(u, v, m):
+    return math.sqrt(max(v * v - u * u, 0.0)) - u * math.tan(u - m * math.pi / 2.0)
+
+
+def solve_u(v, m):
+    lo = m * math.pi / 2.0 + 1e-12
+    hi = min((m + 1) * math.pi / 2.0, v) - 1e-12
+    f_lo = residual(lo, v, m)
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        f_mid = residual(mid, v, m)
+        if (f_lo > 0.0) == (f_mid > 0.0):
+            lo, f_lo = mid, f_mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+for a in (2.034666161675658e-6, 2.000e-6):
+    v = v_number(a)
+    print(f"half-width {a * 1e6:.6f} um -> V = {v:.15f}, {mode_count(v)} mode(s)")
+    for m in range(mode_count(v)):
+        u = solve_u(v, m)
+        w = math.sqrt(v * v - u * u)
+        b = (w / v) ** 2
+        ne = math.sqrt(n2 * n2 + b * (n1 * n1 - n2 * n2))
+        print(f"   m = {m}   u = {u:.12f}   w = {w:.6f}   b = {b:.6f}"
+              f"   n_e = {ne:.12f}")
+```
+
+The first slab is the one under the prism. $V$ is 2.000000000000000, there are two
+roots, and the effective indices are 1.474723299978 and 1.462048012826 — the two dips
+the coupler found, in every digit it could resolve. Those same twelve decimals are what
+the lab *Solve the slab eigenvalue equation* asserts, as 1.474723299977725 and
+1.4620480128263664, against a bisection you are asked to write yourself; the code above
+is that bisection, so the agreement is a check on the physics rather than a coincidence
+of arithmetic.
+
+The second slab is a wafer from the same run whose film came out at 2.000 µm. $V$ drops
+to 1.965924472202252 — the value the lab pins to fifteen digits — the mode count is
+unchanged, and both effective indices shift in the fourth decimal. Two slabs with the
+same $V$ share their mode count, their $b$ and their field shapes once $x$ is measured
+in units of $a$, which is why $b$ against $V$ is the only plot anyone draws.
+
+The normalised guide index $b = (w/V)^2$ reads directly. It is 0 at cutoff, with $n_e$
+down at the cladding index and the tail spilling out to infinity, and 1 for a deep mode
+with $n_e$ at the core index and nothing outside. The fundamental here sits at 0.7348:
+three-quarters of the way in, and still leaking.
+
+## The mistake: bringing EMAG510's wall
+
+The most expensive error here is assuming the boundary condition from the last course —
+that the field goes to zero at the wall, so $\kappa a$ for the lowest mode is $\pi/2$
+and no root-finding is needed.
+
+It is tempting because it is nearly free. A whole module of EMAG510 was spent earning
+$k_x = m\pi/a$, and a slab of glass in a diagram looks like a slab of anything else. The
+answer even survives a plausibility check: $\pi/2 = 1.5708$ is a reasonable-looking $u$
+for a guide with $V = 2$.
+
+```python
+import math
+
+n1, n2 = 1.48, 1.46
+step = n1 * n1 - n2 * n2
+
+
+def n_eff(u, v):
+    """Effective index from a transverse phase u, or None if u is not a guided root."""
+    w2 = v * v - u * u
+    if w2 <= 0.0:
+        return None
+    return math.sqrt(n2 * n2 + (w2 / (v * v)) * step)
+
+
+hard = math.pi / 2.0            # what a conducting wall would demand of m = 0
+for v, true_u in ((2.0, 1.0298665293222586), (1.0, 0.7390851332151607)):
+    guess, truth = n_eff(hard, v), n_eff(true_u, v)
+    shown = "no guided mode at all" if guess is None else f"n_e = {guess:.15f}"
+    print(f"V = {v:.1f}:  metal wall u = {hard:.7f} -> {shown}")
+    print(f"          dielectric u = {true_u:.7f} -> n_e = {truth:.15f}")
+    if guess is not None:
+        print(f"          the metal-wall answer is low by {truth - guess:.7f}")
+
+u1 = 0.7390851332151607
+print(f"at V = 1 the root satisfies cos(u) = u:  cos = {math.cos(u1):.16f}, "
+      f"u = {u1:.16f}")
+```
+
+At $V = 2$ the metal wall predicts $n_e = 1.467695201268300$ where the prism coupler
+measured 1.474723 — an error of 0.0070281. A commercial coupler resolves $n_e$ to about
+$\pm 0.0005$, so the wrong model misses by fourteen times the instrument's uncertainty.
+The bench refutes it on sight.
+
+At $V = 1$ it fails harder, and in the direction that costs a design. It demands
+$u = 1.5708$ when the circle has radius 1, which leaves $w^2 = V^2 - u^2$ negative and
+returns no guided mode at all. The truth is that a symmetric slab *always* guides its
+fundamental, however thin the film: the $m = 0$ branch of the tangent starts at the
+origin, and a circle of any radius whatever crosses it. The mode at $V = 1$ is real, it
+sits at $n_e = 1.469108806777969$, and it is one of the values the lab checks. A designer
+carrying the metal-wall rule concludes that a thin film guides nothing and thickens it
+until the guide has gone multimode.
+
+The last line is a small gift from the algebra. At $V = 1$ the equation reads
+$u\tan u = \sqrt{1 - u^2}$; substituting $\cos u = u$ makes the left side $\sin u$ and
+the right side $\sqrt{1 - \cos^2 u}$, which is the same thing. So the fundamental root
+at $V = 1$ is exactly the fixed point of the cosine, 0.7390851332151607, and the
+bisection reproduces all sixteen digits of it. It is one closed-form value in an
+equation that has none, and it makes a free test of any solver you write.
+
+## Where this stops holding
+
+**Symmetric only.** The fundamental never cutting off is a property of a *symmetric*
+slab. Deposit the same film on a substrate with air above it and the two walls have
+different $\gamma$; the round trip picks up two unequal phases, and the fundamental
+acquires a genuine cutoff thickness below which the film guides nothing. Most real
+planar devices are asymmetric.
+
+**TE only.** The matching condition used above is continuity of $E_y$ and its
+derivative, which is the TE case. TM matches $H_y$ and $(1/n^2)\,\partial H_y/\partial x$,
+and the extra factor puts $(n_1/n_2)^2$ in front of $w$.
+
+```python
+import math
+
+n1, n2, lam0, v = 1.48, 1.46, 1.55e-6, 2.0
+
+
+def root(p):
+    """Fundamental root of p*w = u*tan(u); p is 1 for TE, (n1/n2)^2 for TM."""
+    lo, hi = 1e-12, min(math.pi / 2.0, v) - 1e-12
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        f = p * math.sqrt(max(v * v - mid * mid, 0.0)) - mid * math.tan(mid)
+        lo, hi = (mid, hi) if f > 0.0 else (lo, mid)
+    return 0.5 * (lo + hi)
+
+
+ne = {}
+for name, p in (("TE", 1.0), ("TM", (n1 / n2) ** 2)):
+    u = root(p)
+    b = (v * v - u * u) / (v * v)
+    ne[name] = math.sqrt(n2 * n2 + b * (n1 * n1 - n2 * n2))
+    print(f"{name}: factor {p:.10f}   u = {u:.10f}   n_e = {ne[name]:.12f}")
+
+d = ne["TE"] - ne["TM"]
+print(f"birefringence  n_e(TE) - n_e(TM) = {d:.4e}")
+print(f"beat length    lambda / dn       = {1e3 * lam0 / d:.3f} mm")
+```
+
+The factor is 1.0276, the two effective indices differ by $7.8\times10^{-5}$, and the
+lab solves only the TE family. That difference looks negligible and is not: the two
+polarisations fall a full cycle out of step every 19.873 mm, so a centimetre-scale
+device is polarisation-sensitive whether it was designed to be or not.
+
+**A slab is not a fibre.** A circular step-index fibre replaces the sine and the
+exponential with Bessel functions, and cutoff moves from $\pi/2$ to 2.405, the first zero
+of $J_0$. The shape of the argument does not change — a circle, a family of branches, one
+root each — which is why the capstone carries `v_number` straight over and changes only
+the constant it is compared against.
+
+**Indices held constant.** The treatment above takes $n_1$ and $n_2$ as numbers.
+Material dispersion makes both functions of wavelength, so $b$ against $V$ stays exact
+while $n_e$ against wavelength does not — a distinction module 3 must take seriously,
+since the second derivative of that curve is what limits how far a pulse travels.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Why the modes are discrete and the equation is not solvable",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A metal-walled guide gives $k_x = m\\pi/a$ in closed form. Why does the symmetric slab need a numerical root instead?",
+                        "opts": [
+                            "The dielectric wall passes a decaying field, so matching ties $\\kappa$ inside to $\\gamma$ outside",
+                            "The core and cladding indices both vary with wavelength, which puts $\\lambda$ on both sides",
+                            "Symmetry makes the conditions at the two walls degenerate, and a degenerate pair has no separate roots",
+                            "The transverse field is a sine rather than a cosine, and sines have no analytic inverse",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The reflection at a glass wall keeps unit magnitude but carries a phase $-2\arctan(\gamma/\kappa)$, and $\gamma$ depends on the same unknown $n_e$ that $\kappa$ does. That is what puts $u$ inside a tangent and outside it at once.",
+                            r"Material dispersion is real, but it is not the obstruction: freeze both indices at fixed values, as every calculation in this module does, and the equation is still transcendental.",
+                            r"Symmetry is what makes the problem *easier* — it splits the modes into even and odd families and lets one equation with $m\pi/2$ cover both, and there is nothing degenerate about the pair. An asymmetric slab is harder, not more solvable.",
+                            r"The core field is a sine for odd modes and a cosine for even ones, and neither choice is the difficulty. Inverting a sine is what $\arcsin$ is for.",
+                        ],
+                        "why": r"""
+A conductor forces the tangential field to zero, which is a condition on the inside
+alone and quantises $\kappa$ by itself. A dielectric wall does not: the field continues
+into the cladding as $e^{-\gamma|x|}$, and continuity of the field and its slope ties
+$\kappa$ to $\gamma$. Since both are functions of the one unknown $n_e$, the unknown
+ends up inside a tangent and multiplying it, and $u\tan(u - m\pi/2) = w$ admits no
+rearrangement that isolates $u$.
+""",
+                    },
+                    {
+                        "q": "A symmetric slab is thinned until $V = 0.9$, well below $\\pi/2$. How many guided modes does it carry?",
+                        "opts": [
+                            "One — the $m = 0$ branch starts at the origin, so any circle at all crosses it",
+                            "None, since $V$ has fallen below the $\\pi/2$ at which the first mode turns on",
+                            "One, but only for TE; the TM fundamental has a cutoff of its own at this thickness",
+                            "It cannot be answered without the wavelength, which $V$ on its own does not contain",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The count is $\lfloor 2V/\pi\rfloor + 1$, and the $+1$ is not a fudge — it is the fundamental, which exists for every $V > 0$ however small.",
+                            r"$V = \pi/2$ is where the *second* mode turns on, not the first. Reading it as the fundamental's cutoff is the metal-guide habit, and it is the error that has designers thicken a film until it goes multimode.",
+                            r"TM in a symmetric slab has no cutoff either; its equation carries a factor $(n_1/n_2)^2$ on $w$, which shifts the root and leaves the $m = 0$ branch starting at the origin.",
+                            r"The wavelength is already inside $V = 2\pi a\,\mathrm{NA}/\lambda_0$. That is the entire reason $V$ is worth defining: it is the one number the answer depends on.",
+                        ],
+                        "why": r"""
+The mode count is $\lfloor 2V/\pi\rfloor + 1$, so $V = 0.9$ gives one. The tangent
+branches sit $\pi/2$ apart in $u$ and the $m = 0$ branch begins at the origin, so a
+circle of radius $V$ meets it for any positive $V$ whatever: a symmetric slab always
+guides its fundamental, however thin the film. What a small $V$ costs is confinement,
+not existence — at $V = 1$ the mode sits at $b = 0.454$ with most of its energy in the
+cladding, which is a mode that bends badly and couples to anything nearby.
+""",
+                    },
+                    {
+                        "q": "The normalised guide index of a mode is $b = 0.10$. What does that say about it?",
+                        "opts": [
+                            "Its effective index is near the cladding, so it is close to cutoff and weakly held",
+                            "Its effective index is near the core, so nearly all of its power travels inside the core",
+                            "A tenth of the light in the guide travels in this mode, and the rest in others",
+                            "Its transverse phase $u$ is a tenth of $V$, so it bounces at a shallow angle to the axis",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$b$ is defined to run from 0 at cutoff to 1 far above it, so 0.10 is a mode barely holding on, with a long evanescent tail and an $n_e$ a tenth of the way from $n_2$ to $n_1$ in the squares.",
+                            r"That describes $b$ near 1. Reading the scale backwards is easy because $b$ is built from $w$, the *cladding* decay, so a small $b$ means a small $\gamma$ and a tail that reaches far.",
+                            r"$b$ says nothing about how power was divided between modes at launch — it is a property of a mode's dispersion, and it is defined for a mode carrying no power at all.",
+                            r"$b = (w/V)^2$, not $(u/V)$. With $b = 0.10$, $w$ is 0.32 of $V$ and $u$ is 0.95 of it, which is the steepest bounce rather than the shallowest.",
+                        ],
+                        "why": r"""
+$b = (w/V)^2$ and $n_e^2 = n_2^2 + b(n_1^2 - n_2^2)$, so $b$ interpolates the effective
+index between cladding and core: 0 at cutoff, 1 when the mode is entirely bound. At
+$b = 0.10$ the mode is a tenth of the way up, its cladding decay $w$ is only $0.32V$,
+and the field reaches far outside the core. The first higher mode of the slab in this
+module sits at exactly 0.1018, which is why it is the one that vanishes first when the
+guide is bent, heated, or trimmed.
+""",
+                    },
+                    {
+                        "q": "Why does the lab bracket mode $m$ on $(m\\pi/2,\\ \\min((m{+}1)\\pi/2,\\ V))$ rather than searching the whole range?",
+                        "opts": [
+                            "The tangent has a pole every $\\pi$, and one branch holds exactly one root with a sign change across it",
+                            "Roots outside that window are complex, and a real bisection cannot represent them at all",
+                            "It is an optimisation: the same roots are found either way, but far fewer function evaluations are needed",
+                            "The window is where the residual is smooth, and Newton's method needs a smooth region to converge",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Bisection needs a bracket whose ends differ in sign and it needs exactly one root inside; both are guaranteed on one tangent branch and neither is guaranteed across a pole.",
+                            r"There are no complex roots to avoid — the difficulty is real poles. A search crossing one sees a sign change with no root behind it and converges confidently on the pole.",
+                            r"The two searches do not find the same roots. A bracket spanning a pole makes bisection converge on the pole itself, which is a wrong answer rather than a slow one.",
+                            r"The method here is bisection, which needs no derivative and no smoothness — only a sign change. The bracketing is about which sign changes are genuine.",
+                        ],
+                        "why": r"""
+Between $m\pi/2$ and the next pole, $\tan(u - m\pi/2)$ climbs from zero to infinity while
+$\sqrt{V^2 - u^2}$ falls, so the residual starts positive, ends negative, and crosses
+once. That is precisely what bisection needs. Widen the bracket across a pole and the
+tangent jumps from $+\infty$ to $-\infty$, producing a sign change with no root behind
+it — and bisection, which asks only about signs, will converge on the pole and report it
+as an answer. The upper end is capped at $V$ as well, because $u > V$ makes $w$
+imaginary and describes a radiating field rather than a guided one.
+""",
+                    },
+                    {
+                        "q": "A mode of this slab has $n_e = 1.4747$, between $n_2 = 1.46$ and $n_1 = 1.48$. What is that number?",
+                        "opts": [
+                            "The index setting the mode's axial phase velocity, $c/n_e$, with the field partly in each medium",
+                            "The index of the glass at the point on the cladding wall where the ray turns round on each bounce",
+                            "A fitted constant with no physical reading, produced by whatever numerical scheme found it",
+                            "The average of core and cladding index weighted by the fraction of power in each",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$\beta = k_0n_e$ is the definition, so $n_e$ is the index the mode behaves as though it were travelling through — and it lies between the two because the mode itself lies partly in both.",
+                            r"The ray does not enter the cladding and turn round in it; beyond the critical angle nothing propagates out there. The evanescent tail carries no power away and has no turning point.",
+                            r"It is measurable. A prism coupler reads it off a dip angle to about $\pm0.0005$, without knowing anything about how it was computed.",
+                            r"Tempting and nearly right, but the weighting is by field overlap rather than power fraction, and it is $n_e^2$ that interpolates linearly in $b$, not $n_e$.",
+                        ],
+                        "why": r"""
+$\beta = k_0n_e$ defines it: the mode advances along the axis as though it were a plane
+wave in a bulk medium of index $n_e$. It falls between the two indices because the mode
+occupies both media — oscillating in the core, decaying in the cladding — and the more
+of it that sits in the cladding, the closer $n_e$ falls to $n_2$. That is what $b$
+measures. It is a real, measurable quantity rather than a bookkeeping device: a prism
+coupler finds it directly from the angle at which the reflected power dips.
+""",
+                    },
+                    {
+                        "q": "Two symmetric slabs are built with the same $V$ but different half-widths and wavelengths. What do they share?",
+                        "opts": [
+                            "The same mode count and the same $b$ for every mode, with field shapes matching in units of $a$",
+                            "The same effective indices, since $n_e$ is what $V$ was constructed to determine in the first place",
+                            "The same cladding decay length $1/\\gamma$, which is what makes their confinement identical",
+                            "Nothing in particular, unless the two also happen to share a numerical aperture",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$V$ is the only parameter in $u^2 + w^2 = V^2$ and $u\tan(u - m\pi/2) = w$, so the roots $u$ and $w$ — and therefore $b$ — depend on nothing else.",
+                            r"$b$ is shared, and $n_e$ is not: recovering $n_e$ from $b$ needs $n_1$ and $n_2$ separately, and two slabs of equal $V$ can have quite different index pairs.",
+                            r"$w = \gamma a$ is shared, so $1/\gamma$ scales with $a$ — the tail is the same fraction of the core width, and a different physical length.",
+                            r"They share a great deal. $V$ already folds $a$, $\lambda_0$ and the NA into one number, which is why every textbook plot has $V$ on its axis and no wavelength anywhere.",
+                        ],
+                        "why": r"""
+Both governing equations contain $V$ and nothing else, so the roots $u$ and $w$ are
+functions of $V$ alone, and so is $b = (w/V)^2$. What is not shared is anything needing
+a dimension or an index back: $n_e$ requires $n_1$ and $n_2$ separately, and $1/\gamma$
+is a physical length that scales with $a$. This is the whole reason the normalised
+variables exist — one curve of $b$ against $V$ describes every symmetric slab that has
+ever been built, and the un-normalising is done at the end.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "A mode is a round trip that closes",
                 "visualiser": "smith",
@@ -758,6 +1434,225 @@ assert _b > _a, \
                 "Independent broadening mechanisms add in quadrature, so the largest one dominates fast.",
                 "The rule of thumb $B_{max} = 1/(2\\Delta\\tau)$, and the bandwidth–length product that follows from it.",
             ],
+            "read": [
+                {
+                    "title": "Two reels on one bench, and the sixty-eight nanoseconds between them",
+                    "minutes": 16,
+                    "body": r'''
+Two reels sit on the bench, each a kilometre of silica. A laser diode is driven with a
+2 ns pulse; the far end goes into a fast detector and a sampling scope.
+
+Through the first reel — step-index multimode, core 1.48, cladding 1.46 — the 2 ns pulse
+comes back 68 ns wide. Not delayed by 68 ns: *widened* by it, into a low mound with a
+hard leading edge and a long trailing shoulder.
+
+Through the second reel — single-mode fibre at 1550 nm, driven by a DFB laser 0.1 nm
+wide — the same pulse comes back 2 ns wide. The scope cannot separate the output from
+the input.
+
+Same glass, same length, same wavelength, same instrument. What differs is that the
+first reel offers the pulse more than one way through.
+
+## The 13.7 metres that are not there
+
+The extreme guided ray is the one that meets the wall at exactly the critical angle;
+anything steeper leaves. Module 1 put that angle at 80.570° from the wall's normal, so
+the ray runs at 9.430° to the axis, and to advance one metre along the fibre it travels
+$1/\sin\theta_c = n_1/n_2$ metres of glass. Over a kilometre that is 13.7 metres of
+extra path, all of it crossed at the same $c/n_1$ as the axial ray, because both rays
+are in the same material.
+
+That is the whole mechanism, and the derivation *From ray paths to a bit rate* turns it
+into $\tau_m = Ln_1(n_1 - n_2)/(cn_2)$ in three steps. The number is worth seeing
+arrive.
+
+```python
+import math
+
+C = 2.99792458e8
+n1, n2, L = 1.48, 1.46, 1000.0        # metres of step-index multimode fibre
+
+axial = L * n1 / C
+extreme = (L * n1 / n2) * n1 / C
+spread = extreme - axial
+
+print(f"extra glass crossed by the extreme ray: {L * (n1 / n2 - 1):.4f} m")
+print(f"speed inside the core:                  {C / n1:.6e} m/s")
+print(f"axial ray arrives at   {axial * 1e9:.4f} ns")
+print(f"extreme ray arrives at {extreme * 1e9:.4f} ns")
+print(f"modal spread           {spread * 1e12:.6f} ps")
+print(f"which allows           {1.0 / (2.0 * spread) / 1e6:.6f} Mb/s over this km")
+```
+
+Two arrival times, 4936.7486 ns and 5004.3753 ns, differing by 67626.693273 ps. The lab
+*Pulse spreading and the bit rate it allows* asserts that spread as 67626.69327305007 ps
+against the closed form, and the two agree because they are the same subtraction.
+
+The last line applies the engineering rule the derivation ends on: allow the pulse to
+spread over at most half a bit period, so $B = 1/(2\tau)$. A kilometre of this fibre
+carries 7.39 Mb/s. That is the reason step-index multimode fibre is not a long-haul
+medium and never was — the index step that makes it easy to couple into is the same
+index step that spreads its pulses.
+
+## Colour, not path
+
+Kill the modal term by allowing one path only, and a second mechanism is waiting
+underneath.
+
+EMAG510 met it on brass. Two metres of WR-90 answered "how long does a signal take to
+cross?" twice — 5.0369 ns read off the phase and 8.8360 ns measured on the envelope —
+because $\beta$ was not proportional to $\omega$, so the chord and the tangent of the
+dispersion curve had different slopes. Silica bends its curve for different reasons:
+the material index depends on wavelength, and module 2's $b(V)$ curve adds a second
+contribution, because $V$ contains $\lambda_0$ and so $n_e$ moves with wavelength even
+in glass that does not. The consequence is the one EMAG510 established. Group delay
+depends on frequency, so a source that is not monochromatic arrives spread out.
+
+Fibre engineering rarely goes back to $d^2\beta/d\omega^2$ for this. It measures the
+delay against wavelength on a real reel and quotes the slope:
+
+$$\tau_c = D\,L\,\Delta\lambda, \qquad [D] = \frac{\text{ps}}{\text{nm}\cdot\text{km}}$$
+
+The units are the formula. Standard single-mode fibre is about 17 ps/(nm·km) at 1550 nm.
+Near 1310 nm the material and waveguide contributions have opposite signs and cancel, so
+$D$ passes through zero — which is why 1310 was the first long-haul window even though
+1550 has the lower loss, and why moving the waveguide term by redesigning the index
+profile (dispersion-shifted fibre) moves the zero to where you want it.
+
+The sandbox *A link is a low-pass filter* is this same fact in the frequency domain: a
+wider spread is a lower corner. Two things there are worth carrying. The corner $\omega_n$
+is where the phase crosses $-90°$ and not where the magnitude is 3 dB down — at the
+$\zeta = 0.9$ the chart opens on, the magnitude at $\omega_n$ is already 5.1 dB down and
+the 3 dB point sits back at $0.75\,\omega_n$. And the roll-off is 40 dB per decade
+because there are two poles: the fibre and the receiver front end are separate band
+limits, and a link that is 20 per cent too long is not 20 per cent worse.
+
+## Two mechanisms, added the way independent things add
+
+Path spreading and colour spreading have nothing to do with each other. One is
+geometrical and would exist in a fibre with no dispersion in its glass; the other is
+material and would exist in a fibre with one mode. Independent broadenings add as
+variances rather than as widths, so the total is the quadrature sum
+$\tau_t = \sqrt{\tau_m^2 + \tau_c^2}$.
+
+That square root is the whole story of which term matters.
+
+```python
+import math
+
+modal_ps = 67626.69327305007          # the 1 km multimode reel
+d_ps = 17.0                           # ps/(nm km), standard fibre at 1550 nm
+
+for w_nm in (40.0, 1.0, 0.1):
+    chrom = d_ps * 1.0 * w_nm
+    total = math.hypot(modal_ps, chrom)
+    print(f"source {w_nm:5.1f} nm: chromatic {chrom:6.1f} ps, total {total:.8f} ps,"
+          f" {1.0 / (2.0 * total * 1e-12) / 1e6:.7f} Mb/s")
+
+print(f"in quadrature a 17 ps mechanism adds "
+      f"{math.hypot(modal_ps, 17.0) - modal_ps:.10f} ps, not 17")
+print(f"50 km of single-mode at 1 nm: {d_ps * 50.0 * 1.0:.1f} ps"
+      f" -> {1.0 / (2.0 * 850.0 * 1e-12):.6f} bit/s")
+for w_nm in (40.0, 0.1):
+    reach = 1.0 / (2.0 * 1.0e10 * d_ps * w_nm * 1e-12)
+    print(f"the same {w_nm:4.1f} nm source on a 10 Gb/s single-mode link"
+          f" reaches {reach:.5f} km")
+```
+
+A 17 ps mechanism sitting beside a 67626.693 ps one contributes 0.0021367302 ps — its
+own size divided by eight thousand. The lab pins that total at 67626.69540978027 ps and
+checks that the achievable bit rate moves by under one part in $10^4$, which is the
+quadrature rule stated as a test rather than a claim.
+
+The 50 km line is the same arithmetic on a link where the modal term is absent: 850 ps
+of chromatic spread allows 588235294.117647 bit/s, which the lab also asserts. Nothing
+about the formula changed. What changed is which term is the biggest one in the root.
+
+## The mistake: buying the lever that works somewhere else
+
+Faced with a link that is too slow, the reflex is to narrow the source. It is the one
+change that does not involve digging up cable, $\tau_c = DL\Delta\lambda$ is linear and
+memorable, and on single-mode links the improvement is spectacular — the last two lines
+above take the dispersion-limited reach of a 10 Gb/s link from 73.5 m with a 40 nm LED
+to 29.41176 km with a 0.1 nm DFB, a factor of four hundred.
+
+Apply the same swap to the kilometre of multimode on the bench and the achievable bit
+rate goes from 7.3931565 Mb/s to 7.3935302 Mb/s. That is a gain of five parts in a
+hundred thousand, for a source costing perhaps a hundred times as much. The quadrature
+root has swallowed the entire improvement, because it was never the term that was
+binding.
+
+What makes this tempting rather than careless is that the calculation is correct in both
+cases. The chromatic spread really did fall by a factor of 400 on the multimode reel too
+— from 680 ps to 1.7 ps. It made no difference because 680 ps was already invisible
+beside 67.6 ns. A budget exists so that you find out which term dominates *before*
+spending anything, and the same discipline reappears in the next module, where the
+question is whether a link is short on power or short on bandwidth.
+
+## Where this stops holding
+
+**The two-ray estimate is a worst case that real fibre does not reach.** Nothing keeps a
+ray on one path for a kilometre. Micro-bends and index fluctuations couple power between
+modes continually, so a photon that starts on the extreme ray spends part of its journey
+near the axis. The spread then grows closer to $\sqrt{L}$ than to $L$ beyond a few
+hundred metres, and the bandwidth–length product that the $B = 1/(2\tau_m)$ rule implies
+is constant is not constant. Vendors quote multimode bandwidth at a stated length and a
+stated launch condition for exactly this reason.
+
+**A step index is the worst possible profile.** Grade the index parabolically and the
+axial rays travel through the highest index, so they go slowest, while the steep rays
+spend most of their path out where the glass is faster. The compensation is first-order
+exact, and what is left goes as $\Delta^2$ rather than $\Delta$.
+
+```python
+import math
+
+C = 2.99792458e8
+n1, n2 = 1.48, 1.46
+delta = (n1 - n2) / n1
+
+step = 1e3 * n1 * (n1 - n2) / (C * n2) * 1e12
+graded = 1e3 * n1 * delta * delta / (2.0 * C) * 1e12
+print(f"step index    {step:10.3f} ps/km")
+print(f"graded index  {graded:10.3f} ps/km   ({step / graded:.1f} times narrower)")
+
+for l_km in (1.0, 100.0):
+    pmd = 0.1 * math.sqrt(l_km)               # ps, at 0.1 ps/sqrt(km)
+    chrom = 17.0 * l_km * 0.1
+    print(f"{l_km:6.1f} km single-mode: chromatic {chrom:7.2f} ps, PMD {pmd:5.3f} ps,"
+          f" total {math.hypot(chrom, pmd):8.4f} ps")
+```
+
+450.762 ps/km against 67626.693 — a factor of 150 for a change in profile and none in
+material. Every multimode fibre sold for data communications is graded, and the lab's
+step-index formula describes the fibre nobody buys.
+
+**"Single-mode" is a claim about one polarisation.** Module 2 found the TE and TM
+fundamentals of a symmetric slab at effective indices differing by $7.8\times10^{-5}$.
+A real fibre is nominally circular, so the two polarisations are nominally degenerate,
+and every departure from circularity — ovality, stress, a cable bend — splits them
+again. The residue is polarisation-mode dispersion, quoted as a coefficient in
+ps/$\sqrt{\text{km}}$ because the birefringence axis rotates randomly along the fibre and
+the walk-off accumulates as a random walk. The last two lines put it at 1.0 ps over
+100 km against 170 ps of chromatic spread: negligible at 10 Gb/s, and the limiting term
+once chromatic dispersion has been compensated away, which is what happens on any modern
+long-haul link.
+
+**The half-bit-period rule is a rule.** It stands for roughly a 1 dB power penalty in a
+particular receiver, not a theorem. The honest calculation is a dispersion penalty
+computed at a target bit error rate for the actual pulse shape and detector, and it can
+land anywhere from a third of a bit period to two-thirds. The rule is what you use to
+decide whether a design is worth simulating.
+
+**$D$ is not a constant.** It has a slope of roughly 0.09 ps/(nm²·km), so a source 40 nm
+wide sees $D$ vary by about 3.6 ps/(nm·km) across its own spectrum. Worse, at the
+dispersion zero the first-order formula predicts no spread at all, which is wrong: what
+survives there is the slope term, going as $\Delta\lambda^2$ rather than
+$\Delta\lambda$. A link designed at exactly 1310 nm is limited by a mechanism the
+formula in this module cannot see.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "A link is a low-pass filter",
                 "visualiser": "bode",
@@ -1103,6 +1998,332 @@ assert abs(_ratio - 1.0) < 1e-4, \
                 "Rearranging the budget for reach rather than margin, which is the form a designer actually needs.",
                 "Loss-limited versus dispersion-limited: the reach is the smaller of the two, and knowing which one binds tells you what to fix.",
             ],
+            "read": [
+                {
+                    "title": "Twenty-one point four decibels, and the ninety-four kilometres that were not there",
+                    "minutes": 16,
+                    "body": r'''
+An OTDR is plugged into one end of a newly installed 80 km span and the trace comes back
+on the screen: a straight line sloping down at 0.25 dB per kilometre, with eight small
+steps in it where the fusion splices are, a step at each end where the patch connectors
+sit, and one spike at the 42 km mark that is a mechanical splice reflecting light back
+up the fibre.
+
+Unplug the OTDR, put a calibrated source on one end and a power meter on the other, and
+the end-to-end insertion loss reads 21.4 dB. The transmitter launches 0 dBm. The receiver
+is specified to work down to $-28$ dBm.
+
+That is the entire question a link budget asks, and the answer is a subtraction: the
+receiver sees $-21.4$ dBm, which is 6.6 dB more than it needs. The link works, and it
+will keep working for as long as those 6.6 dB last.
+
+## Why the arithmetic is addition
+
+Each thing between the laser and the detector *multiplies* the power by its own factor.
+Eighty kilometres of fibre passes some fraction, a connector passes another, a splice a
+third, and the power arriving is the product of all of them. Products are hard to hold in
+the head and impossible to scan for the dominant term.
+
+Take the logarithm and the product becomes a sum. Define a loss in decibels as
+$-10\log_{10}(P_\text{out}/P_\text{in})$ and each element contributes one number, added.
+Define an absolute level the same way against a fixed reference of 1 mW — that is the
+"m" in dBm — and a level minus a set of losses is a level again. This is the whole
+reason a budget is a column of numbers rather than a chain of fractions, and the useful
+consequence is not the arithmetic but the visibility: the biggest number in the column
+is the thing to fix, and you can see it without doing any work. The exercise *Every
+decibel between the laser and the detector* asks for that reason in as many words, and
+for the reference behind the "m", which is 1 mW and nothing else.
+
+```python
+alpha, L = 0.25, 80.0                       # dB/km, km
+connectors, splices = 2 * 0.5, 8 * 0.05     # two connectors, eight fusion splices
+loss = alpha * L + connectors + splices
+p_tx, sens = 0.0, -28.0                     # dBm launched, dBm needed
+
+print(f"fibre       {alpha * L:6.2f} dB")
+print(f"connectors  {connectors:6.2f} dB")
+print(f"splices     {splices:6.2f} dB")
+print(f"total       {loss:6.2f} dB")
+print(f"received    {p_tx - loss:6.2f} dBm = "
+      f"{1e3 * 10 ** ((p_tx - loss) / 10.0):.4f} uW")
+print(f"margin      {p_tx - sens - loss:6.2f} dB")
+print(f"reach at 3 dB of margin: "
+      f"{(p_tx - sens - connectors - splices - 3.0) / alpha:.1f} km")
+```
+
+The fibre is 20.00 of the 21.40 dB and everything else is rounding error beside it. The
+receiver sees 7.2444 µW, which is a real power a meter reads. And the last line is the
+derivation *Rearranging a budget for reach* run backwards: hold 3 dB in reserve, ask how
+much fibre the rest will pay for, and the answer is 94.4 km. That is the form a designer
+actually wants, and it is the number the lab *Build a link budget and invert it* asserts
+as 94.4 exactly, along with a check that feeding that length back through the forward
+calculation returns the 3 dB you asked for.
+
+The sandbox *Margin as the gap above the sensitivity line* draws the same picture:
+$K = 6$ puts the received level $20\log_{10}6 = 15.6$ dB above the dashed sensitivity
+line, and every term in the budget eats into that gap. Take $K$ down to 1 and the curve
+starts *on* the line — a budget with no margin, before the link has aged a day.
+
+## The one term that is not bookkeeping
+
+Seven of the eight splices are fusion splices at 0.05 dB. The spike at 42 km is a
+mechanical splice, and a mechanical splice leaves a gap. Module 1 already has what is
+needed: a face between silica and air reflects $((n_2-n_0)/(n_2+n_0))^2$ of the power,
+and the light crosses two of them.
+
+```python
+import math
+
+n_core = 1.46
+for name, n_gap in (("air", 1.0), ("gel at 1.30", 1.30), ("index-matched", 1.46)):
+    r = ((n_core - n_gap) / (n_core + n_gap)) ** 2
+    print(f"{name:>14}: R = {r:.10f}   the pair of faces costs "
+          f"{-10 * math.log10((1.0 - r) ** 2) + 0.0:.12f} dB")
+
+r = ((1.46 - 1.0) / (1.46 + 1.0)) ** 2
+t_min = (1.0 - r) ** 2 / (1.0 + r) ** 2
+print(f"gap as two independent faces: {-10 * math.log10((1.0 - r) ** 2):.6f} dB")
+print(f"gap as a cavity, worst case:  {-10 * math.log10(t_min):.6f} dB")
+print(f"gap as a cavity, best case:   {-10 * math.log10(1.0) + 0.0:.6f} dB")
+```
+
+0.309147341887 dB for an air gap, which the lab checks to that many digits, and
+0.029239294224 dB once the gap is filled with gel at $n = 1.30$. A factor of ten and
+six fusion splices' worth of loss, bought with a substance whose only job is to have
+roughly the right index. On the Smith chart it is the load moved to the centre; the
+argument is EMAG520's, and the same argument produces the anti-reflection coating,
+where a quarter-wave layer at $n = \sqrt{n_0n_1} = 1.208$ transforms one impedance into
+the other instead of matching them directly.
+
+## The mistake: a reach with no bit rate in it
+
+The budget above produced 94.4 km. It is a confident, well-founded number, and there is
+a way of using it that gets a link built and then found dead.
+
+```python
+p_tx, sens, alpha, fixed, margin = 1.0, -22.0, 0.25, 1.3, 3.0
+d_ps, w_nm = 17.0, 0.1
+
+loss_km = (p_tx - sens - fixed - margin) / alpha
+for bitrate in (1.0e9, 1.0e10):
+    disp_km = 1.0 / (2.0 * bitrate * d_ps * w_nm * 1e-12)
+    binding = "loss" if loss_km <= disp_km else "dispersion"
+    print(f"{bitrate / 1e9:5.1f} Gb/s: power allows {loss_km:.2f} km, "
+          f"dispersion allows {disp_km:.5f} km -> limited by {binding}")
+print("nothing in the power budget mentions the bit rate, so it cannot warn you")
+```
+
+Those are the capstone's own numbers. The same physical route — same fibre, same
+connectors, same laser, same receiver — is loss-limited at 74.80 km when it runs at
+1 Gb/s and dispersion-limited at 29.41176 km when it runs at 10 Gb/s. Build 70 km of it
+for the 10 Gb/s service and every power measurement on commissioning will pass, because
+the power is fine. What fails is the eye, and no meter in the loss budget looks at it.
+
+The trap is specific and worth stating plainly: $P_t$, $S$, $\alpha$, $A_c$, $A_s$ and
+$M$ contain no bit rate between them, so the reach they produce is not a function of the
+bit rate, and a calculation that cannot see a variable cannot warn you about it. What
+makes the error tempting is that the loss budget is the calculation everyone knows how
+to do, it terminates in kilometres, and its answer is correct — it is the answer to a
+different question. The capstone asks for both limits and the name of the one that
+binds, and it asks for the name because the name is the thing that tells you what to
+buy: a lower-loss fibre moves 74.80 and does nothing at all to 29.41176.
+
+## Where the budget stops holding
+
+**Two faces are not two independent events.** The 0.309147 dB above multiplies
+$(1-R)$ twice, which assumes the light forgets its phase between the faces. Two parallel
+partial reflectors a few wavelengths apart form a weak Fabry–Perot cavity, and the
+transmission runs between 1 and $(1-R)^2/(1+R)^2$ depending on the gap to a fraction of a
+wavelength: from 0.000000 dB to 0.607669 dB, with the budget's 0.309147 sitting in the
+middle as the incoherent average. A connector that changes loss by half a decibel when
+you warm it with your hand is not faulty; it is a cavity being tuned by thermal
+expansion.
+
+**Attenuation is a spectrum, not a number.** 0.25 dB/km is silica at 1550 nm. The same
+fibre is about 0.35 dB/km at 1310 nm, and older fibre has a water absorption peak near
+1383 nm that can exceed 1 dB/km. A budget written for one window does not transfer to
+another, and re-using a spare fibre at a different wavelength has caught out more than
+one commissioning team.
+
+**Splice loss is a distribution.** 0.05 dB is a mean from a good machine on matched
+fibre. Field splices have a tail — a fibre-type mismatch, a bad cleave, a cold day —
+and a budget that multiplies a count by a mean has calculated the expected loss of a
+route rather than the loss of *this* route. The honest form adds the mean and holds
+enough margin for the tail, which is one of the things the margin term is doing.
+
+**The receiver has a ceiling as well as a floor.** Sensitivity is the least power that
+works; there is also an overload point above which the front end saturates and the error
+rate rises again. A 500 m link built with a transmitter sized for 80 km fails, and it
+fails in a way that looks exactly like a loss problem until somebody inserts a 10 dB
+attenuator and it starts working.
+
+**Power stops buying reach.** The budget is linear in $P_t$, so 10 dB more launch power
+reads as 40 km more fibre. Above roughly +10 dBm into a single-mode core that stops being
+true: stimulated Brillouin scattering reflects the excess back up the fibre, and
+self-phase modulation broadens the source spectrum, which feeds straight back into the
+$D\,L\,\Delta\lambda$ of the last module and shortens the dispersion limit. The two
+budgets stop being independent at exactly the point where you try hardest to win.
+
+**Margin is not slack.** It is a forecast of the things not on the drawing: connector
+end faces collecting dust, two more splices when a digger finds the cable, a laser
+dimming perhaps 1 dB across twenty-five years, temperature moving everything by a few
+tenths. Those add to something close to 2 dB on an ordinary route, which is why 3 dB is
+a thin margin and not a generous one, and why a budget that closes at 0.0 dB has been
+shown to close on precisely one day.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "What is left after every decibel has been subtracted",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "Why is a link budget worked in decibels rather than in milliwatts?",
+                        "opts": [
+                            "Every element multiplies the power, and a logarithm turns that product into a column you can add",
+                            "Optical detectors respond to the logarithm of the incident power, so decibels are the natural unit",
+                            "Milliwatts span too many orders of magnitude along a long span to be written out conveniently",
+                            "Power and voltage ratios differ by a factor of two, and only decibels can express both at once",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Fibre, connectors and splices each pass a fraction, so the received power is a product of fractions. Logarithms turn it into a sum, and a sum can be scanned for its biggest term at a glance.",
+                            r"A photodiode's current is linear in optical power, not logarithmic. The logarithm is a choice made by the engineer writing the budget, not a property of the detector.",
+                            r"True as far as it goes — 7 µW against 1 mW is a wide range — but compression is a side benefit. A budget in milliwatts would still be a product, and still be unreadable.",
+                            r"That factor of two is a detail of how dB is defined for field quantities, and it is a source of confusion rather than the reason the unit is used here.",
+                        ],
+                        "why": r"""
+Each element between laser and detector multiplies the power by its own fraction, so the
+received power is a product. Taking logarithms makes it a sum, which is why a budget is
+a column of numbers. The real payoff is not the ease of adding but what the column shows:
+in the 80 km span here, 20.00 dB of the 21.40 dB total is fibre, and the eye finds that
+without any arithmetic at all. Try the same in milliwatts and the dominant term is
+invisible.
+""",
+                    },
+                    {
+                        "q": "A power budget gives a reach of 74.8 km. The link is built at 70 km, runs at 10 Gb/s, and fails — yet every power measurement passes. What was missed?",
+                        "opts": [
+                            "Dispersion, which limits this route to 29.4 km and appears nowhere in a power budget",
+                            "The margin, which should have been larger on a route so near the 74.8 km limit",
+                            "The splice count, since field splices scatter above their nominal loss and eight of them add up",
+                            "Receiver overload, because at only 70 km the arriving power is above what the front end tolerates",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$D\,L\,\Delta\lambda$ reaches half a bit period at 29.4 km on this route at 10 Gb/s. The power budget contains no bit rate, so it could not have flagged it.",
+                            r"Margin protects against loss that appears later, and the power measurements are passing — the problem is not a shortage of decibels at any point in the link's life.",
+                            r"Splice scatter would show up as extra loss, and the measurements pass. It is a real risk on a real route, and it is not what fails here.",
+                            r"Overload is a genuine failure mode on short links, but 70 km of fibre at 0.25 dB/km removes 17.5 dB, so the arriving power is nowhere near a front end's ceiling.",
+                        ],
+                        "why": r"""
+The reach a power budget returns is a function of $P_t$, $S$, $\alpha$, the fixed losses
+and $M$, and not one of those depends on the bit rate. Run the same route at 1 Gb/s and
+it is loss-limited at 74.8 km; run it at 10 Gb/s and chromatic dispersion closes the eye
+at 29.4 km, with the power still perfectly healthy. A calculation that does not contain a
+variable cannot warn you about it, and the fix follows from naming which limit binds: a
+lower-loss fibre moves 74.8 km and leaves 29.4 km exactly where it was.
+""",
+                    },
+                    {
+                        "q": "A mechanical splice leaves a small air gap between two fibre ends. What does the gap cost, and why?",
+                        "opts": [
+                            "About 0.31 dB: the light crosses two silica–air faces and each returns roughly 3.5 per cent",
+                            "About 0.15 dB: one interface, since the two fibre ends are the same material as each other",
+                            "About 0.07 dB, from adding the two reflectances and converting the 7 per cent total to decibels",
+                            "Nothing measurable, since the gap is far shorter than a wavelength and the light crosses it",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Two faces, each passing $1 - R$ with $R = 0.03497$, so the pair passes $(1-R)^2 = 0.9313$ — a loss of 0.309147 dB, or six fusion splices in one component.",
+                            r"Counting one face is the commonest slip here. The light leaves glass into air at the first face and re-enters glass at the second, and both are index steps.",
+                            r"Adding reflectances instead of multiplying transmissions gives 0.3145 dB, which happens to be close — near enough to hide the error, and wrong in a way that grows as $R$ does.",
+                            r"The gap length has almost nothing to do with it. The loss is at the two interfaces, and it would be there for a gap of any width at all.",
+                        ],
+                        "why": r"""
+$R = ((1.46-1)/(1.46+1))^2 = 0.03497$ at each face, and the light crosses two of them, so
+the pair passes $(1-R)^2 = 0.9313$ — a loss of 0.309147 dB. That is six times a 0.05 dB
+fusion splice, from one component, which is the reason fusion splicing exists. Fill the
+gap with gel at $n = 1.30$ and $R$ drops to 0.00336 and the loss to 0.029239 dB. The
+whole of that improvement comes from choosing a material with roughly the right index —
+the same move as sliding a load to the centre of a Smith chart.
+""",
+                    },
+                    {
+                        "q": "A budget closes with exactly 0.0 dB of margin. What is wrong with that?",
+                        "opts": [
+                            "It closes only while nothing changes: dirt, repairs and laser ageing all spend decibels later",
+                            "It gives no allowance for the power meter's calibration error, which is typically a few tenths",
+                            "Sensitivity is quoted at one bit rate, so a budget with no margin cannot be reused at another",
+                            "It leaves nothing to spend if the link is later upgraded to a longer span or a faster line rate",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Connector end faces collect dust, a cut cable comes back with two more splices, and a laser dims perhaps 1 dB across its life. Around 2 dB of that is ordinary, and a 0 dB budget has none of it.",
+                            r"Instrument error is real and is handled by measuring carefully, not by holding decibels back for years. Margin is about the link changing, not about the meter being unsure.",
+                            r"Sensitivity does depend on bit rate, which is why it is read from the data sheet at the rate in use. That is a term in the budget, not the job of the margin.",
+                            r"Headroom for a future upgrade is a reasonable thing to want and a different thing to want. Margin is spent by the link you have, on the route you have, doing nothing new.",
+                        ],
+                        "why": r"""
+Margin is a forecast of everything not on the drawing. End faces collect dust, a digger
+finds the cable and the repair adds two splices, a laser dims about 1 dB across
+twenty-five years, and temperature moves everything by a few tenths. On an ordinary route
+those come to something near 2 dB, which is why 3 dB is thin rather than generous. A
+budget closing at 0.0 dB has been shown to close on the day of installation, and on no
+other day.
+""",
+                    },
+                    {
+                        "q": "A receiver sensitivity is $-28$ dBm and a connector loss is 0.5 dB. How do the two units differ?",
+                        "opts": [
+                            "dBm fixes a power against 1 mW; dB is a bare ratio, so a level minus ratios is a level",
+                            "dBm is used for optical power and dB for electrical power, which is why both appear here",
+                            "They differ by a constant 30, which is the number of decibels between a milliwatt and a watt",
+                            "dBm means the figure was measured on an instrument, where dB means it was computed",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$-28$ dBm is $1.6\ \mu$W, a power you could put on a meter. 0.5 dB is a fraction, 0.891, and nothing else. Subtracting the second from the first leaves a power, which is what makes the column work.",
+                            r"Both units appear on both sides of a photodiode, and neither is optical or electrical by nature. The distinction is absolute against relative.",
+                            r"30 dB is the gap between dBm and dBW, which is a different pairing. Confusing those two is a factor of a thousand and does happen.",
+                            r"Neither notation says anything about provenance. A sensitivity in dBm is usually a data-sheet figure, and a measured loss in dB is measured.",
+                        ],
+                        "why": r"""
+dBm is absolute: it is a power expressed against a fixed 1 mW reference, so $-28$ dBm is
+1.6 µW and $0$ dBm is 1 mW. Plain dB is a ratio with no reference at all, so 0.5 dB names
+the fraction 0.891 and nothing more. That is what makes the budget's arithmetic legal —
+an absolute level minus a sum of ratios is an absolute level, and the final comparison is
+level against level. Mixing the two, or reaching for dBW by mistake, is the classic
+budget error and it costs a factor of a thousand.
+""",
+                    },
+                    {
+                        "q": "A 500 m link is built with a transmitter chosen for an 80 km span and it does not work. Inserting a 10 dB attenuator makes it work. Why?",
+                        "opts": [
+                            "The front end was saturating: a receiver has an overload point above its sensitivity floor",
+                            "The attenuator absorbed the reflections travelling back up the fibre to the laser",
+                            "At that launch power the fibre is nonlinear, and the attenuator brought it back into the linear region",
+                            "The extra connectors carrying the attenuator added the loss the original budget had assumed",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Sensitivity is a floor; every receiver also has a ceiling, and 500 m of fibre removes only 0.125 dB. Padding the link down to the working window is the standard fix.",
+                            r"Back-reflection into a laser is a real problem with real cures — angled connectors, isolators — but it does not improve when you attenuate, since the pad affects both directions.",
+                            r"Nonlinearity is a long-span effect needing kilometres of interaction length. Over 500 m at an ordinary launch power there is nothing for it to build up in.",
+                            r"The connectors do add loss, and that is the same fix by a different name: the link needed less power arriving, however the reduction was obtained.",
+                        ],
+                        "why": r"""
+The budget in this module treats sensitivity as a threshold to be cleared, and the more
+power that arrives the better. That holds only up to the receiver's overload point, above
+which the front end saturates and the error rate rises again. Over 500 m the fibre
+removes 0.125 dB, so a transmitter sized for 80 km delivers nearly all its power into a
+receiver expecting a fraction of it. The symptom looks exactly like a loss fault until
+somebody pads the link, which is why short links built with long-haul optics ship with an
+attenuator in the box.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "Margin as the gap above the sensitivity line",
                 "visualiser": "bode",
