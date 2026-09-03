@@ -1132,8 +1132,251 @@ the whole net to the penny, as `same` does above, and one confirms that `legacy.
 still has all of its `if`s.
 ''',
                 },
+                {
+                    "title": "A failing test first, and a traceback read bottom-up",
+                    "minutes": 14,
+                    "body": r'''
+A warehouse report says three torches; the shelf holds five. Somewhere in forty lines
+of `inventory.py` a number is being replaced where it should have been added, and the
+fastest-feeling move — open the file and read until the mistake announces itself — is
+reliably the slowest one available. The previous reading built a net under code that
+was about to move. This one points the same machinery at the other two jobs it does:
+writing a net for code that never had one, and reading that net the moment it turns
+red.
+
+Those two jobs are one skill. A test puts the code into a known state, does one thing
+to it, and asserts on what came back. A debugging session performs the same three
+moves by hand, with the state held in somebody's head and nothing written down. The
+test is the version that is still there on Thursday.
+
+## Arrange, act, assert
+
+The standard Python runner is **pytest**, and its conventions amount to three rules
+and no configuration: files named `test_*.py`, functions named `test_*`, and a bare
+`assert` inside. There is no base class to inherit from and no assertion vocabulary
+to memorise, because the runner rewrites each `assert` so that a failure prints both
+sides of the comparison it was handed.
+
+```text
+# test_inventory.py
+import pytest
+
+from inventory import Inventory, Item
+
+
+def test_add_merges_a_repeated_item():
+    inv = Inventory()                        # arrange
+    inv.add(Item("Torch", 249.0, 2))
+    inv.add(Item("Torch", 249.0, 3))         # act
+    assert inv.items["Torch"].quantity == 5  # assert
+
+
+def test_remove_unknown_item_raises():
+    inv = Inventory()
+    with pytest.raises(KeyError):
+        inv.remove("Ghost", 1)
+```
+
+```bash
+pip install pytest
+pytest                     # collect and run everything below the current directory
+pytest -q                  # one character per test instead of one line each
+pytest -x                  # stop at the first failure
+pytest -k merges           # only the tests whose name contains "merges"
+pytest test_inventory.py::test_remove_unknown_item_raises
+```
+
+That listing is a file to be saved rather than a snippet to run on this page: it
+imports `pytest` and a module named `inventory`, and neither is present here. The
+three comments name the shape every test in it takes. **Arrange** builds the world
+the behaviour needs and nothing more. **Act** is the one call under examination.
+**Assert** states what should have come back. One behaviour per test, named after the
+behaviour, so that the runner's output reads as a sentence: a red
+`test_remove_unknown_item_raises` has said what broke before you have opened a file.
+
+## Write the failing one first
+
+Here is the miscount, small enough to hold in view, with the same two tests written
+against `unittest` so that they run where you are reading them.
+
+```python
+import io
+import unittest
+
+
+class Inventory:
+    def __init__(self):
+        self.items = {}
+
+    def add(self, name, quantity):
+        self.items[name] = quantity          # the defect: it replaces instead of adding
+
+    def remove(self, name, quantity):
+        if name not in self.items:
+            raise KeyError(name)
+        self.items[name] = self.items[name] - quantity
+
+
+class InventoryTests(unittest.TestCase):
+    def test_add_merges_a_repeated_item(self):
+        inv = Inventory()                       # arrange
+        inv.add("Torch", 2)
+        inv.add("Torch", 3)                     # act
+        self.assertEqual(inv.items["Torch"], 5)  # assert
+
+    def test_remove_unknown_item_raises(self):
+        inv = Inventory()
+        with self.assertRaises(KeyError):
+            inv.remove("Ghost", 1)
+
+
+def run_suite():
+    suite = unittest.defaultTestLoader.loadTestsFromTestCase(InventoryTests)
+    result = unittest.TextTestRunner(stream=io.StringIO(), verbosity=0).run(suite)
+    return result.testsRun, len(result.failures) + len(result.errors)
+
+
+ran, failed = run_suite()
+print("with the bug still in:", ran, "tests run,", failed, "failed")
+
+
+def add(self, name, quantity):
+    self.items[name] = self.items.get(name, 0) + quantity
+
+
+Inventory.add = add
+ran, failed = run_suite()
+print("after the one-line fix:", ran, "tests run,", failed, "failed")
+```
+
+The first line reports `with the bug still in: 2 tests run, 1 failed` and the second
+reports `after the one-line fix: 2 tests run, 0 failed`. The order of events matters
+more than the numbers. The test was written while the defect was still in place, it
+went red, and that red is the only evidence there is that the test can fail at all.
+Only afterwards was `add` replaced by the version that reads the current quantity
+before writing it back. A test that has never been seen red is a test nobody has
+evidence about: it may be asserting something no implementation could violate, and
+the green gives no way to tell.
+
+That order is the habit worth carrying out of this module. When a bug is reported,
+the first commit is a test that fails because of it and the second is the fix. The
+test then stays in the suite for good. It costs four lines, and it turns that
+particular defect into a one-time event, because the only route back for it now runs
+through an assertion that names it. The characterisation net in the previous reading
+records what the code **does**; a regression test records what it **must** do, and
+the two sit in the same suite doing different work.
+
+## Which inputs, and how many
+
+Module 1 answered the question of which values are worth testing, and the answer has
+not moved: one representative from inside each equivalence partition, and a pair
+straddling every boundary at the resolution the domain works in. What testing adds is
+where those cases go. A boundary pair belongs in a test named for the boundary rather
+than appended to a test about something else, because a failure has to point at one
+behaviour to be worth reading. Zero, one, the empty collection, the largest value the
+domain allows, and the input that ought to raise are the five that get forgotten, and
+between them they account for most of the defects that reach a customer.
+
+## A traceback is read bottom-up
+
+When the suite goes red, the traceback is the first evidence, and it is written in an
+order that catches people out. Python prints the frames outermost first, under the
+heading `Traceback (most recent call last)`, so the deepest frame — the one that
+actually raised — is at the bottom, immediately above the error line.
+
+```python
+import traceback
+
+
+def price_of(row):
+    return float(row["price"]) * row["quantity"]
+
+
+def order_total(rows):
+    total = 0.0
+    for row in rows:
+        total = total + price_of(row)
+    return total
+
+
+ROWS = [{"price": "2.50", "quantity": 4}, {"price": "1.20", "quantity": None}]
+
+try:
+    print(order_total(ROWS))
+except TypeError as exc:
+    print("what went wrong:", type(exc).__name__ + ":", exc)
+    frames = traceback.extract_tb(exc.__traceback__)
+    print("where it went, outermost first:", [frame.name for frame in frames])
+    print("the frame that raised:", frames[-1].name)
+    bad = [row for row in ROWS if row["quantity"] is None]
+    print(f"{bad=}")
+```
+
+The block prints four lines. The error is `TypeError: unsupported operand type(s)
+for *: 'float' and 'NoneType'`, which is a precise statement rather than a complaint:
+something multiplied a float by `None`. The frame list is `['<module>',
+'order_total', 'price_of']`, printed in the order Python prints them, and the frame
+that raised is the last of the three. So the last line of a traceback says what went
+wrong, the bottom frame says where it happened, and the frames above it say how
+control reached that point. Read them in that order and a traceback has answered
+three questions in about five seconds.
+
+The fourth line is `bad=[{'price': '1.20', 'quantity': None}]`, and it comes from
+`print(f"{bad=}")`. Since Python 3.8 an `=` at the end of an f-string field prints
+the expression's source text alongside its value, so the label cannot drift away from
+the thing being labelled — which is what happens to `print("bad", other)` the third
+time a debugging line gets copied.
+
+## The method under it
+
+1. **Reproduce it.** Find the smallest input that triggers the problem every time. A
+   large share of bugs are diagnosed during this step and never reach the next one,
+   because shrinking the input is what forces the conditions to be named.
+2. **Read the traceback bottom-up**, as above, and believe it. The error is a
+   statement about what the interpreter found, not an opinion about your intent.
+3. **Make the invisible visible.** `print(f"{order=}")` at the suspicious points, or
+   `breakpoint()` to stop there and inspect the frame by hand. In a browser,
+   `debugger;` with the developer tools open does the same job.
+4. **Isolate.** Cut the failing behaviour out into a five-line script. If the bug
+   comes with it, it is cornered; if it does not, it lives in what you removed. Either
+   answer halves the search, which is why this step is worth doing even when you
+   expect it to tell you nothing.
+5. **Explain it out loud**, to a colleague or to nobody in particular. The sentence
+   beginning "it cannot be the cache, because—" is reliably the moment the assumption
+   inside it becomes audible.
+
+Once it is fixed, the debug prints come out and the regression test stays in. What
+replaces those prints in code that runs anywhere but your own machine is `logging`:
+`logging.warning("stock below zero for %s", name)` carries a timestamp, a level and a
+module name, can be turned down without editing the call site, and leaves the string
+formatting undone until something is actually going to read it.
+
+## What a test must not assert on
+
+The temptation, once a suite exists, is to reach past the interface and assert on
+whatever is easiest to see: a private attribute, the contents of a cache, the number
+of times a helper was called. Those assertions pass today and go red on the morning
+somebody renames the attribute, and the failure says nothing about behaviour. This is
+the rule module 1 stated about acceptance criteria, arriving from the other
+direction, and it is what makes the previous reading's refactoring possible at all. A
+suite that asserts on structure goes red at every extraction, and a net that reports
+a failure when nothing observable moved stops being read within a fortnight.
+
+## Where this stops holding
+
+A green suite proves that the cases in it pass, and says nothing about the cases
+nobody wrote. A coverage percentage measures which lines were executed rather than
+which behaviours were checked, so total line coverage is entirely consistent with
+asserting nothing at all. A test that depends on the clock, on the iteration order of
+a set, on the network or on an unseeded random number will fail once a fortnight and
+teach the team to press the re-run button, which costs more than the test was ever
+worth. And some defects change under observation: adding a `print` alters the timing
+enough that a race stops racing, at which point the method above has to be run
+against a recording rather than against a live process.
+''',
+                },
             ],
-            "quiz": {
+            "quiz": [{
                 "title": "Changing the shape without changing the behaviour",
                 "minutes": 7,
                 "questions": [
@@ -1239,7 +1482,94 @@ stops at the first failure is a flag, not a reason.
 """,
                     },
                 ],
-            },
+            }, {
+                "title": "The failing test, and the traceback under it",
+                "minutes": 6,
+                "questions": [
+                    {
+                        "q": "A bug is reported, you write a test that fails because of it, and then you fix the code. What happens to that test afterwards?",
+                        "opts": [
+                            "It stays in the suite for good, because the only route back for that defect now runs through an assertion that names it",
+                            "It is deleted alongside the fix, since a test that can no longer fail costs time on every run and proves nothing",
+                            "It is marked as skipped, so that the suite records that the defect existed without paying to check for it again",
+                            "It is folded into the existing test of that function, to stop the suite growing by a case every time somebody files a report",
+                        ],
+                        "a": 0,
+                        "why": r"""
+That is what a regression test is, and it is the cheapest thing in testing: four
+lines that turn one defect into a one-time event. Deleting it inverts the argument —
+the reason it can no longer fail is that the test is holding the fix in place, and
+the fix is what a later refactoring is most likely to undo by accident. Skipping it
+keeps the cost and gives up the whole of the benefit; a skipped test is a comment
+that takes a second to run. Folding it into an existing test costs the failure its
+name, and a suite is worth reading precisely because a red
+`test_remove_unknown_item_raises` says what broke before anybody opens a file.
+""",
+                    },
+                    {
+                        "q": "A bug report arrives. What is the first move?",
+                        "opts": [
+                            "Find the smallest input that triggers it every time, because naming the conditions is most of the diagnosis",
+                            "Read the function until the mistake shows itself — the code is the only authority on what it does",
+                            "Wrap the failing call in `try` and `except` so that the program survives, and then investigate without the pressure",
+                            "Roll the release back and start a bisection, so that the commit responsible names itself before anybody has to read code",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A reliable reproduction is the thing every later step needs: it is what the
+regression test asserts on, what the bisection answers with, and what tells you the
+fix worked. Shrinking the input is also the step that forces the conditions to be
+said out loud, which is why a large share of bugs are diagnosed here and never reach
+a debugger. Reading the code is true about authority and unbounded in cost — forty
+lines can be read all afternoon without the wrong one announcing itself. Catching the
+exception hides the evidence and leaves the defect running. And a bisection is a fine
+tool that needs a yes-or-no test to run at each probe, so it comes after the
+reproduction rather than instead of it.
+""",
+                    },
+                    {
+                        "q": "A traceback is headed `Traceback (most recent call last)`. Where in it are the two facts you need — what went wrong, and where?",
+                        "opts": [
+                            "The last line names the exception and its message; the bottom frame, immediately above that line, is where it was raised",
+                            "The first line names the exception; the top frame, immediately below it, is where the exception was raised",
+                            "Either end serves, because the frames are listed in the order the functions appear in the file rather than in call order",
+                            "The frames run outwards from the fault, so the bottom one is the caller furthest away and the top one is where it broke",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The heading is the instruction: the most recent call is printed last, so the list runs
+outermost first and the deepest frame — the one that actually raised — sits at the
+bottom, with the error line under it. Read the error, then the frame above it, then
+walk upwards to see how control arrived; three questions answered in about five
+seconds. The reversed reading is the tempting one because most text is read downwards
+into detail, and here the detail is at the end. Source order has nothing to do with
+it, since the frames record calls rather than definitions, and a recursive function
+appears many times over.
+""",
+                    },
+                    {
+                        "q": "A test reaches past the interface and asserts on a private attribute of the object under examination. What does that cost, in a module about refactoring?",
+                        "opts": [
+                            "It goes red at any extraction that renames the attribute, though nothing observable moved, and a net that fails without a behaviour change stops being read",
+                            "Nothing at all, provided the attribute is documented somewhere: the test is checking the same behaviour by a shorter and faster route than the interface offers",
+                            "Only running time, because reaching into an object is slower than calling it, and the cost becomes visible once the suite holds a few thousand cases",
+                            "It costs the test its ability to fail, because a private attribute is written by the same code the assertion then reads back",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Refactoring is defined as a change that preserves behaviour, and an assertion on
+structure fails when structure changes, so a suite written that way reports a
+behaviour change on every extraction. The team then learns to ignore it, and the net
+has been spent. This is module 1's rule about acceptance criteria arriving from the
+other direction: a check that has to be edited whenever the implementation moves is
+not independent evidence of anything. Documentation does not repair it, because what
+is documented can be refactored too. The cost is not running time, which is
+negligible either way. And such a test can certainly fail — a private attribute is
+read back after the code has written it, so it fails the moment the write changes.
+""",
+                    },
+                ],
+            }],
             "blanks": {
                 "title": "Reading the constants back out of the nest",
                 "minutes": 9,
@@ -3352,8 +3682,397 @@ a surface that relaxes `port` from required to optional, and one that promotes
 `timeout` the other way.
 ''',
                 },
+                {
+                    "title": "History you can bisect",
+                    "minutes": 13,
+                    "body": r'''
+Six weeks of work sit between the release that was fine and the release that is not.
+Somewhere inside them a change made the checkout charge the wrong postage. You have
+the question written down as a test — the boundary pair from module 1, straddling
+fifty pounds — and you have 1,024 commits. Running the test against every one of them
+is a day of work. Running it against ten of them is twenty minutes, and which ten is
+decided by the shape of the history rather than by anybody's intuition.
+
+That is what a version control system is for. Everything else in this reading — the
+staging area, the message, the branch, the remote — is in service of a history that
+somebody can later search.
+
+## The rhythm
+
+Git records snapshots of a whole project. Each snapshot is a **commit**: a tree of
+file contents, a parent commit, an author, a timestamp and a message. The everyday
+loop is three commands, run several times a day.
+
+```bash
+git init                       # turn this directory into a repository (once)
+git status                     # what has changed since the last commit?
+git add inventory.py           # stage: choose what goes into the next snapshot
+git add .                      # ...or stage everything that changed
+git commit -m "Add low-stock report"
+git log --oneline              # the history, one commit per line
+git diff                       # what has changed and is not staged
+git diff --staged              # what is staged and about to be committed
+```
+
+The step people ask about is `add`. If a commit records the whole tree anyway, why is
+there a separate act of choosing what goes into it? Because a commit is not a
+snapshot of a moment; it is a snapshot of a decision. An afternoon of editing usually
+contains two changes that have nothing to do with each other, and the staging area is
+what lets them be recorded as two commits instead of one. `git add -p` walks the diff
+hunk by hunk and asks about each one, which is the tool for exactly that situation.
+
+Commit when one coherent thing works. "Add JSON persistence" is a commit; a week of
+edits is not, and neither is "stuff". The message convention is the imperative mood,
+under about sixty characters on the first line, saying what the commit does to the
+code — the line completes the sentence "applying this commit will ...".
+
+## Why the granularity is a technical decision
+
+Small commits look like a matter of tidiness until the history has to answer a
+question. A bisection is a binary search over commits, in which the test is *does the
+suite pass here?* and each answer discards half of what is left.
+
+```python
+def suite_fails_at(commit):
+    """The one question a bisection asks, and the only one it needs."""
+    return commit >= 617
+
+
+def bisect(last_good, first_bad, probes):
+    lo, hi = last_good, first_bad
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        probes.append(mid)
+        if suite_fails_at(mid):
+            hi = mid
+        else:
+            lo = mid
+    return hi
+
+
+probes = []
+culprit = bisect(0, 1024, probes)
+print("commits between the last good one and the broken one:", 1024)
+print("probes the bisection needed:", len(probes))
+print("first four probes:", probes[:4])
+print("culprit:", culprit)
+print("walking forwards one commit at a time would have needed:", culprit + 1)
+```
+
+Ten probes against 1,024 commits, by the same arithmetic that gives a balanced binary
+search its depth: every probe halves the range, and $\log_2 1024 = 10$. Walking
+forwards one commit at a time from the last known-good revision would have cost 618
+runs of the suite. Git performs the search for you. Start it with `git bisect start`,
+mark the broken revision with `git bisect bad` and a known-good one with
+`git bisect good <sha>`, and answer `good` or `bad` after each revision it checks out
+for you; `git bisect run pytest -x` hands the answering over to the suite, using its
+exit status as the verdict, and prints the offending commit without further help.
+
+Each of those ten answers, though, is only as useful as the commit it lands on. A
+history of ten enormous commits gives the bisection three probes and then hands over
+a commit touching four hundred lines, which is the point at which the search stops
+helping and the reading starts. The size of a commit is therefore not a matter of
+taste; it is the resolution of every search anybody will ever run over the history.
+
+## Branches, and what a conflict actually is
+
+A branch is a movable label pointing at a commit. Creating one costs nothing, because
+nothing is copied.
+
+```bash
+git switch -c report-feature   # create a branch and move onto it
+git switch main                # back to the trunk
+git merge report-feature       # bring the work in
+git branch -d report-feature   # delete the label; the commits stay
+```
+
+Where two branches changed different lines, git works out the combined file on its
+own. Where they changed the same lines, it stops and writes both versions into the
+file between markers.
+
+```text
+<<<<<<< HEAD
+    shipping = 0.0 if subtotal >= 50 else 4.99
+=======
+    shipping = 0.0 if subtotal > 50 else 4.99
+>>>>>>> report-feature
+```
+
+Above the row of equals signs is what the branch you are on says; below it is what
+the incoming branch says. Editing the file down to what it should be, then `git add`
+and `git commit`, finishes the merge. A conflict is git declining to choose between
+two deliberate edits, which is the behaviour you want from it: the two lines above
+differ by one character, and module 1 spent a whole reading on what that character is
+worth.
+
+## Remotes, and where the gates run
+
+A remote is a copy of the repository somewhere else, conventionally named `origin`.
+
+```bash
+git clone https://github.com/user/repo.git
+git pull                                   # fetch others' commits and integrate them
+git push                                   # publish yours
+git push -u origin report-feature          # the first push of a new branch
+```
+
+The `-u` on that last line is the flag people meet as an error message. A branch
+created locally has no counterpart on the server, so git has nowhere to push it until
+it is told once; `-u` records the answer so that every later push from that branch is
+a bare `git push`.
+
+The team workflow built on this is the pull request: push a branch, open a PR, have
+the diff reviewed, merge into `main`. That is where the rest of this module runs. The
+complexity gate from the first reading is a program a pull request executes against
+the branch, and the version bump from the second is read off the diff the pull
+request displays. A tag is how the decision gets recorded against the code:
+`git tag -a v1.5.0 -m "Add retries to connect"` puts that number on the one commit it
+describes, and `git push --tags` publishes it.
+
+## .gitignore, and the mistake that costs money
+
+Some files have no business in a history: virtual environments, `node_modules/`,
+build output, and above all secrets.
+
+```text
+venv/
+node_modules/
+__pycache__/
+dist/
+.env
+```
+
+The mistake worth naming is what happens when `.env` is committed and *then* added to
+`.gitignore`. Tracking stops from that point forwards, the working tree looks
+correct, `git status` is quiet, and the credential is still sitting in every clone of
+the repository, readable by anybody who runs `git log -p`. An ignore rule governs
+untracked files; it has no retrospective power over commits already made. Undoing it
+takes `git rm --cached .env` to stop the tracking and a history rewrite to remove the
+old blobs — and because the secret has by then been on other people's machines and in
+the server's backups, the only remedy that is actually a remedy is to rotate the
+credential. The tempting belief is that a git-ignored file is a private file, and it
+is not; it is a file git has been told to stop noticing.
+
+## Undoing
+
+```bash
+git restore inventory.py           # discard uncommitted changes to a file
+git restore --staged inventory.py  # unstage it, keeping the changes
+git stash                          # shelve work in progress; git stash pop returns it
+git revert abc123                  # a NEW commit whose diff undoes an old one
+git reset --hard abc123            # move the branch back, discarding what came after
+```
+
+`revert` and `reset` both undo, and the difference between them matters the moment a
+commit has been pushed. `revert` appends a commit whose diff is the inverse of the
+offending one, so everything anybody else has already fetched remains true. A hard
+`reset` moves the branch label backwards and abandons the commits after it, which
+rewrites history that other clones are holding; their next `pull` sees the abandoned
+work as new and merges it straight back in. On a branch that anybody else has, revert.
+
+## Where the history stops telling the truth
+
+Git records what the files contained, not why they contained it. The message is the
+only place the reason exists, which is why a log of "fix" and "wip" cannot be read by
+a human even after git has found the commit. A passing suite at a commit means the
+tests passed there, not that the code was right, so a bisection finds the revision
+where the *test* started failing: if the behaviour was already wrong before anybody
+wrote the test, the search lands on the commit that added the test. Merge commits
+give the search a graph rather than a line, which git copes with and human reading
+does not. And nothing about a commit is evidence that its author ran anything at all
+before making it, which is the whole reason the gates in this module run on the
+server instead of on the machine that produced the commit.
+''',
+                },
+                {
+                    "title": "The ground a gate stands on",
+                    "minutes": 12,
+                    "body": r'''
+A complexity gate that runs on one developer's laptop is a preference. The same gate,
+run by a server on every pull request, is a rule. Nothing about the measurement
+changed between those two sentences; what changed is that a second machine could
+reproduce it. That reproduction has three moving parts — a command any machine can
+run, a set of dependencies any machine can install, and a number the running machine
+can act on — and this reading is about all three.
+
+## The terminal, and the number nobody looks at
+
+Every tool in this trade is a command-line program, because a program that can be
+called from a script can be called by a build server, and a menu item cannot.
+
+```bash
+pwd                    # which directory am I in?
+ls                     # what is here?  (dir, on Windows cmd)
+cd projects/shop       # go there;  cd .. goes up one
+mkdir tools            # make a directory
+cat main.py            # print a file
+python main.py         # run a program
+node app.js
+```
+
+Two keys do half of the typing: **Tab** completes a name, and the **up arrow** brings
+back the previous command. `Ctrl+C` interrupts whatever is running.
+
+The part that matters to a gate is the part with no output. Every command finishes by
+handing back an **exit status**: an integer in which zero means success and anything
+else means failure.
+
+```bash
+python -m mypackage.checks   # run the gate
+echo $?                      # 0 if it passed, non-zero if it did not
+```
+
+PowerShell keeps the same number in `$LastExitCode`. That single integer is the whole
+interface between a check and the system running it, which is why a gate is written
+to return one.
+
+```python
+def complexity_gate(offenders):
+    """A gate is a program: it says what it found, then it passes or fails."""
+    for name, score in offenders:
+        print("   over the limit:", name, "scores", score)
+    return 1 if offenders else 0
+
+
+print("exit status with nothing over the limit:", complexity_gate([]))
+print("exit status with two offenders:", complexity_gate([("Router.dispatch", 6), ("guarded", 4)]))
+```
+
+The two lines naming `Router.dispatch` and `guarded` are printed by the call before
+the line reporting its status, because the argument has to be evaluated before it can
+be printed — the report comes out first and the verdict follows it, which is the
+order a person reading a build log wants. Every check the complexity gate's own
+pipeline runs has that shape, and the status is what lets one step depend on another:
+`&&` runs the second command only when the first exited zero, while `;` runs it
+either way. A build script written with `;` between its steps announces success after
+a failed test run, and has done so at some point in most people's careers.
+
+## An environment somebody else can recreate
+
+Two projects on one machine will eventually want two versions of the same library, so
+each Python project gets its own **virtual environment**: a directory holding its own
+interpreter and its own installed packages.
+
+```bash
+python -m venv venv                # create it, once per project
+source venv/bin/activate           # enter it   (Windows: venv\Scripts\activate)
+pip install requests               # installs into this environment only
+pip freeze > requirements.txt      # record exactly what is installed
+pip install -r requirements.txt    # recreate the same set elsewhere
+deactivate                         # leave it
+```
+
+The `venv/` directory stays out of git and `requirements.txt` goes in, because the
+directory is what running the instruction produces and the file is the instruction.
+Inside that file is a distinction worth having. `requests==2.31.0` is a **pin**: one
+version, identical on every machine, and identical again next year.
+`requests>=2.31,<3` is a **range**, and a range is a bet that the maintainer follows
+the rule from the previous reading — that nothing released before 3.0.0 will break a
+caller. That is precisely what the major digit promises, which is why an application
+pins and a library declares ranges: an application wants the same bytes everywhere,
+and a library that pinned would force its own choice on every project depending on
+it. Below 1.0.0 the promise is suspended, so a `0.x` dependency is pinned exactly or
+watched closely.
+
+`pip freeze` writes down the entire environment, transitive dependencies included,
+which is what makes it reproducible and also what makes it useless as a statement of
+intent — it cannot tell you which three of its ninety lines you asked for. Any
+project of size ends up with a short file of direct dependencies and a generated lock
+file beside it. JavaScript names those two things separately from the start.
+
+```bash
+npm init -y                # write a package.json
+npm install express        # add it to package.json, install into node_modules/
+npm ci                     # install exactly what package-lock.json says, nothing else
+npm run dev                # run a script defined in package.json
+```
+
+`package.json` holds the ranges a person wrote; `package-lock.json` holds the exact
+resolution a machine produced from them. Both belong in git and `node_modules/` does
+not. `npm install` is allowed to update the lock file and `npm ci` refuses to, which
+is the reason the second one is what a build server runs: a check whose dependencies
+can move underneath it is measuring a different program each time.
+
+## Configuration lives outside the code
+
+Anything that differs between one machine and the next — a database URL, a port, an
+API key — is configuration rather than code, and it reaches the program through the
+**environment** rather than through a literal in a source file.
+
+```bash
+export DATABASE_URL="sqlite:///shop.db"      # bash: set it for this shell
+```
+
+```python
+import os
+
+os.environ.pop("PORT", None)
+os.environ["DEBUG"] = "0"
+
+port = os.environ.get("PORT", "8000")
+print("PORT is unset, so the default arrives as", repr(port), "of type", type(port).__name__)
+print("int(port) + 1 =", int(port) + 1)
+
+flag = os.environ.get("DEBUG", "")
+print("DEBUG holds", repr(flag))
+print("bool(flag) is", bool(flag), "even though the setting is off")
+print("read against a list of true words instead:", flag.lower() in ("1", "true", "yes", "on"))
+```
+
+Two traps are visible in that output. Environment variables are strings and nothing
+else, so `PORT` arrives as `'8000'` and the `int()` around it is not decoration.
+And `DEBUG=0` is the string `'0'`, which is a non-empty string, which is truthy — so
+`bool(os.environ.get("DEBUG"))` reports that debugging is switched on for every value
+a person would reach for to switch it off. Read the variable against a list of words
+that mean yes, and the trap closes.
+
+Locally these live in a git-ignored `.env` file that a library such as `python-dotenv`
+loads at start-up; in production the hosting platform sets them. Neither route puts a
+credential in the repository, which is the property being bought, and the previous
+reading explains what it costs to buy it back afterwards.
+
+## A layout that says where things are
+
+```text
+shop/
+├── README.md            what it is, how to run it, how to run the tests
+├── .gitignore
+├── requirements.txt     (or package.json)
+├── src/
+│   ├── main.py
+│   ├── db.py
+│   └── api.py
+└── tests/
+    └── test_api.py
+```
+
+Separating `src/` from `tests/` is not decoration either. It lets a test runner find
+the suite by convention rather than by configuration, it keeps the tests out of
+whatever gets packaged and shipped, and it turns "is this code, or a check on the
+code?" into a question answered by a path.
+
+The README answers three questions on its first screen: what this is, how to run it,
+and how to run the tests. The third is what turns a gate into something a new
+contributor can execute on their first morning, and it is the one most often missing.
+Write it for a stranger; in six months the stranger is you.
+
+## Where this stops holding
+
+A pinned requirements file reproduces an environment on the platform that produced
+it, and a wheel built for one operating system is not the wheel another one needs, so
+"it works on my machine" survives pinning and is answered properly by a container
+image rather than by a text file. Environment variables are global to the process,
+untyped, and invisible in a traceback, so a misspelled name silently takes the
+default and the service runs against the wrong database until somebody reads the
+logs. An exit status is one integer, which is enough to stop a build and not enough
+to explain it — hence the rule from the first reading of this module, that a gate
+which reports failure and nothing else is worse than no gate. And a layout is a
+convention: nothing stops code under `src/` importing from `tests/`, which makes it
+one more rule that has to be checked by a gate if it is to hold at all.
+''',
+                },
             ],
-            "quiz": {
+            "quiz": [{
                 "title": "Counting branches, and reading a diff",
                 "minutes": 7,
                 "questions": [
@@ -3436,7 +4155,134 @@ the call site can rescue you from.
 """,
                     },
                 ],
-            },
+            }, {
+                "title": "Staging, ignoring, pinning, and the exit status",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "The everyday loop is `status`, then `add`, then `commit`. Given that a commit records the whole tree anyway, what is the `add` step for?",
+                        "opts": [
+                            "It chooses which of the working tree's changes belong in the next commit, so an afternoon holding two unrelated changes can be recorded as two",
+                            "It sends the change to the remote, and `commit` is what then writes it into the local history",
+                            "It registers a file with git for the first time; a change to a file git already tracks needs only `commit`",
+                            "It survives from an older interface, and since `git commit -a` picks up every tracked change on its own, staging adds nothing an attentive author needs",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A commit is a snapshot of a decision rather than of a moment, and the staging area is
+where the decision gets made: `git add -p` walks the diff hunk by hunk so that two
+unrelated changes made in one afternoon leave the repository as two commits, which is
+the resolution every later bisection inherits. Registering a new file is something
+`add` also does, which is what makes that reading tempting, but it names one case
+rather than the purpose. Nothing travels to a server until `git push`; a commit is
+entirely local. And `git commit -a` is a real command, which is what makes the
+obsolescence story plausible — it stages every tracked change, so it is precisely the
+command that throws the decision away.
+""",
+                    },
+                    {
+                        "q": "A `.env` file holding a database password was committed a month ago. Somebody adds `.env` to `.gitignore` today. Where is the password now?",
+                        "opts": [
+                            "In the history and in every clone, readable by anyone who runs `git log -p` — an ignore rule governs untracked files and reaches nothing already committed",
+                            "Out of the repository, because `.gitignore` is applied across the whole history the next time git runs its garbage collection",
+                            "Never on the server in the first place, because an ignored file is left out of `git push` in the same way it is left out of `git status`",
+                            "Out of reach in practice: the old commits still hold it, but nothing surfaces the value unless somebody deliberately checks out that revision by its hash and opens the file",
+                        ],
+                        "a": 0,
+                        "why": r"""
+An ignore rule stops git noticing an untracked file; it has no power over commits
+already made, so the credential sits in every clone and every backup, one `git log -p`
+away. That is why the remedy is `git rm --cached` for the tracking, a history rewrite
+for the blobs, and — because the secret has already been copied to machines you do not
+control — rotating the credential regardless. Garbage collection repacks objects and
+deletes unreachable ones; it does not read `.gitignore` and it will not drop a blob a
+commit still points at. Push sends commits, so a file that was committed is a file
+that was pushed. And needing a hash is no protection at all when a clone gives
+everybody the whole history.
+""",
+                    },
+                    {
+                        "q": "Two branches changed the same line of `order_total`, and `git merge` stops, leaving markers in the file. What has happened?",
+                        "opts": [
+                            "Git found two deliberate edits to the same lines and declined to choose between them; you edit the file to what it should be, then `git add` and commit",
+                            "The repository is in an inconsistent state, and the work has to be re-cloned from the remote before anything else can proceed",
+                            "Git kept whichever of the two edits carries the later commit timestamp, and left the markers in the file as a record of the version it decided to discard",
+                            "One of the two branches was started from the wrong commit, and a conflict is how git reports that particular mistake",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Where two branches touched different lines git merges them without asking. Where they
+touched the same lines it stops, because choosing would mean discarding somebody's
+deliberate work on a guess, and the markers are it showing you both versions rather
+than picking one. Nothing is corrupt and nothing needs re-cloning; the merge is
+paused, and `git merge --abort` undoes it if you would rather start again. Git has no
+notion of which edit is better and never silently keeps one, which is the whole point.
+And a conflict says nothing about where a branch started: two branches from the same
+commit conflict readily, and two from different commits often do not.
+""",
+                    },
+                    {
+                        "q": "Why do `requirements.txt` and `package-lock.json` belong in git while `venv/` and `node_modules/` do not?",
+                        "opts": [
+                            "The files are the instruction and the directories are what running it produces; a derived artefact in a history is noise, and platform-specific noise at that",
+                            "The directories are too large for git to store efficiently, and repository size is the whole of the argument against them",
+                            "The directories hold third-party code, and redistributing that code inside your own repository is what the licences forbid",
+                            "Git cannot diff binary content, and both directories hold compiled artefacts its diff algorithm has no representation for, so every reinstall would land as an opaque blob",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Track the source and derive the rest: the file states what the environment should be,
+and the directory is one machine's answer to it, complete with wheels compiled for
+that operating system and paths baked into the scripts. Committing the answer instead
+of the question gives every reviewer a diff nobody reads and every other platform a
+directory that does not work. Size and licensing are real inconveniences and neither
+is the principle — a small dependency tree of permissively licensed packages still
+does not belong in the history. And git stores binaries perfectly well; it diffs them
+poorly, which is a display problem rather than the reason.
+""",
+                    },
+                    {
+                        "q": "A build script runs `check ; deploy`. The check finds two functions over the complexity limit, prints both, and returns 1. What happens?",
+                        "opts": [
+                            "`deploy` runs anyway: `;` starts the next command whatever the previous status was, and `&&` is the operator that would have stopped it",
+                            "`deploy` is skipped, because a non-zero exit status aborts the remainder of the script",
+                            "`deploy` runs, and the pipeline is safe regardless, because a build server reads the offenders a check prints rather than the status it returns",
+                            "The script fails at the `;`, which separates commands only inside a subshell and not at the top level of a script",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`;` means *then*, and nothing more: it sequences two commands and discards the first
+one's verdict. `&&` means *then, if that worked*, and it is the whole mechanism by
+which an exit status stops a pipeline. A shell keeps running after a failed command
+unless it was started with `set -e` or the steps were chained with `&&`, so a script
+punctuated with semicolons reports success after a failed test run and has done so in
+most people's careers at least once. The printed report is for the person reading the
+log afterwards; the integer is the part the machine can act on, which is why a gate
+returns one. And `;` is an ordinary statement separator everywhere in a shell script.
+""",
+                    },
+                    {
+                        "q": "The environment holds `DEBUG=0`, and the code reads `if bool(os.environ.get('DEBUG')):`. What does the program do?",
+                        "opts": [
+                            "It runs with debugging on, because the value arrives as the string `'0'`, and every non-empty string is truthy",
+                            "It runs with debugging off, because Python converts a numeric-looking environment value before `bool` ever sees it",
+                            "It raises a `TypeError`, because `bool` refuses a string argument and wants the value put through `int` first",
+                            "It depends on where the value came from: an `export` in the shell stores an integer, while a `.env` file read by a library stores a string",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The environment is a mapping of strings to strings, with no types anywhere in it, so
+`'0'` reaches the program as two characters of text and `bool` reports what it is
+asked about: a string with something in it. The setting is therefore on for every
+value a person would reach for to turn it off, which is why configuration is read
+against a list of words that mean yes rather than handed to `bool`. Nothing converts
+on the way in — that is what the `int()` around a port is for. `bool` accepts any
+object at all and never raises. And the loader of a `.env` file puts strings into the
+same mapping the shell does, so the source of the value changes nothing.
+""",
+                    },
+                ],
+            }],
             "blanks": {
                 "title": "Five releases off 1.4.2",
                 "minutes": 8,
