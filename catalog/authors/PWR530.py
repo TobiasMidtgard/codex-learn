@@ -48,6 +48,236 @@ COURSE = {
     "modules": [
         # ---- M1 -----------------------------------------------------------
         {
+            "read": [
+                {
+                    "title": "Volt-seconds in, watts out: what the core charges for",
+                    "minutes": 15,
+                    "body": r'''
+This course builds one transformer and then spends four modules arguing with it: 500 VA
+at 48 V for a square-wave converter, which by the end of module 4 is an ETD34 ferrite
+carrying thirteen turns of copper foil at 100 kHz. Put it on the bench before any of
+that is settled. Wind ten turns of hook-up wire round the free part of the centre leg,
+run them into an integrator and a scope, and start the converter.
+
+The drive across the primary is flat-topped: $+48$ V for 5 µs, $-48$ V for 5 µs,
+transitions too fast to see at this timebase. What the search coil integrates is not
+flat-topped at all. It is a triangle — a straight ramp up for 5 µs, a straight ramp
+down for 5 µs, corners sharp enough to drop a cursor on. Nothing in the core rounds
+them off, and nothing in the core makes the ramp curve.
+
+## The ramp is the law, and it fixes the peak
+
+A constant voltage across $N$ turns forces a constant rate of change of flux, because
+$V = N A_e \frac{dB}{dt}$ has $V$ on one side and nothing time-varying on the other.
+Integrate over the positive half period and the flux travels
+
+$$\Delta B = \frac{V}{N A_e}\cdot\frac{1}{2f}$$
+
+from its most negative value to its most positive, so the peak is half of that:
+$B_m = \frac{V}{4 f N A_e}$. The 4 is two halves — half a period of applied voltage, and
+half of a symmetric swing. It is the $K_f = 4$ that module 3 carries into the area
+product, and the derive unit *Where the frequency exponent really goes* builds it from
+the sine case in two steps.
+
+Nothing in that expression is a property of the ferrite. The peak flux is set by the
+volt-seconds you apply and the turns you wound, and the core has no vote. A core that
+is asked for more flux than it can carry does not refuse; it saturates, its inductance
+collapses, and the current goes wherever the loop resistance allows.
+
+```python
+import math
+
+V = 48.0            # volts across the primary, square wave
+f = 100e3           # switching frequency, Hz
+N = 13              # turns
+Ae = 97e-6          # ETD34 effective core area, m^2
+Ve = 7.64e-6        # ETD34 effective core volume, m^3
+K, ALPHA, BETA = 1.5, 1.4, 2.5     # the Steinmetz fit this course carries
+
+half = 1.0 / (2.0 * f)
+dB = V * half / (N * Ae)
+print("half period       %.2f us" % (half * 1e6))
+print("flux swing        %.5f T peak to peak" % dB)
+print("Bm at 13 turns    %.5f T" % (dB / 2.0))
+print("Bm at 12 turns    %.5f T" % (V / (4.0 * f * 12 * Ae)))
+print("turns for 0.100 T %.3f" % (V / (4.0 * f * 0.1 * Ae)))
+for name, B in (("target 0.1000 T", 0.1), ("wound  0.0952 T", dB / 2.0)):
+    Pv = K * f ** ALPHA * B ** BETA
+    print("%s   Pv %8.1f W/m^3   P %.4f W" % (name, Pv, Pv * Ve))
+```
+
+```text
+half period       5.00 us
+flux swing        0.19033 T peak to peak
+Bm at 13 turns    0.09516 T
+Bm at 12 turns    0.10309 T
+turns for 0.100 T 12.371
+target 0.1000 T   Pv  47434.2 W/m^3   P 0.3624 W
+wound  0.0952 T   Pv  41904.1 W/m^3   P 0.3201 W
+```
+
+Two of those numbers are worth pausing on. Asking for 0.1 T calls for 12.371 turns, and
+a turn is not divisible: 12 turns lands at 0.10309 T and 13 turns at 0.09516 T. The
+module-1 lab *Predict and fit core loss* pins its first test to 0.10309278350515463 T,
+which is the twelve-turn case, and the design the rest of the course carries winds
+thirteen and runs 4.8 per cent under the flux it asked for.
+
+The last two lines are the point of the module. A cubic metre of this ferrite driven at
+100 kHz and 0.1 T dissipates 47.4 kW; the ETD34 holds 7.64 cm³ of it, so the core loses
+0.362 W. That is the number the lab's `core_loss` returns and the number module 4 turns
+into kelvin.
+
+## An empirical power law, and which exponent you should be afraid of
+
+$$P_v = k f^{\alpha} B_m^{\beta}$$
+
+is a curve fit, not a derivation. Somebody drove toroids of the material at a list of
+frequencies and flux densities, measured the loss calorimetrically or with a wattmeter,
+took logarithms of all three axes and ran a least-squares line through the result — the
+lab's `fit_steinmetz` is that procedure in four lines. The constants this course uses,
+$k = 1.5$, $\alpha = 1.4$, $\beta = 2.5$, live in the capstone's read-only `cores.py`
+and are typical of a power ferrite in watts per cubic metre with $f$ in hertz and $B_m$
+in tesla.
+
+The mistake the two exponents invite is to read $f^{1.4}$ and conclude that switching
+faster costs core loss. It is a tempting reading, because every other loss in a
+converter does rise with frequency — gate charge, switching loss, ac copper loss, all
+of them — so the intuition is correct about everything except the part being described.
+The way to settle it is to change one thing at a time and keep the change honest: same
+core, same thirteen turns, same 48 V, and only the frequency moved.
+
+```python
+V, N, Ae, Ve = 48.0, 13, 97e-6, 7.64e-6
+K, ALPHA, BETA = 1.5, 1.4, 2.5
+
+print(" f (kHz)      Bm (T)   Pv (W/m^3)     P (W)   ratio")
+prev = None
+for f in (50e3, 100e3, 200e3, 400e3):
+    B = V / (4.0 * f * N * Ae)
+    Pv = K * f ** ALPHA * B ** BETA
+    P = Pv * Ve
+    print("%8.0f   %9.5f   %10.1f    %6.4f   %s"
+          % (f / 1e3, B, Pv, P, "-" if prev is None else "%.4f" % (P / prev)))
+    prev = P
+print("2**(alpha - beta) = %.4f" % 2.0 ** (ALPHA - BETA))
+print("at 25 kHz the same winding would sit at %.4f T" % (V / (4.0 * 25e3 * N * Ae)))
+```
+
+```text
+ f (kHz)      Bm (T)   Pv (W/m^3)     P (W)   ratio
+      50     0.19033      89823.4    0.6863   -
+     100     0.09516      41904.1    0.3201   0.4665
+     200     0.04758      19549.0    0.1494   0.4665
+     400     0.02379       9119.9    0.0697   0.4665
+2**(alpha - beta) = 0.4665
+at 25 kHz the same winding would sit at 0.3807 T
+```
+
+Core loss more than halves at every doubling. The mechanism is in the second column:
+the same volt-seconds spread over half the time is half the flux, so $B_m$ carries a
+factor $\frac{1}{f}$ into $B_m^{\beta}$ and the explicit $f^{\alpha}$ is fighting an
+$f^{-\beta}$ it cannot win. What survives is $f^{\alpha-\beta} = f^{-1.1}$, and $2^{-1.1}$
+is the 0.4665 that repeats down the last column to four decimal places. The exponent to
+be afraid of is $\beta$, and it is on your side.
+
+The last line is where the argument runs out in the other direction. Frequency can be
+lowered as well as raised, and every halving doubles $B_m$: at 25 kHz this winding is
+asking the core for 0.381 T, which is where a power ferrite saturates at 100 °C. The
+$f^{-1.1}$ does not stop being true — the core stops being a transformer first.
+
+## What the fit was fitted to
+
+Two boundaries matter more than the saturation one, because they bite inside the range
+where everything looks fine.
+
+The first is the fitting range. Coefficients are extracted over a stated span of
+frequency and flux, and outside it the law is unsupported rather than conservative;
+$\alpha$ and $\beta$ both drift with frequency in real materials. The lab's last two
+tests are about exactly this fragility: an exact data set returns $k$, $\alpha$ and
+$\beta$ to eight digits, while five per cent of log-normal scatter still holds the
+exponents to 0.03 and leaves $k$ loose somewhere between 1.0 and 2.0. The exponents are
+what survives a measurement; the prefactor is what you should not trust to two figures.
+
+The second is the waveform, and it is the one people get the sign of wrong. Steinmetz
+coefficients are measured on sinusoidal excitation. A square voltage gives a triangular
+flux with constant $\left|\frac{dB}{dt}\right|$, which is a different waveform at the
+same peak and the same frequency. The improved generalised Steinmetz equation prices
+that difference by assuming the instantaneous loss depends on $\left|\frac{dB}{dt}\right|$
+and on the swing $\Delta B$, and integrating over the cycle:
+
+$$P_v = \frac{1}{T}\int_0^T k_i \left|\frac{dB}{dt}\right|^{\alpha} (\Delta B)^{\beta-\alpha}\,dt,
+\qquad k_i = \frac{k}{2^{\beta-1}\pi^{\alpha-1}\int_0^{2\pi}|\cos\theta|^{\alpha}\,d\theta}$$
+
+For a flux that ramps at one rate for a fraction $D$ of the period and back at another
+for the rest, the integral collapses to $D^{1-\alpha} + (1-D)^{1-\alpha}$ and the whole
+correction is arithmetic.
+
+```python
+import math
+
+K, ALPHA, BETA = 1.5, 1.4, 2.5
+
+def simpson(fn, lo, hi, n=20000):
+    h = (hi - lo) / n
+    s = fn(lo) + fn(hi)
+    for i in range(1, n):
+        s += (4 if i % 2 else 2) * fn(lo + i * h)
+    return s * h / 3.0
+
+integral = simpson(lambda t: abs(math.cos(t)) ** ALPHA, 0.0, 2.0 * math.pi)
+ki_over_k = 1.0 / (2.0 ** (BETA - 1.0) * math.pi ** (ALPHA - 1.0) * integral)
+print("integral of |cos|^alpha = %.6f" % integral)
+print("k_i / k                 = %.6f" % ki_over_k)
+for D in (0.5, 0.3, 0.1):
+    shape = D ** (1.0 - ALPHA) + (1.0 - D) ** (1.0 - ALPHA)
+    ratio = ki_over_k * 2.0 ** BETA * shape
+    print("duty %.1f -> ramped flux costs %.3f of the sinusoidal fit, "
+          "so 0.3624 W becomes %.4f W" % (D, ratio, 0.36239701985529593 * ratio))
+```
+
+```text
+integral of |cos|^alpha = 3.582087
+k_i / k                 = 0.062439
+duty 0.5 -> ramped flux costs 0.932 of the sinusoidal fit, so 0.3624 W becomes 0.3378 W
+duty 0.3 -> ramped flux costs 0.979 of the sinusoidal fit, so 0.3624 W becomes 0.3548 W
+duty 0.1 -> ramped flux costs 1.256 of the sinusoidal fit, so 0.3624 W becomes 0.4550 W
+```
+
+The symmetric square wave this converter runs costs 7 per cent *less* than the
+sinusoidal fit predicts, not more. The reason is that a sinusoid of the same peak and
+period reaches a higher $\left|\frac{dB}{dt}\right|$ at the zero crossing than a ramp
+ever does, and with $\alpha < 2$ the loss is a concave function of that rate, so
+spreading the rate evenly is the cheaper way to move the same flux. Push the duty ratio
+away from a half — a forward converter with a short reset, an asymmetric half-bridge —
+and the ramp on the short side gets steep, the correction changes sign, and at $D = 0.1$
+the sinusoidal fit is 26 per cent optimistic. The correction is not a fudge factor with
+a memorable sign; it is a function of the duty ratio that passes through unity somewhere
+between a quarter and a third.
+
+The sandbox *The waveform the core actually sees* is the third boundary drawn rather
+than computed. The drain voltage there does not step cleanly: it rings about zero at
+75 MHz with 30 nH and 150 pF in the loop. That ring is a winding excitation three
+decades above where anybody fitted $\alpha$ and $\beta$, and no correction in this
+section covers it. Neither does any of it cover a dc bias, which is what a gapped
+inductor runs with and what Steinmetz has nothing to say about, or temperature, which
+module 4 shows moves the loss in a direction that depends on which side of 100 °C the
+core is sitting.
+
+## What you are about to build
+
+The derive unit takes the $f^{\alpha-\beta}$ result apart one substitution at a time and
+then asks the same question about turns, where the answer is $2^{-\beta}$ — doubling the
+turns cuts core loss by a factor of 5.7, which is the largest single lever in this
+module and the reason module 3 spends its time on how much copper the window will hold.
+The lab *Predict and fit core loss* writes the four functions the rest of the course
+calls: `flux_density` for the ramp above, `loss_density` and `core_loss` for the fit,
+and `fit_steinmetz` for the least-squares recovery, tested on a clean twelve-point grid
+and then on the same grid with scatter. The 0.3624 W it returns is the smaller half of
+this transformer's loss budget. Module 2 goes after the larger half, and finds that
+raising the frequency — free here, and better than free — is charged for in the copper.
+''',
+                },
+            ],
             "title": "Core loss and the Steinmetz relation",
             "summary": "Core loss is an empirical power law in frequency and flux density. Knowing which exponent bites decides every design move.",
             "concepts": [
@@ -391,6 +621,424 @@ assert 1.0 < _k < 2.0, \
 
         # ---- M2 -----------------------------------------------------------
         {
+            "read": [
+                {
+                    "title": "Thinner than the skin depth, and losing four times over",
+                    "minutes": 16,
+                    "body": r'''
+The transformer from module 1 is wound now. Thirteen turns of copper foil, 130 µm thick
+and 20 mm wide — the ETD34's window height — round a bobbin whose mean turn is 60 mm.
+Put a four-wire milliohm meter on it and it reads 5.16 mΩ, which is
+$\frac{\rho N \cdot \text{MLT}}{A_{cu}}$ to three figures. At the 10.42 A this winding
+carries, that is 0.560 W, a little more than the 0.362 W the core is losing.
+
+Now put an impedance analyser across the same winding with the secondary shorted and
+sweep it. At dc it reads the 5.16 mΩ it is supposed to. At 100 kHz, the frequency the
+transformer was designed for, it reads 19.67 mΩ. The copper is dissipating 2.13 W, six
+times the core loss, and nothing about the winding has changed except the frequency at
+which the question was asked.
+
+## The obvious suspect has an alibi
+
+Skin effect is where everyone starts. A field entering a conductor decays as
+$e^{-x/\delta}$, and the derive unit *From skin depth to Dowell's layer factor* turns
+$\delta = \sqrt{\frac{2\rho}{\omega\mu}}$ into the working form
+$\delta = \sqrt{\frac{\rho}{\pi f \mu}}$. In copper at 100 kHz that is 209 µm.
+
+The foil is 130 µm. It is thinner than one skin depth — every part of it lies inside the
+depth the field penetrates — so there is no unused middle to blame. Dowell's factor for
+a *single* layer at $\Delta = \frac{h}{\delta} = 0.623$ is 1.0133. Skin effect accounts
+for 1.3 per cent of a 281 per cent excess.
+
+```python
+import math
+
+RHO_CU = 1.724e-8                     # ohm.m, annealed copper at 20 C
+MU0 = 1.2566370614359173e-06          # H/m
+N, MLT, bw = 13, 0.060, 0.020         # turns, mean turn, window height (m)
+I = 500.0 / 48.0                      # primary current, A
+Acu = I / 4e6                         # 4 A/mm^2 of copper per turn, m^2
+h = Acu / bw                          # foil thickness, m
+
+def dowell(h, delta, m):
+    d = h / delta
+    skin = d * (math.sinh(2*d) + math.sin(2*d)) / (math.cosh(2*d) - math.cos(2*d))
+    prox = d * (2.0*(m*m - 1.0)/3.0) * (math.sinh(d) - math.sin(d)) / (math.cosh(d) + math.cos(d))
+    return skin + prox
+
+delta = math.sqrt(RHO_CU / (math.pi * 100e3 * MU0))
+D = h / delta
+R_dc = RHO_CU * N * MLT / Acu
+print("skin depth   %.1f um" % (delta * 1e6))
+print("foil         %.1f um  ->  Delta = %.4f" % (h * 1e6, D))
+print("R_dc         %.4f mohm   P_dc %.4f W" % (R_dc * 1e3, I * I * R_dc))
+for m in (1, 7, 13):
+    F = dowell(h, delta, m)
+    print("m = %2d   F_R %.4f  (series %.4f)   R_ac %7.4f mohm   P_cu %.4f W"
+          % (m, F, 1.0 + (5 * m * m - 1) * D ** 4 / 45.0, F * R_dc * 1e3, F * I * I * R_dc))
+```
+
+```text
+skin depth   209.0 um
+foil         130.2 um  ->  Delta = 0.6231
+R_dc         5.1637 mohm   P_dc 0.5603 W
+m =  1   F_R 1.0133  (series 1.0134)   R_ac  5.2325 mohm   P_cu 0.5678 W
+m =  7   F_R 1.8123  (series 1.8173)   R_ac  9.3584 mohm   P_cu 1.0155 W
+m = 13   F_R 3.8099  (series 3.8270)   R_ac 19.6732 mohm   P_cu 2.1347 W
+```
+
+The number that changed between those three lines is not the copper. It is how many
+neighbours each piece of copper has.
+
+## Thirteen layers, and the field every one of them stands in
+
+The window is full of the field the winding itself makes. With foil, each turn is its
+own layer, so after $k$ of the thirteen turns the enclosed current is $kI$ and the field
+in the gap beyond that layer is $H_k = \frac{kI}{b_w}$ — building in equal steps from
+zero at the inner boundary to $\frac{13I}{b_w}$ at the outer. That staircase is the
+magnetomotive force diagram, and it is the whole of proximity effect.
+
+A layer is therefore not sitting in a uniform field. Layer $k$ has $(k-1)\frac{I}{b_w}$
+on one face and $k\frac{I}{b_w}$ on the other, and the eddy current it is forced to
+carry is driven by both. Eddy loss goes as the square of the field that drives it, so
+the winding's total, relative to what one layer alone would suffer, is
+
+$$\sum_{k=1}^{m}\left[(k-1)^2 + k^2\right] = \frac{m(m+1)(2m+1)}{3} - m(m+1) + m
+= \frac{m\left(2m^2+1\right)}{3}$$
+
+Divide by $m$ to get the loss per layer and $\frac{2m^2+1}{3}$ is left — the factor the
+derive unit's fourth step hands you as a given. At thirteen layers it is 113. A *thick*
+thirteen-layer winding dissipates 113 times what a single layer of the same dc
+resistance would, and no amount of copper changes that, because the copper is what
+generates the field.
+
+This foil is not thick, so 113 is not the number here. Near the thin limit Dowell's
+factor expands as
+
+$$\frac{R_{ac}}{R_{dc}} \approx 1 + \frac{(5m^2-1)\Delta^4}{45}$$
+
+which is the form the lab's fourth test pins at $m = 3$ and $\Delta = 0.1$. It says two
+things at once: the excess is quadratic in the layer count, and it is *quartic* in the
+thickness. At $\Delta = 0.623$ with thirteen layers it predicts 3.827 against Dowell's
+exact 3.810, which is close enough to reason with.
+
+## The mistake: the winding runs hot, so add copper
+
+That reflex is trained by every wiring calculation anyone does before this course, and
+it is correct at dc, correct at 50 Hz, and correct for this very winding at 1 kHz, where
+$\delta$ is 2.09 mm and $\Delta$ is 0.062, so $\Delta^4$ is $1.5\times10^{-5}$ and
+$F_R$ is 1.0003. Two decades of frequency later it inverts.
+
+```python
+import math
+
+RHO_CU = 1.724e-8
+MU0 = 1.2566370614359173e-06
+N, MLT, bw = 13, 0.060, 0.020
+I = 500.0 / 48.0
+h0 = (I / 4e6) / bw
+
+def dowell(h, delta, m):
+    d = h / delta
+    skin = d * (math.sinh(2*d) + math.sin(2*d)) / (math.cosh(2*d) - math.cos(2*d))
+    prox = d * (2.0*(m*m - 1.0)/3.0) * (math.sinh(d) - math.sin(d)) / (math.cosh(d) + math.cos(d))
+    return skin + prox
+
+delta = math.sqrt(RHO_CU / (math.pi * 100e3 * MU0))
+print("  foil    Delta    R_dc      F_R       R_ac      P_cu       J")
+for h in (h0 / 2.0, h0, 2.0 * h0):
+    R_dc = RHO_CU * N * MLT / (h * bw)
+    F = dowell(h, delta, 13)
+    print("%6.1f um  %.4f  %7.4f  %8.4f  %8.4f  %7.4f  %.2f A/mm2"
+          % (h * 1e6, h / delta, R_dc * 1e3, F, F * R_dc * 1e3,
+             F * I * I * R_dc, I / (h * bw) / 1e6))
+
+grid = [0.05 + i * 0.001 for i in range(4951)]
+print("\n  m   best Delta   foil     F_R      R_ac       P_cu")
+for m in (1, 2, 4, 7, 13):
+    best = min(grid, key=lambda x: dowell(x, 1.0, m) / x)
+    R_dc = RHO_CU * N * MLT / (best * delta * bw)
+    F = dowell(best, 1.0, m)
+    print("%3d      %.3f    %5.1f um  %.4f  %7.4f  %7.4f"
+          % (m, best, best * delta * 1e6, F, F * R_dc * 1e3, F * I * I * R_dc))
+```
+
+```text
+  foil    Delta    R_dc      F_R       R_ac      P_cu       J
+  65.1 um  0.3115  10.3274    1.1766   12.1515   1.3185  8.00 A/mm2
+ 130.2 um  0.6231   5.1637    3.8099   19.6732   2.1347  4.00 A/mm2
+ 260.4 um  1.2462   2.5819   42.2160  108.9958  11.8268  2.00 A/mm2
+
+  m   best Delta   foil     F_R      R_ac       P_cu
+  1      1.571    328.3 um  1.4408   2.9509   0.3202
+  2      0.961    200.8 um  1.3482   4.5140   0.4898
+  4      0.663    138.5 um  1.3366   6.4863   0.7038
+  7      0.499    104.3 um  1.3353   8.6101   0.9343
+ 13      0.365     76.3 um  1.3327  11.7473   1.2747
+```
+
+Doubling the foil does halve the dc resistance, exactly as promised, and it multiplies
+the ac resistance by 5.5 — 2.13 W of copper loss becomes 11.83 W, which would cook this
+transformer on its own. Halving the foil doubles the dc resistance to 10.33 mΩ and
+*lowers* the ac resistance to 12.15 mΩ. Half the copper, 38 per cent less loss. The
+$\Delta^4$ is the reason: halving the thickness divides the excess by sixteen, and an
+excess of 2.81 becomes 0.177.
+
+The second table is the lab *Dowell's factor and the optimum foil* run on this winding.
+`optimal_delta` minimises $\frac{F(\Delta)}{\Delta}$, because widening is not on offer —
+the foil is already as wide as the window — so thickening buys cross-section in
+proportion to $\Delta$ and $R_{dc}$ falls as $\frac{1}{\Delta}$. There is an optimum
+rather than a maximum, it moves to thinner copper as layers are added, and $F_R$ sits
+near $\frac{4}{3}$ at every one of them, which is the invariant the lab's last test
+checks at one, two and four layers. At thirteen layers the best foil is 76 µm and the
+ac resistance is 11.75 mΩ against the 19.67 mΩ this design has.
+
+That optimum runs the copper at 6.8 A/mm², well past the 4 A/mm² the specification asked
+for. Current density is a stand-in for a loss nobody wanted to compute; once the loss
+has been computed, the stand-in stops being the constraint. Module 3 sets $J$ and module
+4 says what it was standing in for.
+
+## Interleaving changes the field, not the copper
+
+Split the primary into two halves, one either side of the secondary, and the
+magnetomotive force staircase climbs to half its former peak, comes back down, and does
+it again. The peak field halves; the loss follows its square. In Dowell's bookkeeping
+each half is a winding portion of $\lceil \frac{13}{2}\rceil = 7$ layers, which is the
+middle line of the first table: $F_R$ falls from 3.810 to 1.812 and the copper loss from
+2.13 W to 1.02 W. One extra winding operation, a little more interwinding capacitance,
+and half the ac copper loss — the capstone measures it as 24.33 K of temperature rise.
+
+## Where Dowell stops holding
+
+The analysis is one-dimensional. It assumes the field in the window runs parallel to the
+layers everywhere, which needs conductors that span the window breadth and a core with
+no gap. Gap an inductor and the field near the gap fringes *across* the foil rather than
+along it; the loss climbs far above anything on this page, and the remedy is geometric —
+keep the winding back from the gap, or split the gap into several small ones. Round wire
+needs a porosity factor to become an equivalent foil before $\Delta$ means anything, and
+litz needs one at the strand level and a separate bundle-level term on top.
+
+The sharpest limit is that $\Delta$ is defined at one frequency, and this winding does
+not carry one frequency.
+
+```python
+import math
+
+RHO_CU = 1.724e-8
+MU0 = 1.2566370614359173e-06
+h = (500.0 / 48.0 / 4e6) / 0.020
+
+def dowell(h, delta, m):
+    d = h / delta
+    skin = d * (math.sinh(2*d) + math.sin(2*d)) / (math.cosh(2*d) - math.cos(2*d))
+    prox = d * (2.0*(m*m - 1.0)/3.0) * (math.sinh(d) - math.sin(d)) / (math.cosh(d) + math.cos(d))
+    return skin + prox
+
+def delta_at(f):
+    return math.sqrt(RHO_CU / (math.pi * f * MU0))
+
+for k in (1, 3, 5, 7, 9):
+    d = delta_at(100e3 * k)
+    print("harmonic %2d   delta %5.1f um   Delta %.3f   F_R %7.3f   I_k/I_1 %.4f"
+          % (k, d * 1e6, h / d, dowell(h, d, 13), 1.0 / k))
+for top in (19, 49, 99):
+    num = sum(dowell(h, delta_at(100e3 * k), 13) / (k * k) for k in range(1, top + 1, 2))
+    den = sum(1.0 / (k * k) for k in range(1, top + 1, 2))
+    print("square current, harmonics to %2d:  effective F_R %.1f" % (top, num / den))
+```
+
+```text
+harmonic  1   delta 209.0 um   Delta 0.623   F_R   3.810   I_k/I_1 1.0000
+harmonic  3   delta 120.7 um   Delta 1.079   F_R  25.120   I_k/I_1 0.3333
+harmonic  5   delta  93.5 um   Delta 1.393   F_R  62.343   I_k/I_1 0.2000
+harmonic  7   delta  79.0 um   Delta 1.649   F_R 107.757   I_k/I_1 0.1429
+harmonic  9   delta  69.7 um   Delta 1.869   F_R 154.631   I_k/I_1 0.1111
+square current, harmonics to 19:  effective F_R 16.1
+square current, harmonics to 49:  effective F_R 20.9
+square current, harmonics to 99:  effective F_R 23.2
+```
+
+Each harmonic sees its own skin depth, shrinking as $\frac{1}{\sqrt{k}}$, and its own
+$F_R$, and the losses add because the harmonics are orthogonal. A current with only a
+ninth of its amplitude at the ninth harmonic still contributes, because $F_R$ there is
+forty times larger. Weighted by $I_k^2$ and summed, an ideal square current would face
+an effective factor of 16 rather than 3.81 — and the last two lines show that number
+still climbing, because an ideal square has infinitely fast edges and there is no
+frequency at which the sum stops. What caps it in a real converter is the finite
+transition time, which is the thing the module-1 sandbox was drawing.
+
+So the single-frequency evaluation is right for a winding whose current is close to
+sinusoidal — the LLC tank of PWR510 is exactly that case — and optimistic for a
+hard-switched square-wave converter. The capstone here evaluates `dowell` once, at the
+fundamental, and the module-2 lab optimises against one frequency too; a design that had
+to survive review would apply the same function per harmonic and sum. The sandbox
+*Reading a power law off log axes* is the check on all of it: $R_{ac}(f)$ built this way
+is monotonic and eventually a straight $\sqrt{f}$ line, so a measured winding impedance
+that *peaks* is resonating against its own interwinding capacitance and is not showing
+you proximity effect at all.
+
+## What you are about to build
+
+The lab writes three functions: `skin_depth`, `dowell`, and `optimal_delta` scanning a
+grid of 0.001 from 0.05 to 5. Its tests pin the thin limit at 1.0000249 for six layers
+at $\Delta = 0.05$, the thick asymptote at $\Delta\frac{2m^2+1}{3} = 220$ for four
+layers at $\Delta = 20$, the quartic series, and the optima at 1.571, 0.961 and 0.663
+with $F_R$ near $\frac{4}{3}$ at each. The blanks unit *The conductor stops using its own
+middle* walks the same chain from material constants to a winding decision. What none of
+them can tell you is whether 2.13 W is a problem, because watts are not a temperature.
+That is module 4, and module 3 has to choose the core first.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Why the copper costs more than it weighs",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A thirteen-layer foil winding is 130 µm thick where the skin depth is 209 µm, and at 100 kHz it measures 3.8 times its dc resistance. What is doing that?",
+                        "opts": [
+                            "Each layer sits in the field of the layers before it and carries eddy current because of it",
+                            "The foil is thicker than one skin depth, so the middle of it carries almost no current at all",
+                            "The winding is resonating against its own interwinding capacitance at that frequency",
+                            "Copper at the operating temperature is more resistive than copper on a cold bench",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The magnetomotive force builds across the window, so layer thirteen stands in thirteen times the field layer one does, and eddy loss follows the square of it. Dowell's single-layer factor here is 1.0133 — the other 2.8 comes entirely from the neighbours.",
+                            r"The arithmetic runs the wrong way: 130 µm is *thinner* than the 209 µm skin depth, so there is no starved middle. That would be the story above $\Delta = 1$, and this winding sits at $\Delta = 0.623$.",
+                            r"A resonance gives a peak in the impedance at one frequency and a fall beyond it. Proximity loss is monotonic in frequency, which is how a sweep tells the two apart — a real effect, but not this one.",
+                            r"Copper's coefficient is 0.393 per cent per kelvin, so even a 30 K rise adds 12 per cent. That is a genuine correction worth making, and it is a factor of 1.12 against a factor of 3.81.",
+                        ],
+                        "why": r'''
+Near the thin limit Dowell's factor is $1 + \frac{(5m^2-1)\Delta^4}{45}$, and at
+$\Delta = 0.623$ with thirteen layers that predicts 3.83 against the exact 3.81. The
+$m^2$ is the field building layer by layer across the window; the $\Delta^4$ is how
+weakly a thin conductor responds to it. Skin effect on its own contributes 1.3 per cent
+here, which is why the winding's own thickness is the wrong place to look first.
+''',
+                    },
+                    {
+                        "q": "Halving the foil thickness at a fixed layer count divides the *excess* ac resistance by about sixteen. Where does the sixteen come from?",
+                        "opts": [
+                            "Thinning the foil halves $\\Delta$, and the excess term grows as the fourth power of it",
+                            "Halving the thickness doubles the skin depth in the copper, and the excess goes as its square",
+                            "The dc resistance doubles, and an excess measured against it is halved twice over",
+                            "Two thinner layers stand in for one thick one, and the loss grows as $m^2$",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$1 + \frac{(5m^2-1)\Delta^4}{45}$, and $2^4 = 16$. At thirteen layers the excess falls from 2.81 to 0.177 when the foil goes from 130 µm to 65 µm — a factor of 15.9, the series being slightly off this far from the thin limit.",
+                            r"Skin depth is fixed by the material and the frequency; $\sqrt{\frac{\rho}{\pi f\mu}}$ contains no conductor dimension at all. Thinning the foil moves $\Delta$ by moving $h$, and nothing happens to $\delta$.",
+                            r"The dc resistance does double, which is why the *ratio* $F_R$ improves faster than the ac resistance does. But 16 is a fourth power, and doubling a denominator cannot produce it.",
+                            r"The layer count was held fixed in the question: thirteen turns of foil are thirteen layers whatever their thickness. The $m^2$ is real and it is the other half of the expansion, but it is not what moved here.",
+                        ],
+                        "why": r'''
+The thin-foil expansion is $F_R \approx 1 + \frac{(5m^2-1)\Delta^4}{45}$, so the excess
+over unity carries $\Delta^4$ and halving the thickness divides it by sixteen. It is why
+foil and litz work at all: make each conductor thin enough and the $m^2$ has almost
+nothing to multiply. The trade is that the dc resistance rises as $\frac{1}{\Delta}$, so
+the ac resistance itself has a minimum — at thirteen layers it lands at 76 µm, not at
+the thinnest foil available.
+''',
+                    },
+                    {
+                        "q": "Splitting the primary into two halves either side of the secondary drops Dowell's factor from 3.81 to 1.81, with the same turns and the same copper. What changed?",
+                        "opts": [
+                            "The peak magnetomotive force in the window halved, and eddy loss follows its square",
+                            "The two halves are now in parallel, so the dc resistance of the primary fell by four",
+                            "Each half carries half the current, so the skin depth in the foil is doubled",
+                            "The leakage inductance fell, and with it the energy stored in the window",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The staircase now climbs to seven layers' worth, comes back down, and repeats, so Dowell sees a portion of $\lceil 13/2 \rceil = 7$ rather than 13. Loss goes as the square of the field, and $(7/13)^2$ is close to the factor observed.",
+                            r"Interleaving puts the halves in *series*, not parallel — they are still thirteen turns carrying the same current, and the dc resistance is unchanged at 5.16 mΩ. Only the ac factor multiplying it moved.",
+                            r"Skin depth depends on the material and the frequency, never on the current a conductor happens to carry. And the halves are in series, so the current in each is the full 10.42 A.",
+                            r"Leakage really does fall, roughly in proportion, and it is a second good reason to interleave. It is not the mechanism for the copper loss, which is set by the field the winding stands in.",
+                        ],
+                        "why": r'''
+The field in the window is made by the winding itself, building from zero at one boundary
+to $\frac{NI}{b_w}$ at the other. Splitting the primary makes it build to half, fall back,
+and build again, so the peak halves and the layer count Dowell is given halves with it.
+The dc resistance is untouched — the copper loss falls from 2.13 W to 1.02 W entirely
+through $F_R$. The cost is one more winding operation and more interwinding capacitance,
+and on this transformer it is worth 24.33 K.
+''',
+                    },
+                    {
+                        "q": "A thirteen-layer winding of 130 µm foil runs hot, so the foil is doubled to 260 µm. What happens to it at 100 kHz?",
+                        "opts": [
+                            "The dc resistance halves, the ac resistance rises fivefold, and the winding gets hotter",
+                            "Both resistances halve, and the temperature rise halves along with the copper loss",
+                            "The dc resistance halves and the ac resistance holds, since $\\Delta$ is a material property",
+                            "The ac resistance halves, but the unchanged proximity term keeps the loss where it was",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$R_{dc}$ goes 5.16 mΩ to 2.58 mΩ and $F_R$ goes 3.81 to 42.2, so $R_{ac}$ goes 19.67 mΩ to 109.0 mΩ and the copper loss from 2.13 W to 11.83 W. Doubling $\Delta$ from 0.62 to 1.25 leaves the thin limit behind entirely.",
+                            r"This is the dc answer, and it is right below a kilohertz — at 1 kHz this winding's $F_R$ is 1.0003 and adding copper does exactly what it promises. Two decades of frequency later it inverts.",
+                            r"$\Delta = \frac{h}{\delta}$ is a ratio of a dimension you choose to a depth the material sets, so doubling the foil doubles it. Only $\delta$ is fixed by the material and the frequency.",
+                            r"Nothing in Dowell's factor is unchanged by thickness — the proximity term carries the same $\Delta$ as the skin term and grows faster with it. The premise that the two halves move separately is what fails here.",
+                        ],
+                        "why": r'''
+More copper puts more of it in the neighbours' field. Doubling the foil doubles $\Delta$
+to 1.25, which is past the thin limit where the $\Delta^4$ was keeping the eddy currents
+small, and thirteen layers at that thickness give $F_R = 42$. The winding goes from 2.13 W
+to 11.83 W of copper loss for twice the material. Going the other way — 65 µm, half the
+copper — gives 12.15 mΩ and 1.32 W, and the true optimum for thirteen layers is 76 µm.
+''',
+                    },
+                    {
+                        "q": "For a thick conductor Dowell's factor tends to $\\Delta\\frac{2m^2+1}{3}$. What does that make the ac resistance itself do as frequency rises?",
+                        "opts": [
+                            "It rises as the square root of frequency, from a floor already well above $R_{dc}$",
+                            "It rises in direct proportion to frequency, since $\\Delta$ is proportional to $f$",
+                            "It stops rising, because the current is already confined to a single skin depth",
+                            "It rises as the square of frequency, because eddy loss goes as the square of the field",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$R_{dc}$ has no frequency in it and $\Delta \propto \sqrt{f}$, so $R_{ac}$ carries exactly that. Mild — a decade of frequency costs a factor of 3.16 — but it starts from $\frac{2m^2+1}{3}$, which is 113 at thirteen layers.",
+                            r"$\Delta = \frac{h}{\delta}$ and $\delta \propto f^{-1/2}$, so $\Delta$ goes as $\sqrt{f}$, not as $f$. This answer is the right structure with the exponent doubled.",
+                            r"Confinement to one skin depth is what makes $R_{ac} \propto \Delta$ rather than something worse, but the depth keeps shrinking with frequency, so the resistance keeps climbing. It levels off nowhere.",
+                            r"Loss does go as the square of the field, and that square is already inside the $m^2$. The frequency dependence is carried by $\Delta$ alone, and $\Delta$ is a square root.",
+                        ],
+                        "why": r'''
+Only $\Delta$ depends on frequency, and $\Delta = \frac{h}{\delta} \propto \sqrt{f}$, so a
+thick winding's ac resistance grows as $\sqrt{f}$ — a straight line of $+10$ dB per decade
+on the log axes the module's sandbox is there to teach you to read. The mildness is
+deceptive: the constant in front is $\frac{2m^2+1}{3}$, so a thirteen-layer winding starts
+that gentle climb from 113 times its dc resistance. The layer count is the number to fix,
+and unlike the frequency it is yours to choose.
+''',
+                    },
+                    {
+                        "q": "A gapped inductor's winding measures far worse than Dowell's factor predicts for its thickness and layer count. What has the model left out?",
+                        "opts": [
+                            "The fringing field near the gap crosses the conductors instead of running along them",
+                            "The gap raises the reluctance, so the winding needs many more turns than were assumed",
+                            "The gap stores the energy, and stored energy shows up as loss in the copper",
+                            "Dowell assumed solid copper, and a gapped core is normally wound with litz wire",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Dowell's analysis is one-dimensional: field parallel to the layers, everywhere. Near a gap it is not, and a component crossing the foil drives eddy currents around the wide face, where the path is long and the loss is large.",
+                            r"More turns for the same window would raise both $R_{dc}$ and the layer count, and the model handles both. The discrepancy here survives after the turns have been counted correctly.",
+                            r"Stored energy is returned each cycle, not dissipated — an ungapped and a gapped core storing the same energy can have very different winding loss. It is the field's *direction* near the gap that costs, not the energy in it.",
+                            r"Litz needs a porosity factor before $\Delta$ means anything, and that is a real correction. It applies to any winding of stranded wire, gapped core or not, and does not explain a gap-specific excess.",
+                        ],
+                        "why": r'''
+Every step of Dowell's derivation assumes the field runs parallel to the layers, which
+holds when the conductors span the window and the flux path has no discontinuity. A gap
+is a discontinuity: the flux bulges out of it and crosses the nearest turns broadside.
+The fix is geometry rather than arithmetic — keep the winding several gap lengths clear,
+or split one large gap into several small ones so each fringes less. It is the most
+common way a transformer calculation that was right gets applied to an inductor and is
+wrong by a factor nobody can find in the algebra.
+''',
+                    },
+                ],
+            },
             "title": "Skin and proximity effect",
             "summary": "Above a few tens of kilohertz a conductor stops using its own middle, and its neighbours make that worse.",
             "concepts": [
@@ -753,6 +1401,277 @@ for _m, _want in ((1, 1.4408463383158308), (2, 1.3482469614002408),
 
         # ---- M3 -----------------------------------------------------------
         {
+            "read": [
+                {
+                    "title": "One number picks the core, and it knows nothing about heat",
+                    "minutes": 16,
+                    "body": r'''
+Five cores are on the bench, in a row, smallest first: an EFD20, an ETD29, an ETD34, an
+ETD44 and an E55. The requirement is the one this course has been carrying — 500 VA at
+48 V from a square-wave converter — and the question is which of the five to reach for.
+There is no simulator in this scene, and no time for one. There is a datasheet with two
+numbers per core: $A_e$, the cross-section of the centre leg, and $A_w$, the area of the
+window the winding has to fit through.
+
+Two things have to fit, and they are different things. The copper has to fit in the
+window. The flux has to fit in the core. Neither constraint picks a core on its own,
+because each one contains the number of turns, and the turns have not been chosen yet.
+
+## Two constraints that each contain the turns
+
+Take the window first. Every turn carries the rms primary current $I$, and the
+specification allows a current density $J$, so every turn needs a conductor of
+cross-section $\frac{I}{J}$. The window is not all copper — round wire does not
+tessellate, insulation and bobbin walls and creepage take space — so only a fraction
+$K_u$ of it is available:
+
+$$K_u A_w = \frac{N I}{J}$$
+
+Then the core. Module 1 settled what the flux does: a square wave of amplitude $V$ at
+frequency $f$ on $N$ turns of a core with area $A_e$ produces a peak flux density
+$B_m = \frac{V}{4 f N A_e}$, and pushing $B_m$ past the material's saturation value
+gives you a short circuit rather than a transformer. Solving for the turns,
+
+$$N = \frac{V}{4 f B_m A_e}$$
+
+Each expression contains $N$ and one of the two areas. Multiply them together and both
+of those disappear at once:
+
+$$A_p = A_w A_e = \frac{I}{J K_u}\cdot\frac{V}{4 f B_m A_e}\cdot A_e = \frac{V I}{4 f B_m J K_u}$$
+
+The derive unit *Why the core area cancels* walks that substitution step by step and
+then generalises the 4 to a waveform constant $K_f$. What is left contains no geometry
+at all — only the volt-amperes to be passed, the frequency, and the two numbers you are
+willing to push the material to. That is what makes it a *selection* criterion: you
+compute it before you know anything about the winding, and then read down a catalogue.
+
+```python
+CORES = [("EFD20", 31e-6, 22e-6), ("ETD29", 76e-6, 90e-6), ("ETD34", 97e-6, 123e-6),
+         ("ETD44", 173e-6, 214e-6), ("E55", 354e-6, 250e-6)]
+VA, Bm, J, Kf = 500.0, 0.1, 4e6, 4.0        # 500 VA, 0.1 T, 4 A/mm^2, square wave
+
+def area_product(f, Ku):
+    return VA / (Kf * f * Bm * J * Ku)
+
+def select(Ap):
+    fits = [c for c in CORES if c[1] * c[2] >= Ap]
+    return min(fits, key=lambda c: c[1] * c[2]) if fits else None
+
+print("catalogue, Ae*Aw in cm^4:")
+for name, Ae, Aw in CORES:
+    print("   %-6s %7.3f" % (name, Ae * Aw * 1e8))
+print(" f (kHz)   need (cm^4)   core     has     margin")
+for f in (50e3, 100e3, 150e3, 200e3, 300e3, 400e3):
+    Ap = area_product(f, 0.4)
+    c = select(Ap)
+    print("%8.0f   %10.4f    %-6s %7.4f    x%.2f"
+          % (f / 1e3, Ap * 1e8, c[0], c[1] * c[2] * 1e8, c[1] * c[2] / Ap))
+```
+
+```text
+catalogue, Ae*Aw in cm^4:
+   EFD20    0.068
+   ETD29    0.684
+   ETD34    1.193
+   ETD44    3.702
+   E55      8.850
+ f (kHz)   need (cm^4)   core     has     margin
+      50       1.5625    ETD44   3.7022    x2.37
+     100       0.7812    ETD34   1.1931    x1.53
+     150       0.5208    ETD29   0.6840    x1.31
+     200       0.3906    ETD29   0.6840    x1.75
+     300       0.2604    ETD29   0.6840    x2.63
+     400       0.1953    ETD29   0.6840    x3.50
+```
+
+The requirement at 100 kHz is 0.781 cm⁴ and the ETD34 offers 1.193, so the core chosen
+is half as big again as the one asked for. That is normal and it is geometric: $A_p$ is
+an area times an area, so it scales as the fourth power of a linear dimension, and the
+steps between catalogue sizes are large — 1.74 from the ETD29 to the ETD34, 3.10 from
+the ETD34 to the ETD44. Being twenty per cent over the requirement often means paying
+for a core with three times what you need. The module-3 lab *Choose a core and count the
+cost* makes `select_core` return the *smallest* sufficient core rather than the first
+one in the list that fits, and return `None` rather than the largest when nothing fits —
+both of those are the difference between a selection rule and a guess.
+
+## The trap in $K_u$
+
+The window utilisation factor is the softest number in the formula and the easiest to be
+generous with. It sits in the denominator, so optimism about it shrinks the core you
+believe you need.
+
+```python
+CORES = [("EFD20", 31e-6, 22e-6), ("ETD29", 76e-6, 90e-6), ("ETD34", 97e-6, 123e-6),
+         ("ETD44", 173e-6, 214e-6), ("E55", 354e-6, 250e-6)]
+import math
+
+VA, V, Bm, J, Kf, f = 500.0, 48.0, 0.1, 4e6, 4.0, 100e3
+Acu = (VA / V) / J                              # copper per turn, m^2
+for Ku in (0.4, 0.9):
+    Ap = VA / (Kf * f * Bm * J * Ku)
+    name, Ae, Aw = min([c for c in CORES if c[1] * c[2] >= Ap],
+                       key=lambda c: c[1] * c[2])
+    N = math.ceil(V / (Kf * f * Bm * Ae))
+    print("Ku %.1f -> need %.4f cm^4 -> %-6s  N = %2d  copper %.1f mm^2 in a %.1f mm^2 "
+          "window = %.1f%% fill" % (Ku, Ap * 1e8, name, N, N * Acu * 1e6, Aw * 1e6,
+                                    100.0 * N * Acu / Aw))
+```
+
+```text
+Ku 0.4 -> need 0.7812 cm^4 -> ETD34   N = 13  copper 33.9 mm^2 in a 123.0 mm^2 window = 27.5% fill
+Ku 0.9 -> need 0.3472 cm^4 -> ETD29   N = 16  copper 41.7 mm^2 in a 90.0 mm^2 window = 46.3% fill
+```
+
+Assume 0.9 and the rule hands back the next core down, and then demands a 46 per cent
+fill from it — which is not 0.9, and is not even the 0.4 the honest version of the same
+calculation assumed. The optimism does not announce itself in the formula; it arrives at
+the winding bench, where the last few turns do not go on. A wound, insulated, taped
+multi-winding transformer lands between 0.3 and 0.4, and the module-3 quiz is right to
+call 0.4 optimistic for anything with three windings and safety creepage.
+
+## The mistake that the formula actively encourages
+
+$A_p \propto \frac{1}{f}$ is the whole economic argument for high-frequency conversion,
+and it is written into the table above: 400 kHz needs a quarter of the core that 100 kHz
+does. Follow it and the design is an ETD29 at 400 kHz — a quarter of the area product
+the 100 kHz design demanded, on a core with 72 per cent of its volume. Better still, add the
+loss model the module-3 lab asks you to write — copper as $\rho N \cdot \text{MLT} \cdot J I$
+and core loss from module 1's Steinmetz relation — and the total has a minimum near
+150 kHz, which looks like the design settling on its own answer.
+
+```python
+import math
+
+RHO_CU, K_STEIN, ALPHA, BETA = 1.724e-8, 1.5, 1.4, 2.5
+CORES = [("EFD20", 31e-6, 22e-6, 1460e-9, 0.039), ("ETD29", 76e-6, 90e-6, 5470e-9, 0.053),
+         ("ETD34", 97e-6, 123e-6, 7640e-9, 0.060), ("ETD44", 173e-6, 214e-6, 17800e-9, 0.078),
+         ("E55", 354e-6, 250e-6, 43900e-9, 0.116)]
+VA, V, Bm, J, Ku, Kf = 500.0, 48.0, 0.1, 4e6, 0.4, 4.0
+I = VA / V
+
+print(" f (kHz)  core     N   P_cu    P_fe   total")
+for f in (50e3, 100e3, 150e3, 200e3, 300e3, 400e3):
+    Ap = VA / (Kf * f * Bm * J * Ku)
+    c = min([x for x in CORES if x[1] * x[2] >= Ap], key=lambda x: x[1] * x[2])
+    N = math.ceil(V / (Kf * f * Bm * c[1]))
+    cu = RHO_CU * N * c[4] * J * I
+    fe = K_STEIN * f ** ALPHA * Bm ** BETA * c[3]
+    print("%8.0f  %-6s %3d  %.4f  %.4f  %.4f" % (f / 1e3, c[0], N, cu, fe, cu + fe))
+```
+
+```text
+ f (kHz)  core     N   P_cu    P_fe   total
+      50  ETD44   14  0.7844  0.3199  1.1044
+     100  ETD34   13  0.5603  0.3624  0.9227
+     150  ETD29   11  0.4188  0.4577  0.8765
+     200  ETD29    8  0.3046  0.6847  0.9893
+     300  ETD29    6  0.2284  1.2079  1.4364
+     400  ETD29    4  0.1523  1.8070  1.9593
+```
+
+Copper falls with frequency because the turns fall with it; core loss rises because the
+flux is being cycled more often than the $\frac{1}{f}$ in $B_m$ can compensate once the
+core has *also* been made smaller. They cross, and the smallest total is 0.877 W at
+150 kHz on an ETD29 — a smaller core and a lower loss than the 100 kHz design. The lab's
+last test is built on exactly this crossing.
+
+It is the wrong answer, and what makes it wrong is the column that is not in the table.
+That copper figure is $I^2 R_{dc}$. Module 2 measured this winding's ac resistance and
+found it 3.81 times the dc value at 100 kHz, and worse at every frequency above.
+
+```python
+import math
+
+RHO_CU, MU0 = 1.724e-8, 1.2566370614359173e-06
+K_STEIN, ALPHA, BETA, H_CONV = 1.5, 1.4, 2.5, 10.0
+CORES = [("ETD29", 76e-6, 90e-6, 5470e-9, 0.053, 3.6e-3, 0.018),
+         ("ETD34", 97e-6, 123e-6, 7640e-9, 0.060, 4.6e-3, 0.020),
+         ("ETD44", 173e-6, 214e-6, 17800e-9, 0.078, 7.8e-3, 0.028),
+         ("E55", 354e-6, 250e-6, 43900e-9, 0.116, 1.30e-2, 0.034)]
+VA, V, Bm, J, Ku, Kf = 500.0, 48.0, 0.1, 4e6, 0.4, 4.0
+I, Acu = VA / V, (VA / V) / 4e6
+
+def dowell(h, delta, m):
+    d = h / delta
+    skin = d * (math.sinh(2*d) + math.sin(2*d)) / (math.cosh(2*d) - math.cos(2*d))
+    prox = d * (2.0*(m*m - 1.0)/3.0) * (math.sinh(d) - math.sin(d)) / (math.cosh(d) + math.cos(d))
+    return skin + prox
+
+print(" f (kHz)  core     F_R    P_cu    P_fe   total   R_th    dT (K)")
+for f in (50e3, 100e3, 150e3, 200e3, 300e3, 400e3):
+    Ap = VA / (Kf * f * Bm * J * Ku)
+    c = min([x for x in CORES if x[1] * x[2] >= Ap], key=lambda x: x[1] * x[2])
+    N = math.ceil(V / (Kf * f * Bm * c[1]))
+    F = dowell(Acu / c[6], math.sqrt(RHO_CU / (math.pi * f * MU0)), math.ceil(N / 2))
+    cu = F * RHO_CU * N * c[4] * J * I
+    fe = K_STEIN * f ** ALPHA * Bm ** BETA * c[3]
+    R_th = 1.0 / (H_CONV * c[5])
+    print("%8.0f  %-6s %6.3f  %.4f  %.4f  %.4f  %6.3f  %6.2f"
+          % (f / 1e3, c[0], F, cu, fe, cu + fe, R_th, (cu + fe) * R_th))
+```
+
+```text
+ f (kHz)  core     F_R    P_cu    P_fe   total   R_th    dT (K)
+      50  ETD44   1.053  0.8261  0.3199  1.1461  12.821   14.69
+     100  ETD34   1.812  1.0155  0.3624  1.3779  21.739   29.95
+     150  ETD29   3.014  1.2623  0.4577  1.7200  27.778   47.78
+     200  ETD29   2.556  0.7784  0.6847  1.4631  27.778   40.64
+     300  ETD29   2.867  0.6548  1.2079  1.8628  27.778   51.74
+     400  ETD29   2.354  0.3585  1.8070  2.1655  27.778   60.15
+```
+
+The interleaved winding is the generous case — the un-interleaved one at 150 kHz has
+$F_R = 7.80$ and a 103 K rise — and even so the 150 kHz design that looked optimal on
+the previous table breaches a 40 K budget by eight kelvin. The thermal resistance column
+is why: a smaller core has less surface to shed heat from, so the ETD29's 27.8 K/W
+punishes every watt 28 per cent harder than the ETD34's 21.7. Module 4 derives that column;
+the capstone's sweep uses it and lands on the ETD34 at 100 kHz, which is neither the
+smallest core the area product allows nor the lowest loss the frequency sweep offers.
+
+The mistake is tempting because $A_p$ is genuinely the right first move, and because the
+formula is honest about what it contains. It contains volt-amperes, frequency, flux,
+current density and window fill. Loss is not in it. $B_m$ and $J$ are stand-ins for a
+thermal limit, chosen from experience, and the formula treats them as free.
+
+## Where it stops holding
+
+The clearest boundary is that the stand-ins are not size-independent. Loss scales with
+volume, $L^3$, and the surface that sheds it scales as $L^2$, so the temperature rise
+for the same $J$ and $B_m$ grows with the core. McLyman's tables carry a current density
+that falls as cores get larger for exactly this reason, and a design that uses one $J$
+across a whole catalogue is being optimistic at the big end.
+
+$K_f$ is a waveform constant and 4 belongs to a symmetric square wave, 4.44 to a
+sinusoid. The derivation also assumes the primary and the secondary conduct together, so
+their magnetomotive forces cancel and the window holds both currents at once. A flyback
+does not work that way — it stores energy in a gap and its windings conduct in turn — so
+its figure of merit is built on $\frac{1}{2}LI^2$ rather than on VA, and applying $A_p$
+to it undersizes the core.
+
+There is a convention in this course's own numbers worth knowing about before it
+surprises you. The turns come out fractional and get rounded up: at 100 kHz the flux
+constraint asks for 12.37 turns and the design winds 13, which means the wound
+transformer runs at 0.0952 T rather than the 0.1 T that was specified. The lab and the
+capstone both compute core loss at the specified 0.1 T, so the 0.3624 W they report is
+13 per cent above what 13 turns actually produce — 0.3201 W. It is conservative in the
+direction that matters and it is consistent across the whole course, which is what makes
+it usable, but it is a convention rather than a measurement, and the flux a wound
+transformer runs at is always the one its integer turn count gives it.
+
+## What you are about to build
+
+The lab writes `area_product`, `select_core`, `turns` and `losses`. Its tests pin the
+area product at 7.8125e-9 m⁴, the walk down the catalogue from the ETD44 at 50 kHz to
+the ETD29 at 400 kHz, `None` for a 20 kVA requirement no core in the list can meet, and
+13 turns rather than 12 from a 12.37 that must round the safe way. The sandbox *What
+buys you the higher frequency* is the other half of the argument: the area product falls
+as $\frac{1}{f}$ only while the switching cell keeps up, and it shows the dead time
+covering the resonant transition at 30 nH and 150 pF and then failing to cover it once
+$C_{oss}$ triples. Module 4 supplies the column that decides all of this, which is the
+one that turns watts into kelvin.
+''',
+                },
+            ],
             "title": "Sizing a transformer by area product",
             "summary": "One number, the product of core area and window area, decides which core can carry a given VA at a given frequency.",
             "concepts": [
@@ -1125,6 +2044,405 @@ assert _b["core"] > _b["copper"], \
 
         # ---- M4 -----------------------------------------------------------
         {
+            "read": [
+                {
+                    "title": "1.38 watts, and whether that is a problem",
+                    "minutes": 16,
+                    "body": r'''
+The transformer is finished. ETD34 core, thirteen turns of 130 µm foil split either side
+of the secondary, running 500 VA at 48 V and 100 kHz. Tape a thermocouple to the centre
+leg, stand it in a cabinet at 40 °C with no fan, and start the converter with a stopwatch
+running.
+
+For the first second the reading barely moves. Over the next two minutes it climbs
+steeply, then the climb flattens, and after about twenty minutes it stops at 70 °C and
+stays there. Nothing was cooled. Nothing intervened. The three previous modules computed
+a loss of 1.38 W — 1.02 W in the copper, 0.36 W in the core — and the bench has turned
+that number into 30 kelvin.
+
+Whatever performed that conversion is a single scalar, because 30 divided by 1.38 is
+21.7 and it did not need to know anything else.
+
+## Why a scalar is enough
+
+Heat is made in two places, the ferrite and the copper, conducts to the outer surface,
+and leaves it into the air by convection and radiation. In steady state, everything
+generated must be leaving, or the temperature would still be moving. So the settling
+point is wherever the escape rate has grown to match the dissipation.
+
+If the escape rate is proportional to how far above ambient the surface has risen — which
+is Newton's law of cooling, and is the assumption doing the work here — then
+
+$$P = h A_s \left(T - T_a\right) \qquad\Longrightarrow\qquad
+\Delta T = \frac{P}{h A_s} = P R_{th}, \qquad R_{th} = \frac{1}{h A_s}$$
+
+and the constant $R_{th}$ has units of kelvin per watt. The capstone's `cores.py` gives
+each core an exposed area $A_s$ and fixes $h_{conv} = 10$ W/m²K for natural convection.
+That is the whole thermal model of this course, and it is one division.
+
+```python
+H_CONV = 10.0                    # W/m^2K, natural convection
+print("core    As (mm^2)   R_th (K/W)")
+for name, As in (("ETD29", 3.6e-3), ("ETD34", 4.6e-3), ("ETD44", 7.8e-3)):
+    print("%-6s  %8.0f     %7.3f" % (name, As * 1e6, 1.0 / (H_CONV * As)))
+
+R_th = 1.0 / (H_CONV * 4.6e-3)
+print("\nETD34 at 100 kHz, 40 C ambient:")
+print("  winding        P_cu     P_fe    total     dT      surface")
+for label, P_cu in (("13 layers  ", 2.1347), ("interleaved", 1.0155)):
+    total = P_cu + 0.3624
+    print("  %s  %.4f   %.4f   %.4f   %5.2f K   %5.1f C"
+          % (label, P_cu, 0.3624, total, total * R_th, 40.0 + total * R_th))
+```
+
+```text
+core    As (mm^2)   R_th (K/W)
+ETD29       3600      27.778
+ETD34       4600      21.739
+ETD44       7800      12.821
+
+ETD34 at 100 kHz, 40 C ambient:
+  winding        P_cu     P_fe    total     dT      surface
+  13 layers    2.1347   0.3624   2.4971   54.28 K    94.3 C
+  interleaved  1.0155   0.3624   1.3779   29.95 K    70.0 C
+```
+
+Those are the capstone's own numbers, and they are the reason module 2 was worth the
+trouble: interleaving is a winding decision that shows up here as 24 K. The first column
+of the first table is the reason module 3's tempting 150 kHz design fails — the smaller
+core sheds heat worse, and 27.8 K/W against 21.7 K/W is a 28 per cent penalty on every
+watt.
+
+## The same algebra, with the parts named
+
+$\Delta T = P R_{th}$ is Ohm's law with the labels changed, and that correspondence is
+not a teaching device — it is how thermal simulation is done, because accepting it hands
+you a solver, a transient response and a frequency domain at no cost. The build exercise
+*A thermal network really is a circuit* makes you place the correspondence on a canvas:
+a 25 A current source is 25 W of dissipation, a node voltage is a temperature rise, and
+ground is ambient.
+
+A semiconductor's path is three resistances in series — junction to case, case to sink
+through the interface material, and sink to ambient — and the derive unit *Sharing a
+heatsink, and losing control of it* takes it from there. The interesting step is what
+happens when several devices share the last resistance: their private paths stay private,
+but the sink carries all of the power, so one device's junction sits at
+
+$$T_j = T_a + P\left(R_{jc} + R_{cs}\right) + n P R_{sa}$$
+
+With the lab's numbers — 12.5 W, $R_{jc} = 0.45$, $R_{cs} = 0.25$, $R_{sa} = 1.8$ — a
+single device reaches 71.25 °C above a 40 °C ambient, and four of them on that one sink
+reach 138.75 °C each. Inverting it, one device may dissipate 34.0 W within a 125 °C
+limit and each of four may dissipate 10.76 W. Those four numbers are the lab *Junction
+temperature, steady and transient* in its first three tests.
+
+The build exercise's trap is worth carrying away: only $R_{sa}$ is yours to buy. With
+0.7 K/W fixed by the package and the interface, halving a 2.0 K/W heatsink takes the
+rise from 67.5 K to 42.5 K rather than to 34 K, and the second half of a heatsink budget
+buys much less than the first.
+
+## Time, and why a pulse is cheap
+
+Nothing above explains the twenty minutes. Give each mass a thermal capacitance in
+joules per kelvin and the network acquires time constants; a Foster ladder writes the
+result as
+
+$$Z_{th}(t) = \sum_i R_i\left(1 - e^{-t/\tau_i}\right)$$
+
+which starts at zero, rises through each term as its own $\tau_i$ passes, and ends at
+$\sum_i R_i$. The lab's three-term ladder — 0.05, 0.3 and 1.2 K/W with time constants of
+1 ms, 20 ms and 0.5 s — reaches 1.55 K/W in the end but stands at 0.0486 K/W one
+millisecond in, a thirty-second of it. That is why a device survives a pulse it could not
+survive continuously, and why a datasheet plots $Z_{th}$ against pulse width rather than
+quoting one number.
+
+The sandbox *A heatsink as a low-pass filter* is a ruler for reading that curve rather
+than a model of one: the flat level on the left is the steady-state resistance in K/W and
+the roll-off on the right is the pulse behaviour. Its curve is second-order and rolls off
+at 40 dB per decade where a Foster ladder rolls off at 20, so take the plateau and the
+corner from it and not the slope.
+
+## The mistake: computing the loss once
+
+Every watt on this page was computed at 20 °C. Copper's resistivity rises 0.393 per cent
+per kelvin, so a winding that has warmed 30 K is 12 per cent more resistive than the one
+in the calculation, dissipates 12 per cent more, and warms further. The loss is a function
+of the temperature it produces, and solving for one while holding the other fixed is
+solving the wrong problem.
+
+Write the dissipation as $P = P_0\left(1 + a\,\Delta T\right)$ and close the loop with
+$\Delta T = P R_{ja}$. The derive unit's fourth step does the algebra: $P$ appears on both
+sides, and collecting it gives
+
+$$P = \frac{P_0}{1 - a P_0 R_{ja}}$$
+
+The coefficient $a$ here is not copper's 0.00393, because only the copper term carries
+it — the core term does not — so it is copper's coefficient weighted by the copper's
+share of the loss.
+
+```python
+P_cu, P_fe = 1.0155, 0.3624          # watts at 20 C, interleaved ETD34 at 100 kHz
+R_ja = 1.0 / (10.0 * 4.6e-3)         # K/W
+P0 = P_cu + P_fe
+a = 0.00393 * P_cu / P0              # only the copper term has a coefficient
+
+def steady_power(P0, a, R):
+    denom = 1.0 - a * P0 * R
+    return float("inf") if denom <= 0.0 else P0 / denom
+
+print("a          %.6f per K" % a)
+print("open loop  %.4f W  ->  %.2f K" % (P0, P0 * R_ja))
+P = steady_power(P0, a, R_ja)
+print("closed     %.4f W  ->  %.2f K" % (P, P * R_ja))
+print("critical R_ja %.1f K/W (ETD34 sits at %.1f)" % (1.0 / (a * P0), R_ja))
+print("a 2 W core with a = 0.004:")
+for R in (60.0, 124.0, 125.0, 130.0):
+    print("   R_ja %5.1f K/W  ->  %s W" % (R, "%.3f" % steady_power(2.0, 0.004, R)))
+```
+
+```text
+a          0.002896 per K
+open loop  1.3779 W  ->  29.95 K
+closed     1.5088 W  ->  32.80 K
+critical R_ja 250.6 K/W (ETD34 sits at 21.7)
+a 2 W core with a = 0.004:
+   R_ja  60.0 K/W  ->  3.846 W
+   R_ja 124.0 K/W  ->  250.000 W
+   R_ja 125.0 K/W  ->  inf W
+   R_ja 130.0 K/W  ->  inf W
+```
+
+The transformer's answer moves from 29.95 K to 32.80 K — 9.5 per cent, comfortably
+inside a 40 K budget but not inside a 32 K one — and its critical thermal resistance is
+250.6 K/W, more than ten times where it is sitting. The loop is real here and it is not
+dangerous.
+
+The last four lines are the lab's `steady_power` and the derive unit's closing example,
+and they are what dangerous looks like. A 2 W core with $a = 0.004$ through 60 K/W settles
+at 3.846 W, nearly double its cold dissipation. At 124 K/W it settles at 250 W, which is
+arithmetic rather than physics — the linearisation stopped being true long before. At
+125 K/W the denominator is zero and there is no steady state at all. The margin a design
+needs is not on the loss; it is on the thermal resistance, and a small ungapped core in
+still air reaches 50 K/W without trying.
+
+## Where the model stops holding
+
+The constant $h$ is the first thing to go. Natural convection from a surface does not
+carry heat away in proportion to $\Delta T$; the boundary layer thickens as it warms, and
+the standard correlation for a vertical surface of height $L$ is
+$h \approx 1.42\left(\frac{\Delta T}{L}\right)^{1/4}$. Radiation is a second mechanism
+entirely, going as $T^4$ on both sides, and at these temperatures it is not a small
+correction.
+
+```python
+SIGMA = 5.67e-8
+L, eps, T_a = 0.035, 0.9, 313.0      # 35 mm core, emissivity, 40 C ambient in kelvin
+
+print("  dT     h_conv   h_rad    sum")
+for dT in (10.0, 29.95, 60.0):
+    h_conv = 1.42 * (dT / L) ** 0.25
+    T_s = T_a + dT
+    h_rad = eps * SIGMA * (T_s ** 2 + T_a ** 2) * (T_s + T_a)
+    print("%6.2f K  %6.3f  %6.3f  %6.3f" % (dT, h_conv, h_rad, h_conv + h_rad))
+```
+
+```text
+  dT     h_conv   h_rad    sum
+ 10.00 K   5.838   6.566  12.404
+ 29.95 K   7.680   7.216  14.896
+ 60.00 K   9.137   8.300  17.437
+```
+
+Two things follow. The 10 W/m²K in `cores.py` is a lumped stand-in for two mechanisms
+that obey different laws, and at a 30 K rise with a clear view of cool surroundings the
+real total is nearer 15, so the course's number is conservative — but only while the
+radiating view is clear. Seal the same transformer in a small enclosure and the surfaces
+it radiates to are themselves warm, the view factor drops well below one, and 10 becomes
+optimistic instead. Neither case is a constant, and the direction of the error depends on
+the box, not on the transformer.
+
+The second is that $h$ *rises* with $\Delta T$, so $R_{th}$ falls as the thing gets hotter.
+That is a stabilising nonlinearity working against the destabilising one in the previous
+section, and the linear model contains neither. It is also why a measured $R_{th}$ quoted
+without the power at which it was measured is close to meaningless.
+
+Three smaller boundaries. The model has one temperature for the whole transformer, and a
+real winding has a hot spot buried in the middle of it that sits 10 to 20 K above the
+surface the thermocouple is taped to — the number that matters for insulation life is the
+one you cannot reach. A Foster ladder is a fitting form and not a physical one: its
+internal nodes correspond to nothing, so a case temperature cannot be read off one, which
+is what a Cauer ladder is for. And the ferrite's own coefficient was taken as zero above,
+which is honest only near 100 °C: a power ferrite's loss curve has a minimum there, so
+below it the core term's coefficient is *negative* and the 32.80 K is a slight
+over-estimate, while above it the coefficient turns positive and adds to the copper's.
+
+## What you are about to build
+
+The lab writes `junction_temp` and `max_power` for the shared-sink algebra, `foster_zth`
+for the transient, and `steady_power` for the loop above — the last of which returns
+`float("inf")` rather than a negative number past the critical resistance, because a
+negative power looks plausible and is meaningless. The build exercise puts the three
+resistances on a canvas and checks the 67.5 K settling point, the 17.6 K after 50 ms, and
+the 74 per cent of the path that belongs to the heatsink. The capstone then runs the
+whole course end to end on the frequency sweep from module 3, and the design it returns
+is an ETD34 at 100 kHz, interleaved, at 29.95 K — chosen not because it is the smallest
+core or the lowest loss, but because it is the smallest core that stays cool enough.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Watts into kelvin, and the loop back",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "An ETD34 transformer dissipating 1.38 W in still air settles 29.95 K above ambient. The same loss is put on an ETD29, whose exposed area is 3.6e-3 m² against the ETD34's 4.6e-3. What is the new rise?",
+                        "opts": [
+                            "About 38 K, because the thermal resistance goes as one over the exposed area",
+                            "The same 30 K, because neither the dissipation nor the ambient temperature moved",
+                            "About 39 K, because the loss is made in a volume that shrank faster than the area",
+                            "Lower, because a smaller core has a shorter path from where the heat is made",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$R_{th} = \frac{1}{h A_s}$ goes from 21.74 to 27.78 K/W, a ratio of 1.278, and $29.95 \times 1.278 = 38.3$ K. It is the reason module 3's smaller, lower-loss 150 kHz design runs hotter than the larger one.",
+                            r"The rise is the product of the loss and a thermal resistance, and the resistance is a property of the surface. Holding the watts fixed does not hold the kelvin fixed when the thing shedding them has changed size.",
+                            r"The volume argument is the right physics for a different question — why big cores need lower current density — but here the loss was given as fixed at 1.38 W, so only the area moved.",
+                            r"Internal conduction is not the bottleneck in a ferrite this size; the limit is getting heat off the outer surface into still air. Less surface is worse, whatever happens inside.",
+                        ],
+                        "why": r'''
+$R_{th} = \frac{1}{h A_s}$, so with $h$ held at 10 W/m²K the ETD29's 3.6e-3 m² gives
+27.78 K/W against the ETD34's 21.74, and the same 1.38 W produces 38.3 K instead of
+29.95 K. This is the column that decides the whole capstone sweep: the area product falls
+with frequency and picks smaller cores, and smaller cores have less surface, so the
+thermal penalty arrives at exactly the point the sizing rule was celebrating.
+''',
+                    },
+                    {
+                        "q": "Four identical devices sit on one heatsink, each dissipating $P$. Which resistances in $T_j = T_a + P(R_{jc} + R_{cs}) + nPR_{sa}$ have to carry all four devices' power?",
+                        "opts": [
+                            "Only the sink-to-ambient one, since it is the single path all four share",
+                            "All three, because the four devices are bolted to one common piece of metal",
+                            "Only the case-to-sink one, where the four separate interfaces meet the sink",
+                            "None of them, if the sink is thick enough to spread the heat evenly",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Junction-to-case and case-to-sink are private to each device and see one device's $P$; the sink-to-ambient path is common and sees $4P$. That is why sharing raises the allowed dissipation from 34.0 W to 10.76 W each rather than leaving it alone.",
+                            r"They are on one piece of metal, but the heat from device two does not flow through device one's package to get there. Each private path carries its own device's power and no more.",
+                            r"Each device has its own thermal interface pad, so each case-to-sink resistance carries one device's power. They are in parallel to the sink, not in series with each other.",
+                            r"Spreading resistance is a real effect and a thick sink reduces it, but even a perfectly isothermal sink still has to pass $4P$ into the air through one $R_{sa}$.",
+                        ],
+                        "why": r'''
+Walk the path from ambient inwards. The sink sits at $T_a + nPR_{sa}$ because every watt
+in the system leaves through it, and one junction is a further $P(R_{jc} + R_{cs})$ above
+that on its own private path. With 12.5 W, 0.45, 0.25 and 1.8 K/W, one device reaches
+71.25 °C and four reach 138.75 °C — the difference being the other three devices' power
+through the sink resistance alone. Inverted, the per-device budget falls from 34.0 W to
+10.76 W.
+''',
+                    },
+                    {
+                        "q": "A device rated for 25 W continuous survives a 50 ms burst that would settle at four times its steady-state junction rise. What makes the burst survivable?",
+                        "opts": [
+                            "In 50 ms only the small thermal masses have warmed, so the heatsink is not yet in the path",
+                            "Thermal resistance falls at high power levels, because convection carries the heat away faster",
+                            "The average power over the whole duty cycle is what the junction temperature follows",
+                            "Silicon has a much higher thermal conductivity over short times than over long ones",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$Z_{th}(t) = \sum_i R_i(1 - e^{-t/\tau_i})$, and a term contributes nothing until its own $\tau_i$ has passed. At 50 ms the die and case have settled and the sink, with tens of seconds, has barely started — the rise is $R_{jc} + R_{cs}$ alone.",
+                            r"Convection does improve with temperature, which the constant-$h$ model misses, but the effect is tens of per cent over the whole rise and it acts on the outside surface, far too slowly to matter within 50 ms.",
+                            r"True for a burst much shorter than the *slowest* time constant, and it is how a repetitive duty cycle is handled. A single 50 ms burst is longer than the die and case constants, so the peak, not the average, is what the junction sees.",
+                            r"Conductivity is a material property and does not know what time it is. What changes with time is which thermal capacitances have finished charging.",
+                        ],
+                        "why": r'''
+The transient thermal impedance starts at zero and picks up each ladder term as its time
+constant passes. The lab's three-term ladder ends at 1.55 K/W but stands at 0.0486 K/W
+after one millisecond — a thirty-second of the steady value. In the build exercise's
+network the die and case constants are milliseconds and the heatsink's is 40 seconds, so
+50 ms in the junction has reached 17.6 K of an eventual 67.5 K. A datasheet plots $Z_{th}$
+against pulse width for exactly this reason.
+''',
+                    },
+                    {
+                        "q": "A winding's loss rises 0.393 per cent per kelvin, so the loss computed on a cold bench underestimates the settled loss. What sets the point where no steady temperature exists at all?",
+                        "opts": [
+                            "The thermal resistance reaching $\\frac{1}{aP_0}$, where the loop returns as much as it took",
+                            "The temperature reaching the point where the winding insulation begins to break down",
+                            "The dissipation reaching the point where convection can no longer carry it away",
+                            "The coefficient $a$ turning negative, which would invert the sign of the whole feedback path",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$P = \frac{P_0}{1 - aP_0R_{ja}}$, and the denominator vanishes at $R_{ja} = \frac{1}{aP_0}$. For this transformer that is 250.6 K/W against the 21.7 it runs at; for the derive unit's 2 W core with $a = 0.004$ it is 125 K/W, which a small core in still air can reach.",
+                            r"Insulation life is a real limit and usually the binding one, but it is a limit on the answer rather than a reason the equation has none. Runaway is a property of the loop gain and happens at whatever temperature the algebra says.",
+                            r"Convection has no such cliff — it improves as the surface warms. The instability comes from the loss depending on temperature, not from the cooling failing.",
+                            r"A negative $a$ makes the loop *stabilising*, which is what a ferrite below 100 °C provides: the core's loss falls as it warms and the denominator moves away from zero.",
+                        ],
+                        "why": r'''
+Closing the loop gives $P = \frac{P_0}{1 - aP_0R_{ja}}$, so the steady solution disappears
+when $aP_0R_{ja}$ reaches one — the loop returns as much heat as it was given. Weighting
+copper's coefficient by the copper's share of this transformer's loss gives $a = 0.00290$
+per kelvin, a settled 1.509 W instead of 1.378 W, a rise of 32.80 K instead of 29.95 K,
+and a critical resistance of 250.6 K/W. The margin that matters is on the thermal
+resistance, not on the loss, and the lab's `steady_power` returns infinity past it rather
+than the negative number the formula would otherwise hand back.
+''',
+                    },
+                    {
+                        "q": "A three-term Foster fit to a measured cooling curve comes back with complex poles and a small overshoot. What does that tell you?",
+                        "opts": [
+                            "The fit has followed the measurement noise, since positive $R$ and $C$ give real poles only",
+                            "The heatsink and the die are exchanging heat back and forth, which the ladder fit has caught",
+                            "The measurement was taken with too much power, so the material properties moved",
+                            "The ladder needs more terms, because three cannot represent a real cooling curve",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"A network of positive thermal resistances and capacitances is a sum of decaying exponentials and cannot overshoot; there is no thermal inductance. An overshoot in the fit is the fitting routine chasing scatter it should have smoothed.",
+                            r"Heat does flow both ways between masses, and that is exactly what a ladder of real poles already describes. Oscillatory exchange would need an energy store that heat does not have.",
+                            r"Properties do move with temperature and a large step can distort a measurement, but that produces a curve of the wrong shape rather than one that is physically impossible.",
+                            r"More terms would fit finer detail, and three is genuinely coarse for a real stack. Adding terms would not license an overshoot, because no number of positive $RC$ terms can produce one.",
+                        ],
+                        "why": r'''
+Every term in $\sum_i R_i(1 - e^{-t/\tau_i})$ is a decaying exponential with a real pole,
+because there is no thermal analogue of an inductor — heat has no momentum. A fit that
+comes back underdamped has been fitted to noise, and the sandbox *A heatsink as a low-pass
+filter* is there to make that recognisable: drop its damping to 0.05 and a 20 dB peak
+appears with the phase diving towards $-180°$, which is a shape no thermal network can
+produce. Reading the plateau and the corner from that plot is legitimate; reading the
+slope is not, since it is second order and a Foster ladder is a sum of first-order terms.
+''',
+                    },
+                    {
+                        "q": "The course models cooling as $R_{th} = \\frac{1}{h A_s}$ with $h$ fixed at 10 W/m²K. Where does that assumption break first?",
+                        "opts": [
+                            "$h$ is not a constant: convection grows with the rise and radiation is a separate law",
+                            "$A_s$ is not constant either, since a warm core expands and presents a little more surface",
+                            "The relation is exact for natural convection, and only forced air invalidates it",
+                            "Thermal resistance is only defined once the transient has fully settled out",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Convection from a vertical surface goes as $\left(\frac{\Delta T}{L}\right)^{1/4}$ and radiation as the difference of fourth powers; at a 30 K rise they come to 7.7 and 7.2 W/m²K, so 10 is a lumped stand-in for about 15 with a clear radiating view and an optimistic one inside a closed box.",
+                            r"Thermal expansion changes a ferrite's dimensions by parts in ten thousand over this range. It is real and it is four orders of magnitude too small to matter here.",
+                            r"Natural convection is the case where the constant is *least* justified, because the boundary layer thickens with the rise. Forced air is closer to a constant $h$, being set by the fan rather than by the temperature.",
+                            r"A steady-state resistance does describe the settled point, and that is what it is for. The transient is handled by $Z_{th}(t)$, which converges on the same number rather than replacing it.",
+                        ],
+                        "why": r'''
+Two mechanisms are hiding inside that 10. The convective term rises as the fourth root of
+the temperature rise — 5.8 W/m²K at 10 K, 7.7 at 30 K, 9.1 at 60 K — and radiation adds
+another 6.6 to 8.3 W/m²K depending on how much cool surroundings the surface can see. So
+the model is conservative for a transformer standing in open air and optimistic for one
+sealed in a small box, and the sign of the error is a property of the enclosure rather
+than of the magnetics. The rise of $h$ with $\Delta T$ also means $R_{th}$ falls as the
+core warms, which is a stabilising nonlinearity working against the self-heating loop —
+and the linear model contains neither of them.
+''',
+                    },
+                ],
+            },
             "title": "Thermal resistance from junction to ambient",
             "summary": "Loss is only a number until it becomes a temperature. The network that turns one into the other is a resistor divider with a feedback path.",
             "concepts": [
