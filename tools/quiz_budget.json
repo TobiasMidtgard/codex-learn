@@ -63,6 +63,6 @@
   "SEC301": {"longest": 0, "shortest": 0, "whys": 120, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "VLSI510": {"longest": 6, "shortest": 1, "whys": 48, "blanks": {"longest": 2, "shortest": 1, "markup": 0, "whys": 28}},
   "VLSI520": {"longest": 6, "shortest": 0, "whys": 48, "blanks": {"longest": 3, "shortest": 0, "markup": 0, "whys": 32}},
-  "VLSI530": {"longest": 8, "shortest": 1, "whys": 0, "blanks": {"longest": 3, "shortest": 1, "markup": 0, "whys": 40}},
+  "VLSI530": {"longest": 8, "shortest": 1, "whys": 48, "blanks": {"longest": 3, "shortest": 1, "markup": 0, "whys": 40}},
   "WEB301": {"longest": 13, "shortest": 2, "whys": 0, "blanks": {"longest": 6, "shortest": 3, "markup": 0, "whys": 88}}
 }
