@@ -57,6 +57,293 @@ COURSE = {
                 "Rounding error is bounded by $q/2$ and behaves, for a busy signal, like white noise of power $q^2/12$.",
                 "Truncation is not rounding: it has a DC bias of $-q/2$ for two's complement, which a recursive filter will integrate.",
             ],
+            "read": [
+                {
+                    "title": "Ninety-eight decibels, and where they came from",
+                    "minutes": 16,
+                    "body": r'''
+On the bench: a 16-bit codec, a generator putting a full-scale 1 kHz sine into it, and an
+analyser on the digital output. The tone reads 0 dBFS and there is a floor 98 dB beneath
+it. Turn the generator down by 40 dB. The tone follows it down; the floor does not move.
+
+The second measurement is the one worth staring at. A floor that ignores the signal is
+not arriving from the analogue front end, where thermal noise and signal scale together
+and the ratio between them is fixed. It is being manufactured inside the converter, at a
+level set by the word length and by nothing else whatever.
+
+```python
+import math
+
+
+def quantise(x, frac_bits):
+    """Round x onto the grid of a format with this many fractional bits."""
+    q = 2.0 ** -frac_bits
+    return round(x / q) * q
+
+
+def measure(amplitude, frac_bits, count=40000):
+    """Mean-square error and signal-to-noise ratio for a quantised sine."""
+    sig2 = 0.0
+    err2 = 0.0
+    for n in range(count):
+        x = amplitude * math.sin(2.0 * math.pi * 0.0123456 * n)
+        e = quantise(x, frac_bits) - x
+        sig2 += x * x
+        err2 += e * e
+    return err2 / count, 10.0 * math.log10(sig2 / err2)
+
+
+q = 2.0 ** -15
+for amp in (1.0, 0.01):
+    power, snr = measure(amp, 15)
+    print(f"amplitude {amp:<6} noise power {power:.4e}   SNR {snr:6.2f} dB")
+print(f"q*q/12 for q = 2**-15        {q * q / 12:.4e}")
+print(f"6.02 * 16 + 1.76             {6.02 * 16 + 1.76:6.2f} dB")
+```
+
+```text
+amplitude 1.0    noise power 7.7185e-11   SNR  98.11 dB
+amplitude 0.01   noise power 7.9027e-11   SNR  58.01 dB
+q*q/12 for q = 2**-15        7.7610e-11
+6.02 * 16 + 1.76              98.08 dB
+```
+
+A hundredfold drop in amplitude, and the noise power moved by half a percent. Forty
+decibels came off the ratio because forty decibels came off the numerator.
+
+## Where 98 comes from
+
+The converter carries 16 bits across a span running from $-1$ to $+1$, so the codes are
+$q = 2/2^{16} = 2^{-15}$ apart. Rounding to nearest can never move a value further than
+half that, so every error lies in $\left(-\frac{q}{2}, \frac{q}{2}\right)$. When the
+signal moves by many codes between one sample and the next — 2541 of them at the steepest
+part of the full-scale sine above — there is no reason for it to favour any part of that
+interval over any other, and the errors spread across it evenly. The mean square of a value
+uniform on an interval of width $q$ centred on zero is $q^2/12$, which is
+$7.761\times10^{-11}$ here against a measured $7.7185\times10^{-11}$.
+
+A full-scale sine has mean square $\frac{1}{2}$, so the ratio is
+$\frac{1/2}{q^{2}/12} = \frac{6}{q^{2}} = 6\cdot 2^{30}$, which is 98.09 dB. The derive
+unit *The signal-to-noise ratio of a B-bit converter* runs that argument in symbols and
+arrives at $\frac{3}{2}\cdot 2^{2B}$; the measurement above is the same statement with
+the numbers filled in.
+
+The 58 dB reading is the same formula with the signal 40 dB down, and it is the reason
+headroom is expensive. Every decibel of range left unused at the input is a decibel of
+converter thrown away, because the floor beneath it will not come down to meet you.
+
+## The point is a promise, and it costs nothing to move
+
+Nothing in a stored word says where the binary point sits. A 16-bit code of $-30521$ is
+$-30521$, and it becomes a number by agreement: Q(m.f) means $m$ integer bits, $f$
+fractional bits, one sign bit, and a value of code $\times 2^{-f}$.
+
+The choice is real, and one coefficient of the capstone's Butterworth filter shows why.
+
+```python
+A1 = -1.86286416          # a denominator coefficient of the capstone's filter
+
+
+def store(x, int_bits, frac_bits):
+    """What a signed Q(int_bits.frac_bits) word ends up holding: code, then value."""
+    lo = -(2 ** int_bits)
+    hi = 2 ** int_bits - 2.0 ** -frac_bits
+    clamped = min(max(x, lo), hi)
+    code = round(clamped * 2 ** frac_bits)
+    return code, code / 2 ** frac_bits
+
+
+for m, f in ((0, 15), (1, 14), (2, 13)):
+    code, held = store(A1, m, f)
+    print(f"Q{m}.{f}   code {code:>7d}   holds {held:+.10f}   off by {abs(held - A1):.3e}")
+
+print()
+a_code, a_held = store(A1, 1, 14)
+y_code, y_held = store(0.6, 1, 14)
+product = a_code * y_code
+print("a1 as an integer      ", a_code)
+print("y  as an integer      ", y_code)
+print("their integer product ", product, f"({product.bit_length()} magnitude bits)")
+print("read back as Q3.28    ", product / 2 ** 28)
+print("the same in doubles   ", a_held * y_held)
+print("rounded into Q1.14    ", round(product / 2 ** 14) / 2 ** 14)
+print("the corner case       ", (-2 ** 15) * (-2 ** 15) / 2 ** 28)
+```
+
+```text
+Q0.15   code  -32768   holds -1.0000000000   off by 8.629e-01
+Q1.14   code  -30521   holds -1.8628540039   off by 1.016e-05
+Q2.13   code  -15261   holds -1.8629150391   off by 5.088e-05
+
+a1 as an integer       -30521
+y  as an integer       9830
+their integer product  -300021430 (29 magnitude bits)
+read back as Q3.28     -1.1176669225096703
+the same in doubles    -1.1176669225096703
+rounded into Q1.14     -1.11767578125
+the corner case        4.0
+```
+
+Q0.15 reaches only to $1 - 2^{-15}$, so $-1.86286416$ arrives at the rail and is stored
+as $-1.0$: an error of 0.86. That is not a rounded coefficient, it is a different filter.
+The pair still sits at radius 0.9415 — the radius is set by $a_2$, which was untouched —
+but its angle moves from 0.1462 rad to 1.0109, so the resonance leaves $0.0233\,f_s$ and
+arrives at $0.1609\,f_s$, a factor of seven. Q1.14 reaches to $-2$ and holds the number
+to $1.0\times10^{-5}$. Q2.13 also holds it, five times worse, because the extra integer
+bit bought range nobody was going to use and was paid for out of the fractional bits.
+
+That is the whole rule, and it follows from the two numbers rather than from anybody's
+authority: take the smallest $m$ whose range covers the largest magnitude the variable
+will ever hold, and spend every remaining bit on $f$.
+
+The multiply is the same reasoning applied twice. The stored integers are exactly
+$-30521$ and $9830$, and their integer product $-300021430$ is exact — no arithmetic has
+been lost. What has changed is the promise: each factor was scaled by $2^{-14}$, so the
+product is scaled by $2^{-28}$, and the word holding it is Q3.28. Three integer bits and
+not two, because the one product a pair of Q1.14 words can reach that a Q2.28 word cannot
+is $(-2)\times(-2) = +4$, printed on the last line. Every other product in the format
+stays below 4, which is why that top bit is redundant almost always and why DSP parts
+offer a fractional multiply mode that shifts the product left by one to reclaim it.
+
+Rounding the full-width product back down gives $-1.11767578125$ against the exact
+$-1.1176669225$, an error of $8.9\times10^{-6}$ — inside the half-LSB of $3.05\times10^{-5}$
+that Q1.14 promises, as it has to be.
+
+## The mistake: treating truncation as rounding with a different tie-break
+
+Dropping the low bits of a word is free — it is a shift, and on some parts it is not even
+that, because the result is already in the high half of the register. Rounding costs an
+add before the shift. And the error is under one LSB either way. The reasoning is
+appealing enough that truncation is what a first fixed-point port almost always does.
+
+```python
+import math
+
+
+def q_round(x, frac_bits):
+    """Round to nearest — what a converter and a well-written DSP routine do."""
+    q = 2.0 ** -frac_bits
+    return round(x / q) * q
+
+
+def q_trunc(x, frac_bits):
+    """Drop the low bits of a two's complement word: a floor towards minus infinity."""
+    q = 2.0 ** -frac_bits
+    return math.floor(x / q) * q
+
+
+def stats(rule, frac_bits, count=40000):
+    """Mean and mean square of the error this rule makes on a busy sine."""
+    total = 0.0
+    square = 0.0
+    for n in range(count):
+        x = 0.9 * math.sin(2.0 * math.pi * 0.0123456 * n)
+        e = rule(x, frac_bits) - x
+        total += e
+        square += e * e
+    return total / count, square / count
+
+
+q = 2.0 ** -10
+for name, rule in (("round to nearest", q_round), ("truncate        ", q_trunc)):
+    mean, power = stats(rule, 10)
+    print(f"{name}  mean {mean / q:+.4f} q   mean square {power / (q * q):.4f} q^2")
+print(f"predicted        round {1 / 12:.4f} q^2      truncate {1 / 12 + 1 / 4:.4f} q^2")
+print(f"truncating costs {10 * math.log10((1 / 12 + 1 / 4) / (1 / 12)):.2f} dB")
+```
+
+```text
+round to nearest  mean -0.0074 q   mean square 0.0844 q^2
+truncate          mean -0.4957 q   mean square 0.3282 q^2
+predicted        round 0.0833 q^2      truncate 0.3333 q^2
+truncating costs 6.02 dB
+```
+
+Truncating a two's complement word discards the fraction, which is a floor towards
+$-\infty$ rather than a move towards zero, so the error lands in $(-q, 0]$ instead of
+$\left(-\frac{q}{2}, \frac{q}{2}\right)$. The interval is the same width, so the variance
+is the same $q^{2}/12$ — but it is no longer centred, and mean square is variance plus
+the square of the mean: $\frac{q^{2}}{12} + \frac{q^{2}}{4} = \frac{q^{2}}{3}$. Four
+times the power, which the derive unit's six-decibels-per-bit converts into exactly one
+bit. A 16-bit part that truncates is a 15-bit part with a marketing department.
+
+The mean is the more dangerous half of that measurement, because $-0.4957q$ is not noise.
+It is a DC offset, and in a recursive structure it is fed back and accumulated: a
+first-order section with $a = 0.99$ multiplies a steady bias by $\frac{1}{1-a} = 100$, so
+half an LSB at the multiplier arrives at the output as 50 LSBs of offset. Module 4 takes
+that mechanism apart.
+
+## Where the model stops holding
+
+Two assumptions carried $q^{2}/12$ here: that the error is spread evenly across a step,
+and that it has nothing to do with the signal. Both need the signal to move by several
+codes between samples, and both fail when it does not.
+
+```python
+import math
+
+q = 2.0 ** -10
+
+
+def quantise(x):
+    return round(x / q) * q
+
+
+def error_power(amplitude, count=40000):
+    """Mean square of the rounding error on a sine of this amplitude."""
+    total = 0.0
+    for n in range(count):
+        x = amplitude * math.sin(2.0 * math.pi * 0.0123456 * n)
+        e = quantise(x) - x
+        total += e * e
+    return total / count
+
+
+codes = [round(quantise(1.6 * q * math.sin(2.0 * math.pi * 0.0123456 * n)) / q)
+         for n in range(20)]
+print("a 1.6 LSB sine, in codes:", codes)
+for amp in (0.9, 8.0 * q, 1.6 * q):
+    print(f"amplitude {amp / q:8.2f} LSB   error power {error_power(amp) / (q * q):.4f} q^2")
+print(f"the uniform model says                {1 / 12:.4f} q^2")
+```
+
+```text
+a 1.6 LSB sine, in codes: [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2]
+amplitude   921.60 LSB   error power 0.0844 q^2
+amplitude     8.00 LSB   error power 0.0764 q^2
+amplitude     1.60 LSB   error power 0.1124 q^2
+the uniform model says                0.0833 q^2
+```
+
+At 921 LSBs the model is right to half a percent. At 8 LSBs it is still usable. At 1.6
+LSBs the output is a three-level staircase locked to the input's own period, the error
+power is 35% high, and — far more important than the power — the error is now periodic.
+Periodic error is harmonic distortion, which lands in a few places and is audible well
+below a hiss of the same power. That is the regime dither exists for: adding a controlled
+half-LSB of noise before the quantiser makes the error random again, raising the floor a
+little in exchange for removing the tones from it.
+
+The same failure has a second face. Quantise a constant and the error is a constant; no
+amount of averaging removes it, and $q^{2}/12$ describes none of it.
+
+## What you are about to build
+
+The lab *A Q-format quantiser and its noise floor* is the five primitives everything
+later in this course sits on: `q_step` for the value of one LSB, `quantise` for the snap
+onto the grid, `saturate` for the asymmetric two's complement range whose top is
+$2^{m} - q$ and never $2^{m}$, `to_fixed` applying them in the order a converter does,
+and `noise_power` so a measured floor can be held against the theory rather than trusted.
+One of its checks measures a busy signal's floor and insists it is within 5% of
+$q^{2}/12$; the last one measures a full-scale sine's ratio and insists it reaches
+$\frac{3}{2}\cdot 2^{2B}$. Both are the numbers above, asserted rather than admired.
+
+The sandbox *The other axis of discretisation* is the time axis, in the same room. It is
+worth a few minutes precisely because it is the other half of the same act: sampling
+misplaces energy in frequency and quantisation misplaces it in amplitude, and in both
+cases what has been misplaced becomes indistinguishable from signal the moment it lands.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "The other axis of discretisation",
                 "visualiser": "spectrum",
@@ -409,6 +696,573 @@ assert abs(_snr / _theory - 1.0) < 0.05, \
                 "A cascade of second-order sections quantises each pole pair against its own two coefficients, so no pole is sensitive to any other section.",
                 "Expanding a cascade into one high-order direct form is algebraically identical and numerically indefensible above about fourth order.",
             ],
+            "read": [
+                {
+                    "title": "The same filter twice, and one of them is an integrator",
+                    "minutes": 17,
+                    "body": r'''
+The capstone's filter is a fourth-order Butterworth low-pass at $f_c/f_s = 0.05$, and it
+arrives as two second-order sections. Multiply their denominators together and there is
+one quartic instead,
+$1 - 3.58719\,z^{-1} + 4.84465222\,z^{-2} - 2.91826783\,z^{-3} + 0.66131735\,z^{-4}$.
+The algebra is exact and the two forms are the same transfer function, with every pole in
+the same place. Store the coefficients in a word with eight fractional bits — the only
+thing that changes — and look again.
+
+```python
+import cmath
+
+SECTIONS = [[1.0, -1.86286416, 0.88637718],
+            [1.0, -1.72432584, 0.74609023]]
+
+
+def quad_roots(a):
+    """The two roots of a[0] z^2 + a[1] z + a[2]."""
+    disc = cmath.sqrt(a[1] * a[1] - 4.0 * a[0] * a[2])
+    return [(-a[1] + disc) / (2.0 * a[0]), (-a[1] - disc) / (2.0 * a[0])]
+
+
+def roots_of(poly, rounds=400):
+    """Durand-Kerner from fixed starting points: deterministic, no library."""
+    c = [v / poly[0] for v in poly]
+    n = len(c) - 1
+    z = [(0.4 + 0.9j) ** k for k in range(n)]
+    for _ in range(rounds):
+        for i in range(n):
+            num = 0j
+            for v in c:
+                num = num * z[i] + v
+            den = 1.0 + 0j
+            for j in range(n):
+                if j != i:
+                    den *= z[i] - z[j]
+            z[i] -= num / den
+    return z
+
+
+def convolve(f, g):
+    out = [0.0] * (len(f) + len(g) - 1)
+    for i, a in enumerate(f):
+        for j, b in enumerate(g):
+            out[i + j] += a * b
+    return out
+
+
+def quantise(poly, frac_bits):
+    """Round every stored coefficient; the leading 1 is structural, not stored."""
+    q = 2.0 ** -frac_bits
+    out = [round(v / q) * q for v in poly]
+    out[0] = 1.0
+    return out
+
+
+quartic = convolve(SECTIONS[0], SECTIONS[1])
+exact = [abs(r) for a in SECTIONS for r in quad_roots(a)]
+print("exact radii, either way :", [round(v, 6) for v in sorted(exact)])
+print("as one quartic          :", [round(v, 6) for v in sorted(abs(z) for z in roots_of(quartic))])
+print()
+casc = [abs(r) for a in SECTIONS for r in quad_roots(quantise(a, 8))]
+dire = [abs(z) for z in roots_of(quantise(quartic, 8))]
+print("8-bit coefficients, cascade :", [round(v, 6) for v in sorted(casc)])
+print("8-bit coefficients, direct  :", [round(v, 6) for v in sorted(dire)])
+```
+
+```text
+exact radii, either way : [0.863765, 0.863765, 0.941476, 0.941476]
+as one quartic          : [0.863765, 0.863765, 0.941476, 0.941476]
+
+8-bit coefficients, cascade : [0.863767, 0.863767, 0.941657, 0.941657]
+8-bit coefficients, direct  : [0.742907, 0.942662, 0.942662, 1.0]
+```
+
+The cascade's poles moved in the sixth decimal place. The quartic's inner conjugate pair
+has come apart into two real poles, one at 0.7429 and one sitting at exactly $z = 1$. The
+filter that was a low-pass now contains an integrator, and it will accumulate whatever DC
+offset the arithmetic hands it, without bound and without an input.
+
+## The number that decided it
+
+A denominator written as a polynomial in $z$ factors as $A(z) = \prod_i (z - p_i)$, so
+its value at $z = 1$ is $\prod_i (1 - p_i)$ — and evaluating the polynomial at $z = 1$ is
+the same as adding up its coefficients. Two ways of computing one quantity, and the
+second one is what the stored word length gets to round.
+
+```python
+import cmath
+
+SECTIONS = [[1.0, -1.86286416, 0.88637718],
+            [1.0, -1.72432584, 0.74609023]]
+
+
+def quad_roots(a):
+    disc = cmath.sqrt(a[1] * a[1] - 4.0 * a[0] * a[2])
+    return [(-a[1] + disc) / (2.0 * a[0]), (-a[1] - disc) / (2.0 * a[0])]
+
+
+def convolve(f, g):
+    out = [0.0] * (len(f) + len(g) - 1)
+    for i, a in enumerate(f):
+        for j, b in enumerate(g):
+            out[i + j] += a * b
+    return out
+
+
+def quantise(poly, frac_bits):
+    q = 2.0 ** -frac_bits
+    out = [round(v / q) * q for v in poly]
+    out[0] = 1.0
+    return out
+
+
+quartic = convolve(SECTIONS[0], SECTIONS[1])
+poles = [r for a in SECTIONS for r in quad_roots(a)]
+product = 1.0
+for p in poles:
+    product *= abs(1.0 - p)
+print("A(1) as a sum of coefficients :", sum(quartic))
+print("A(1) as the product of 1 - p  :", product)
+for k, a in enumerate(SECTIONS, 1):
+    print(f"section {k}: A(1) = {sum(a):.8f}")
+print()
+print(" f     grid step    quartic A(1) after rounding")
+for f in range(6, 13):
+    print(f"{f:2d}   {2.0 ** -f:.4e}    {sum(quantise(quartic, f)):+.8f}")
+```
+
+```text
+A(1) as a sum of coefficients : 0.000511746537357638
+A(1) as the product of 1 - p  : 0.000511746537357799
+section 1: A(1) = 0.02351302
+section 2: A(1) = 0.02176439
+
+ f     grid step    quartic A(1) after rounding
+ 6   1.5625e-02    -0.01562500
+ 7   7.8125e-03    +0.00000000
+ 8   3.9062e-03    +0.00000000
+ 9   1.9531e-03    +0.00000000
+10   9.7656e-04    +0.00097656
+11   4.8828e-04    +0.00000000
+12   2.4414e-04    +0.00073242
+```
+
+Every pole of a narrow low-pass is near $z = 1$, so every factor $1 - p_i$ is small, and
+$A(1)$ is the product of four small numbers: $5.12\times10^{-4}$. The sum of the stored
+coefficients lands on the grid, and when the grid step is larger than $A(1)$ the nearest
+grid point is zero. A denominator whose coefficients sum to zero has $A(1) = 0$, which
+is a root at exactly $z = 1$ — the pole in the first listing, arrived at by arithmetic
+rather than by accident.
+
+Each section on its own has $A(1)$ around $2.2\times10^{-2}$, forty-odd times larger,
+because it is the product of two small factors rather than four. A grid of $2^{-9}$ is
+nowhere near it. That is what the cascade buys, in one number.
+
+## Why one stored coefficient reaches every pole
+
+The derive unit *How far a pole moves when you round a coefficient* does the quadratic
+case: hold $a_1$, perturb $a_2$, and $\frac{dp_1}{da_2} = -\frac{1}{p_1 - p_2}$. The same
+two lines work at any order. Write the monic denominator as
+$A(p) = p^{n} + a_1p^{n-1} + \dots + a_n$, and differentiate $A(p_i) = 0$ with respect to
+one stored coefficient $a_k$:
+
+$$A'(p_i)\,\frac{\partial p_i}{\partial a_k} + p_i^{\,n-k} = 0
+\qquad\Longrightarrow\qquad
+\frac{\partial p_i}{\partial a_k} = -\frac{p_i^{\,n-k}}{\prod_{j \neq i}\left(p_i - p_j\right)}$$
+
+because differentiating $\prod_j (p - p_j)$ and evaluating at $p_i$ leaves only the term
+in which the $(p - p_i)$ factor was the one differentiated. With $n = 2$ and $k = 2$ the
+numerator is 1 and the product has one factor, which is the derive unit's answer.
+
+The denominator is the whole story. In a biquad it is one distance, from a pole to its
+own conjugate. In the quartic it is three distances multiplied together, and each of them
+is under 0.3.
+
+```python
+import cmath
+
+SECTIONS = [[1.0, -1.86286416, 0.88637718],
+            [1.0, -1.72432584, 0.74609023]]
+
+
+def quad_roots(a):
+    disc = cmath.sqrt(a[1] * a[1] - 4.0 * a[0] * a[2])
+    return [(-a[1] + disc) / (2.0 * a[0]), (-a[1] - disc) / (2.0 * a[0])]
+
+
+def roots_of(poly, rounds=400):
+    c = [v / poly[0] for v in poly]
+    n = len(c) - 1
+    z = [(0.4 + 0.9j) ** k for k in range(n)]
+    for _ in range(rounds):
+        for i in range(n):
+            num = 0j
+            for v in c:
+                num = num * z[i] + v
+            den = 1.0 + 0j
+            for j in range(n):
+                if j != i:
+                    den *= z[i] - z[j]
+            z[i] -= num / den
+    return z
+
+
+def convolve(f, g):
+    out = [0.0] * (len(f) + len(g) - 1)
+    for i, a in enumerate(f):
+        for j, b in enumerate(g):
+            out[i + j] += a * b
+    return out
+
+
+def separation(target, others):
+    """The product of the distances from one pole to all the others."""
+    out = 1.0
+    for p in others:
+        out *= abs(target - p)
+    return out
+
+
+quartic = convolve(SECTIONS[0], SECTIONS[1])
+p1 = quad_roots(SECTIONS[0])[0]
+all_poles = [r for a in SECTIONS for r in quad_roots(a)]
+neighbours = [p for p in all_poles if abs(p - p1) > 1e-12]
+
+in_biquad = separation(p1, [p1.conjugate()])
+in_quartic = separation(p1, neighbours)
+print(f"p1 = {p1:.6f}")
+print(f"distance to its conjugate      {in_biquad:.6f}")
+for p in neighbours:
+    print(f"  |p1 - ({p:.6f})| = {abs(p1 - p):.6f}")
+print(f"product over three neighbours  {in_quartic:.6f}")
+print(f"ratio                          {in_biquad / in_quartic:.1f}")
+
+print()
+step = 2.0 ** -14
+bumped = list(SECTIONS[0])
+bumped[2] += step
+moved = min(quad_roots(bumped), key=lambda z: abs(z - p1))
+print(f"one LSB onto the biquad's a2:  pole moves {abs(moved - p1):.6e}")
+print(f"                    predicted            {step / in_biquad:.6e}")
+bq = list(quartic)
+bq[4] += step
+mq = min(roots_of(bq), key=lambda z: abs(z - p1))
+print(f"one LSB onto the quartic's a4: pole moves {abs(mq - p1):.6e}")
+print(f"                    predicted            {step / in_quartic:.6e}")
+```
+
+```text
+p1 = 0.931432+0.137155j
+distance to its conjugate      0.274310
+  |p1 - (0.931432-0.137155j)| = 0.274310
+  |p1 - (0.862163+0.052586j)| = 0.109316
+  |p1 - (0.862163-0.052586j)| = 0.201990
+product over three neighbours  0.006057
+ratio                          45.3
+
+one LSB onto the biquad's a2:  pole moves 2.223243e-04
+                    predicted            2.225045e-04
+one LSB onto the quartic's a4: pole moves 9.885182e-03
+                    predicted            1.007683e-02
+```
+
+The conjugate distance appears twice: on its own, and as the first of the three
+neighbours, because in the quartic that 0.274 is one factor among three. Multiplying it
+by 0.109 and 0.202 divides the sensitivity denominator by 45.3.
+
+The second half of the listing measures the prediction. Add one whole LSB of a 14-bit
+grid to the biquad's $a_2$ and the pole moves $2.223\times10^{-4}$, against a predicted
+$2^{-14}/0.2743 = 2.225\times10^{-4}$. Add the same one LSB to the quartic's constant
+term and it moves $9.885\times10^{-3}$, against a predicted $2^{-14}/0.006057 =
+1.008\times10^{-2}$. The formula is right to under a percent in the first case and to two
+percent in the second, and the ratio between the two measured shifts is 44.5 where the
+separation product said 45.3.
+
+## The mistake: paying for the structure in bits
+
+The tempting response to a filter whose poles have moved is to store the coefficients
+more precisely. It is the fix that needs no redesign, it is measurable, and it always
+helps a little. Here is what it buys.
+
+```python
+import cmath
+
+SECTIONS = [[1.0, -1.86286416, 0.88637718],
+            [1.0, -1.72432584, 0.74609023]]
+
+
+def quad_roots(a):
+    disc = cmath.sqrt(a[1] * a[1] - 4.0 * a[0] * a[2])
+    return [(-a[1] + disc) / (2.0 * a[0]), (-a[1] - disc) / (2.0 * a[0])]
+
+
+def roots_of(poly, rounds=400):
+    c = [v / poly[0] for v in poly]
+    n = len(c) - 1
+    z = [(0.4 + 0.9j) ** k for k in range(n)]
+    for _ in range(rounds):
+        for i in range(n):
+            num = 0j
+            for v in c:
+                num = num * z[i] + v
+            den = 1.0 + 0j
+            for j in range(n):
+                if j != i:
+                    den *= z[i] - z[j]
+            z[i] -= num / den
+    return z
+
+
+def convolve(f, g):
+    out = [0.0] * (len(f) + len(g) - 1)
+    for i, a in enumerate(f):
+        for j, b in enumerate(g):
+            out[i + j] += a * b
+    return out
+
+
+def quantise(poly, frac_bits):
+    q = 2.0 ** -frac_bits
+    out = [round(v / q) * q for v in poly]
+    out[0] = 1.0
+    return out
+
+
+def worst_shift(exact, got):
+    """Largest distance from an exact pole to its nearest survivor."""
+    return max(min(abs(g - p) for g in got) for p in exact)
+
+
+quartic = convolve(SECTIONS[0], SECTIONS[1])
+exact = [r for a in SECTIONS for r in quad_roots(a)]
+print(" f    cascade shift   direct shift   direct radius")
+for f in (6, 8, 9, 11, 13, 16, 17):
+    casc = [r for a in SECTIONS for r in quad_roots(quantise(a, f))]
+    dire = roots_of(quantise(quartic, f))
+    print(f"{f:2d}     {worst_shift(exact, casc):.3e}      {worst_shift(exact, dire):.3e}"
+          f"       {max(abs(z) for z in dire):.6f}")
+```
+
+```text
+ f    cascade shift   direct shift   direct radius
+ 6     5.460e-02      2.656e-01       1.280175
+ 8     1.231e-02      1.303e-01       1.000000
+ 9     2.348e-03      6.974e-02       1.000000
+11     1.688e-03      9.675e-02       1.000000
+13     2.909e-04      2.930e-02       0.955208
+16     8.578e-05      3.260e-03       0.940399
+17     2.325e-05      3.250e-04       0.941404
+```
+
+Read the sixth row against the fourth. The expanded quartic with eleven fractional bits
+moves a pole by $9.7\times10^{-2}$ and puts one on the unit circle. The cascade with
+**six** — the coarsest storage in the table, a seven-bit word — moves a pole by
+$5.5\times10^{-2}$ and stays stable. Five extra bits on every coefficient, and the wrong
+structure is behind the crudest version of the right one. To match the cascade at nine
+bits, $2.3\times10^{-3}$, the quartic needs seventeen: eight bits per coefficient, spent
+to arrive where the other structure already was for free.
+
+The direct radius column carries the second half of the argument, and it is not
+monotonic. Six, eight, nine and eleven bits all give a pole at or outside the unit
+circle; ten bits does not. Adding a bit to a badly conditioned polynomial moves the
+poles somewhere else, and whether that somewhere is inside the circle is not a question
+the word length answers.
+
+## Where this stops holding
+
+The sensitivity formula is a first derivative, so it describes a coefficient nudge and
+not a coefficient move. At six fractional bits the quartic's grid step is $1.56\times
+10^{-2}$, and dividing that by the separation product predicts a pole shift of 2.58 —
+against a measured 0.266. The prediction is an order of magnitude out, because by then
+the poles have moved far enough that the separations in the denominator are no longer
+the ones that were measured. The formula tells you which structure to fear; it does not
+tell you where a badly quantised filter's poles end up.
+
+A cascade is not a guarantee either. The protection is the distance from a pole to its
+own conjugate, $2r\sin\theta$, and a section can be narrow enough for that to vanish on
+its own: at $r = 0.999$ and $\theta = 0.02$ the separation is 0.040, and the lab's fourth
+check has exactly that pair reaching the unit circle at eight coefficient bits with no
+other section anywhere near it. The cascade removes the coupling between sections and
+leaves each section's own conditioning where it found it.
+
+Nor does any of it speak to which zero pair goes with which pole pair, or in what order
+the sections run. Those choices change the overflow behaviour and the noise gain a great
+deal and change this analysis not at all — module 3 is where they are decided. And an FIR
+filter has no poles, so none of the argument reaches one; rounding its taps moves its
+zeros and lifts its stopband floor, a specification failure rather than a stability one.
+
+## What you are about to build
+
+The lab *Cascade against expanded direct form* measures the table above from both ends.
+`biquad_den(r, theta)` builds `[1, -2*r*cos(theta), r*r]`, `quantise_den` rounds a
+denominator onto the grid and puts the structural leading 1 back, `poles` takes the roots,
+and `max_pole_shift(ref, got)` pairs each reference pole with its **nearest** survivor —
+by distance, never by index, because a root finder promises no ordering and an
+index-matched comparison of a pair that swapped is a large number with no meaning.
+`shift_pair` then does the whole experiment: quantise each section separately, convolve
+and quantise the expanded polynomial, and return both shifts.
+
+Its fourth check is the narrow single section above; its fifth insists the expanded form
+is more than five times worse at the same word length. The sandbox *Pole radius, decay,
+and how little it takes to move it* is where to build the intuition for why: take $\theta$
+towards zero at $r = 0.99$ and watch the two poles converge, which is the separation in
+the denominator going to zero in front of you.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Where a rounded coefficient sends the poles",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "The same eighth-order narrowband filter is stable as four biquads and unstable as one expanded denominator, at identical coefficient word lengths. What accounts for the difference?",
+                        "opts": [
+                            "In the expanded form a pole's sensitivity is divided by its distance to all seven others, several of them small",
+                            "The expanded form stores nine coefficients rather than twelve, so each of them has to carry more of the filter",
+                            "A biquad's coefficients are smaller in magnitude, so the same grid rounds them with a smaller relative error",
+                            "The cascade evaluates its arithmetic in a wider accumulator, so every intermediate result is held to more precision",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$\partial p_i/\partial a_k$ carries $\prod_{j \neq i}(p_i - p_j)$ underneath it. A biquad contributes one factor, $2r\sin\theta$; an eighth-order polynomial contributes seven, and their product is tiny.",
+                            r"The count is real and it is the wrong quantity. Twelve stored numbers rounded independently is not worse than nine — what matters is how far a pole travels per unit of coefficient error, which is the separation product, not the tally.",
+                            r"Magnitude does not enter the sensitivity at all. A denominator coefficient of a narrow biquad is close to $-2$, larger than most of the quartic's, and the biquad is the robust one.",
+                            r"Accumulator width is an arithmetic decision and this failure happens before any arithmetic runs: the poles have already moved when the coefficients are stored, with the filter switched off.",
+                        ],
+                        "why": r"""
+The pole sensitivity to any stored coefficient is
+$-p_i^{\,n-k}\big/\prod_{j \neq i}(p_i - p_j)$, and the denominator is a product over
+every *other* pole in the same polynomial. Splitting into biquads leaves each pole with
+one neighbour instead of seven, so the denominator is a single distance rather than a
+product of small ones. For the fourth-order filter in the reading that ratio is 45; at
+eighth order it is far larger, and it is the whole reason shipped IIR filters are
+cascades.
+""",
+                    },
+                    {
+                        "q": "A fourth-order low-pass has denominator coefficients summing to $5.1\\times10^{-4}$. They are rounded onto a grid of step $2^{-8} = 3.9\\times10^{-3}$. What is the risk that creates?",
+                        "opts": [
+                            "The leading coefficient is no longer exactly 1, so the filter's overall gain changes",
+                            "The sum can round to exactly zero, which places a pole at exactly $z = 1$",
+                            "The sum can round to exactly one, which places a pole at the origin",
+                            "None: the sum of the coefficients is a derived quantity, not one of the stored words",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The leading coefficient is structural — it is a 1 in the difference equation, not a number anybody stores — so it survives any rounding. Everything after it is what moves.",
+                            r"$A(1)$ is the coefficient sum, and a coefficient sum of zero is a root at $z = 1$.",
+                            r"A root at the origin would need the constant term to vanish, which is a different coefficient and a harmless one — a pole at $z = 0$ is a pure delay.",
+                            r"The sum is not stored, but each term in it is, and the sum of numbers on a grid of step $\delta$ is itself on that grid. When $\delta$ exceeds the sum, the nearest available value is zero.",
+                        ],
+                        "why": r"""
+$A(1)$ is both the sum of the coefficients and $\prod_i(1 - p_i)$, so for a narrow
+low-pass — every pole near $z = 1$ — it is a product of small numbers, here
+$5.1\times10^{-4}$. The rounded coefficients sum to a multiple of the grid step, and the
+multiple nearest $5.1\times10^{-4}$ on a grid of $3.9\times10^{-3}$ is zero. A
+denominator with $A(1) = 0$ has a root at exactly $z = 1$: the low-pass has acquired an
+integrator, and this is not a rare corner — it happens at 7, 8, 9 and 11 fractional bits
+for the reading's filter.
+""",
+                    },
+                    {
+                        "q": "Two poles of a section are moved closer and closer together, with their radii held fixed. What happens to each pole's sensitivity to a stored coefficient?",
+                        "opts": [
+                            "It is unchanged, because sensitivity is set by the radius, which has not moved",
+                            "It falls to zero, because two coincident poles move together and the pair cannot come apart",
+                            "It grows without bound, because their separation sits in the denominator of the derivative",
+                            "It falls, because the two poles now share the displacement that one coefficient error causes",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"The radius sets how long the response rings, not how far a rounded coefficient moves the pole. A pair at $r = 0.5$ with a tiny angle is as ill-conditioned as one at $r = 0.99$ with the same angle.",
+                            r"They do move together, and that is the failure rather than the protection: a repeated root splits under perturbation like a square root, so an error $\epsilon$ moves each pole by order $\sqrt{\epsilon}$ — worse than linear, not better.",
+                            r"$1/(p_1 - p_2)$ has no upper bound as the difference goes to zero.",
+                            r"Nothing is shared. Each pole gets the full displacement the derivative predicts, and the derivative is larger for both of them at once.",
+                        ],
+                        "why": r"""
+The derivative is $-1/(p_1 - p_2)$ for a quadratic, so the separation is underneath and
+shrinking it makes the sensitivity grow without limit. For a conjugate pair the
+separation is $2r\sin\theta$, which is why a narrow section is the dangerous one: at
+$r = 0.999$ and $\theta = 0.02$ it is 0.040, and half a step of an eight-bit grid is
+enough to push that pair onto the unit circle. Coincident poles are worse still — the
+linear formula breaks down and the split goes as the square root of the perturbation.
+""",
+                    },
+                    {
+                        "q": "An expanded quartic denominator still has a pole outside the unit circle with eleven fractional bits of coefficient storage. Which response actually fixes the filter?",
+                        "opts": [
+                            "Raise the sample rate, so the poles are no longer bunched up close to $z = 1$",
+                            "Factor the polynomial back into second-order sections and round each one separately",
+                            "Double the coefficient word length, storing every one in twenty-two fractional bits instead of eleven",
+                            "Round the coefficients towards zero rather than to nearest, so no radius can grow",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Raising the sample rate moves every pole *towards* $z = 1$, not away from it: the same analogue filter at twice the rate has poles half as far from the point where the grid is thinnest. It makes this worse in exactly the way it appears to help.",
+                            r"It changes the sensitivity denominators from a product of small distances into one distance each, which is the quantity that was wrong.",
+                            r"It works, at a price nobody would pay: the reading's quartic needs seventeen fractional bits to match a cascade at nine, so the bits are being spent to buy back a structure decision that costs nothing to make correctly.",
+                            r"Rounding towards zero shrinks each *coefficient*, which is not the same as shrinking each pole radius — $a_2$ is a product of the radii and $a_1$ is not, so the two move in different directions and the radius can still grow.",
+                        ],
+                        "why": r"""
+The problem is the conditioning of the polynomial, and only the structure changes that.
+Splitting into biquads replaces a sensitivity denominator that is a product of three
+small distances with one distance per section, which is the 45-fold difference measured
+in the reading. Extra bits do help — seventeen fractional bits gets the quartic to where
+a cascade sits at nine — but that is eight bits per coefficient bought to avoid a
+factorisation that is free, and the pole radius does not even fall monotonically with
+word length along the way.
+""",
+                    },
+                    {
+                        "q": "The sensitivity formula predicts a pole shift of 2.58 for a quartic at six coefficient bits, and the shift measured on the rounded filter is 0.266. What has gone wrong?",
+                        "opts": [
+                            "The formula is a derivative, and at that step size the poles move far enough to change the separations it used",
+                            "Rounding at six bits behaves as truncation, so the error is a whole step rather than the half step the bound assumes",
+                            "The formula holds only for real, distinct poles, and these are two conjugate pairs",
+                            "The measurement matches each exact pole with its nearest survivor, and nearest-neighbour pairing understates a large shift",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"A shift of 2.58 in a plane where every pole started inside the unit circle is a prediction well outside the region the linearisation was taken in.",
+                            r"Rounding is rounding at any word length — the same `round` call, the same half-step bound. Six bits makes the step large; it does not change the rule applied to it.",
+                            r"The derivation never needed the poles to be real: $A'(p_i) = \prod_{j\neq i}(p_i - p_j)$ holds over the complex numbers, and the reading's 14-bit check on a conjugate pair matched it to under a percent.",
+                            r"Nearest-neighbour pairing can understate a shift, and here it is the honest choice: a root finder returns no ordering, so index pairing would report distances between poles that were never meant to correspond. It is also not a factor of ten.",
+                        ],
+                        "why": r"""
+$\partial p_i/\partial a_k$ is evaluated at the *unperturbed* poles, so it describes the
+first infinitesimal step away from them. At fourteen fractional bits, where one LSB is
+$6.1\times10^{-5}$, it matches the measurement to under a percent. At six bits the step
+is $1.56\times10^{-2}$, the poles rearrange completely — a conjugate pair becoming two
+real poles, among other things — and the separations in the denominator are no longer
+the ones the formula used. It tells you which structure to fear, not where a badly
+quantised filter ends up.
+""",
+                    },
+                    {
+                        "q": "One section of a cascade has its poles at radius 0.999 and angle 0.02 radians. Rounded to eight coefficient bits, that pair lands on the unit circle even though every other section is untouched. Why does the cascade not protect it?",
+                        "opts": [
+                            "Earlier sections have already scaled the signal down, so it reaches this one with fewer significant bits left",
+                            "Its coefficients exceed one in magnitude, so an integer bit is spent on range and the grid it lands on is coarser",
+                            "Its own two poles are 0.040 apart, and inside a biquad that single distance is the entire sensitivity denominator",
+                            "A cascade only decouples sections whose poles are real, and a conjugate pair shares its coefficients with its partner",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"Signal scaling changes the data path and this failure is in the coefficient path: the poles have moved before a single sample arrives, and they would have moved in a section running on its own.",
+                            r"Tempting and half true — $a_1 = -2r\cos\theta$ is about $-2$ here, so the format does need an integer bit. But the comparison in the reading holds the fractional bits fixed at eight for both structures, and the well-separated section survives them.",
+                            r"$2r\sin\theta = 2 \times 0.999 \times \sin 0.02 = 0.040$, and half an eight-bit step divided by that is $7.6\times10^{-3}$ — enough to cross from $r = 0.999$.",
+                            r"The decoupling has nothing to do with realness. A biquad holds a conjugate pair precisely so that each section owns one pair, and the pair's two members are exactly the neighbours whose separation the formula uses.",
+                        ],
+                        "why": r"""
+Cascading removes a pole's sensitivity to the *other sections'* poles; it does nothing
+about its sensitivity to its own conjugate. That separation is $2r\sin\theta$, here
+$0.040$, so a half-step of $2^{-9}$ predicts a movement of $7.6\times10^{-3}$ — against
+a margin to the unit circle of only $10^{-3}$. The lab's fourth check is this exact pair
+at this exact word length. The remedy is more coefficient bits for that section, or a
+structure that stores $r$ and $\theta$ rather than $a_1$ and $a_2$, such as the coupled
+form.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "Pole radius, decay, and how little it takes to move it",
                 "visualiser": "z-plane",
@@ -791,6 +1645,328 @@ assert _c14 < _d14 / 5, \
                 "The $L_1$ bound $\\sum |h[k]|$ is the smallest input scaling that makes overflow impossible for any bounded input.",
                 "Scaling to the $L_1$ bound is pessimistic for real signals and costs dynamic range directly — guard bits in the accumulator buy the same safety without it.",
             ],
+            "read": [
+                {
+                    "title": "The safe arithmetic gets the wrong answer",
+                    "minutes": 17,
+                    "body": r'''
+Three taps of 0.6, a square wave of amplitude 0.9, and a word whose range runs from $-1$
+to $1 - 2^{-15}$. Every number going in is comfortably inside that range. Here is what
+comes out around sample 22, computed three ways: with no limit at all, with a two's
+complement accumulator that rolls over, and with one that clamps.
+
+```python
+import math
+
+TAPS = [0.6, 0.6, 0.6]
+
+
+def square(n):
+    """The lab's input: a 0.9 square wave, well inside a range of [-1, 1)."""
+    s = math.sin(2.0 * math.pi * 0.02 * n)
+    return 0.9 * (1.0 if s > 0 else -1.0 if s < 0 else 0.0)
+
+
+def wrap(v, int_bits=0):
+    """Fold into [-2**m, 2**m) the way two's complement addition does."""
+    half = 2.0 ** int_bits
+    return (v + half) % (2.0 * half) - half
+
+
+def saturate(v, int_bits=0, frac_bits=15):
+    """Clamp to the representable range instead."""
+    return min(max(v, -(2.0 ** int_bits)), 2.0 ** int_bits - 2.0 ** -frac_bits)
+
+
+def run(mode):
+    out = []
+    for n in range(60):
+        acc = sum(TAPS[k] * square(n - k) for k in range(3) if n - k >= 0)
+        if mode == "wrap":
+            acc = wrap(acc)
+        elif mode == "saturate":
+            acc = saturate(acc)
+        out.append(acc)
+    return out
+
+
+exact = run("none")
+wrapped = run("wrap")
+clamped = run("saturate")
+print(" n    input     exact     wrapped   saturated")
+for n in range(22, 30):
+    print(f"{n:3d}   {square(n):+.2f}   {exact[n]:+.5f}   {wrapped[n]:+.5f}   {clamped[n]:+.5f}")
+print()
+print("worst-case gain, sum of |taps|:", sum(abs(t) for t in TAPS))
+print("reference peak               :", max(abs(v) for v in exact))
+print("largest wrap error           :", max(abs(a - b) for a, b in zip(wrapped, exact)))
+print("largest saturation error     :", max(abs(a - b) for a, b in zip(clamped, exact)))
+```
+
+```text
+ n    input     exact     wrapped   saturated
+ 22   +0.90   +1.62000   -0.38000   +0.99997
+ 23   +0.90   +1.62000   -0.38000   +0.99997
+ 24   +0.90   +1.62000   -0.38000   +0.99997
+ 25   -0.90   +0.54000   +0.54000   +0.54000
+ 26   -0.90   -0.54000   -0.54000   -0.54000
+ 27   -0.90   -1.62000   +0.38000   -1.00000
+ 28   -0.90   -1.62000   +0.38000   -1.00000
+ 29   -0.90   -1.62000   +0.38000   -1.00000
+
+worst-case gain, sum of |taps|: 1.7999999999999998
+reference peak               : 1.62
+largest wrap error           : 2.0
+largest saturation error     : 0.6200305175781251
+```
+
+Three inputs of $+0.9$ in a row and the accumulator wants 1.62. Rolling over, it hands
+back $-0.38$: not a distorted version of $+1.62$ but a value of the opposite sign, and
+the same again at 27 with the signs reversed. Clamping, it hands back $+0.99997$, which
+is at least on the right side of zero and out by the amount of the overload.
+
+## Why one error is 2.0 and the other is 0.62
+
+Two's complement addition is arithmetic modulo $2^{m+1}$, the width of the whole range,
+with the result taken in the half-open window $\left[-2^{m}, 2^{m}\right)$. So a value
+$v$ that leaves the window comes back as $v - 2^{m+1}$ if it left the top, and
+$v + 2^{m+1}$ if it left the bottom. The error is not related to how far $v$ went; it is
+the span itself. With $m = 0$ the span is 2.0, and 2.0 is what the measurement reports —
+to the last digit, for every overflowing sample, whether the overload was one LSB or one
+hundred.
+
+Clamping replaces $v$ with the nearest representable value, so the error is
+$v - \left(2^{m} - q\right)$: the overshoot and nothing else. Here $1.62 - 0.99997 =
+0.62003$, which is again what the measurement reports. A small overload gives a small
+error, and the error grows continuously with the overload rather than jumping to the
+full span at the first code past the rail.
+
+That is the whole argument for saturation at an output, and it is worth stating in the
+terms the ear uses rather than the terms the norm uses. Saturation is soft clipping: it
+adds harmonics that arrive with the signal and stop when it does. Rolling over inserts a
+discontinuity of the entire range into a smooth waveform, and a discontinuity has energy
+at frequencies the signal never contained — which then fold about half the sample rate
+exactly as the alias in the sandbox *Where the energy goes when something folds* does.
+One sounds like a loud passage; the other sounds like a fault.
+
+## The mistake: clamping can only help
+
+The reasonable next step is to apply the clamp everywhere, on the grounds that a value
+which cannot leave the range cannot do damage. This is where fixed-point arithmetic stops
+behaving the way ordinary arithmetic does.
+
+An FIR accumulator adds its products one at a time. Some of those running totals can
+leave the range while the final sum comes back inside it. Take taps $[0.9, -0.8, 0.9]$
+and a window of $[+0.9, -0.9, -0.9]$: the products are $0.81$, $0.72$ and $-0.81$, the
+running totals are $0.81$, $1.53$ and $0.72$, and the answer, $0.72$, is representable.
+
+```python
+import random
+
+TAPS = [0.9, -0.8, 0.9]
+
+
+def wrap(v):
+    return (v + 1.0) % 2.0 - 1.0
+
+
+def saturate(v):
+    return min(max(v, -1.0), 1.0 - 2.0 ** -15)
+
+
+def accumulate(window, limiter):
+    """Add the products one at a time, applying the limiter to each running total."""
+    acc = 0.0
+    for tap, x in zip(TAPS, window):
+        acc = limiter(acc + tap * x)
+    return acc
+
+
+rng = random.Random(11)
+seq = [0.9 if rng.random() < 0.5 else -0.9 for _ in range(4000)]
+worst_wrap = 0.0
+worst_sat = 0.0
+overflowed = 0
+for n in range(2, len(seq)):
+    window = [seq[n], seq[n - 1], seq[n - 2]]
+    exact = sum(t * x for t, x in zip(TAPS, window))
+    if abs(exact) >= 1.0:
+        continue                      # the result itself does not fit; nothing to ask
+    partials = [sum(TAPS[k] * window[k] for k in range(j + 1)) for j in range(3)]
+    if max(abs(p) for p in partials) < 1.0:
+        continue                      # nothing overflowed on the way, either
+    overflowed += 1
+    worst_wrap = max(worst_wrap, abs(accumulate(window, wrap) - exact))
+    worst_sat = max(worst_sat, abs(accumulate(window, saturate) - exact))
+
+print("windows whose total fits but whose running sum did not:", overflowed)
+print("largest error, wrapping accumulator  :", worst_wrap)
+print("largest error, saturating accumulator:", worst_sat)
+
+window = [0.9, -0.9, -0.9]
+print()
+print("one of them, step by step")
+print("  products      ", [round(t * x, 4) for t, x in zip(TAPS, window)])
+print("  running total ", [round(sum(TAPS[k] * window[k] for k in range(j + 1)), 4)
+                           for j in range(3)])
+print("  exact         ", round(sum(t * x for t, x in zip(TAPS, window)), 6))
+print("  wrapping      ", round(accumulate(window, wrap), 6))
+print("  saturating    ", round(accumulate(window, saturate), 6))
+```
+
+```text
+windows whose total fits but whose running sum did not: 991
+largest error, wrapping accumulator  : 1.1102230246251565e-16
+largest error, saturating accumulator: 0.5300305175781251
+
+one of them, step by step
+  products       [0.81, 0.72, -0.81]
+  running total  [0.81, 1.53, 0.72]
+  exact          0.72
+  wrapping       0.72
+  saturating     0.189969
+```
+
+On 991 of the 3998 windows — a quarter of them — the running sum leaves the range and the
+answer does not. On every one of those, the accumulator with **no overflow protection at
+all**, the one that rolls over and does nothing about it, returns the exact answer to
+within $1.1\times10^{-16}$ of floating-point dust. The accumulator that was defended
+returns 0.190 where the truth is 0.720, and it is wrong by 0.530 — a quarter of the whole
+range. The defence is the defect.
+
+The reason is that addition modulo $2^{m+1}$ is closed and associative: rolling over is
+not an approximation of the sum, it is the exact sum expressed in a different
+representative of the same residue class, so a value that leaves the range and comes back
+carries its excess with it and cancels it. Clamping is not modular. It discards the
+excess at the moment of clamping, and nothing later can recover a number that was thrown
+away.
+
+This is why a DSP part offers both and why the choice is made per stage rather than per
+program: the intermediate sums of an FIR are allowed to roam, and the value written out
+at the end is clamped.
+
+## How much headroom to buy, and what it costs
+
+The derive unit *Scaling a three-tap filter so it cannot overflow* finds the largest safe
+input scaling for positive taps: the reciprocal of the tap sum. With signs allowed, the
+same argument gives $\frac{1}{\sum_k \left|h_k\right|}$, because the worst input is the
+one whose sign at each lag matches the sign of the tap it meets. That sum is the $L_1$
+gain, and it is not a bound anyone chose to be careful with — it is attained.
+
+```python
+import cmath
+import math
+import random
+
+
+def lowpass(taps=21, fc=0.15):
+    """A windowed-sinc low-pass, built here so the numbers can be checked."""
+    mid = (taps - 1) / 2.0
+    h = []
+    for n in range(taps):
+        k = n - mid
+        ideal = 2.0 * fc if k == 0.0 else math.sin(2.0 * math.pi * fc * k) / (math.pi * k)
+        h.append(ideal * (0.54 - 0.46 * math.cos(2.0 * math.pi * n / (taps - 1))))
+    return h
+
+
+def peak_gain(h, points=4000):
+    """The largest magnitude of the frequency response, on a fine grid."""
+    best = 0.0
+    for i in range(points + 1):
+        w = math.pi * i / points
+        s = sum(c * cmath.exp(-1j * w * k) for k, c in enumerate(h))
+        best = max(best, abs(s))
+    return best
+
+
+def peak_out(h, x):
+    return max(abs(sum(h[k] * x[n - k] for k in range(len(h)) if n - k >= 0))
+               for n in range(len(x)))
+
+
+h = lowpass()
+l1 = sum(abs(c) for c in h)
+l2 = math.sqrt(sum(c * c for c in h))
+print(f"L1 gain, sum of |h|      {l1:.4f}   costs {20 * math.log10(l1):5.2f} dB to scale out")
+print(f"peak |H(w)|              {peak_gain(h):.4f}   costs {20 * math.log10(peak_gain(h)):5.2f} dB")
+print(f"L2 gain, sqrt(sum h^2)   {l2:.4f}")
+print()
+adversary = [(1.0 if c >= 0 else -1.0) for c in reversed(h)] * 4
+rng = random.Random(5)
+noise = [1.0 if rng.random() < 0.5 else -1.0 for _ in range(4000)]
+tone = [math.sin(2.0 * math.pi * 0.05 * n) for n in range(4000)]
+print(f"peak out, the sign pattern of h   {peak_out(h, adversary):.4f}")
+print(f"peak out, random plus/minus one   {peak_out(h, noise):.4f}")
+print(f"peak out, a full-scale sine       {peak_out(h, tone):.4f}")
+```
+
+```text
+L1 gain, sum of |h|      1.3162   costs  2.39 dB to scale out
+peak |H(w)|              1.0015   costs  0.01 dB
+L2 gain, sqrt(sum h^2)   0.5110
+
+peak out, the sign pattern of h   1.3162
+peak out, random plus/minus one   1.2670
+peak out, a full-scale sine       1.0074
+```
+
+The adversarial input reaches 1.3162 exactly, which is what "attained" means. What is
+worth noticing is the second line: a random full-scale binary sequence, chosen by a coin
+and not by an adversary, reaches 1.2670 — 96% of the bound. For a broadband signal at
+full scale the $L_1$ bound is close to the truth, and calling it pessimistic is a way of
+being wrong about a quarter of a bit.
+
+The sine is the other case. A single tone in the passband peaks at 1.0074, because a
+sinusoid is scaled by $\left|H(\omega)\right|$ and by nothing else, and the largest that
+gets is 1.0015. Scaling to the $L_1$ bound to protect a narrowband signal gives away
+2.38 dB for an input that cannot occur.
+
+There is a third option, and it is why DSP parts have 40-bit accumulators on 16-bit data
+paths. Instead of scaling the signal down by $\frac{1}{L_1}$, widen the accumulator by
+$\left\lceil \log_2 L_1 \right\rceil$ guard bits. Here $\log_2 1.3162 = 0.396$, so one
+guard bit removes every overflow at a cost of one bit of register width and zero decibels
+of signal. Eight guard bits cover an $L_1$ gain up to 256, which is more than a
+several-hundred-tap filter needs.
+
+## Where this stops holding
+
+Saturation makes the filter nonlinear. Superposition is gone the moment anything clamps,
+so a measured response to one input says nothing about another, and the frequency response
+stops being a description of the system. In a recursive filter it does something worse:
+a clamped value is fed back, and an overflow can sustain itself as a full-scale
+oscillation that persists after the input has gone. That is an overflow limit cycle, and
+it is a different animal from the granular limit cycles of module 4 — those are a few
+LSBs, this one is the whole range.
+
+The modular argument has a sharp edge too. Intermediates may roll over only while nothing
+downstream *reads* one as a value. That holds for the running sum of an FIR, which is
+discarded once the output is taken. It fails completely in the recursive structures of
+module 4, where the intermediate is the state, is stored, and is read back on the next
+sample: there, a roll-over is a genuine and permanent error, which is why the capstone
+limits every stored word and not only the output.
+
+Finally, all of this assumes the filter is fixed. An adaptive filter's taps change, so
+$\sum|h|$ changes with them, and a scaling chosen at design time is a scaling chosen for
+coefficients the filter no longer has.
+
+## What you are about to build
+
+The lab *Wraparound, saturation and the $L_1$ bound* is the three pieces above with the
+numbers turned into checks. `wrap(v, int_bits)` is the fold — the modulus taken on
+$v + 2^{m}$ and shifted back, which is the one-line form of the two's complement
+behaviour derived here. `saturate` is the clamp with the same asymmetric top,
+$2^{m} - q$, that module 1 built. `l1_gain(b)` is the tap sum, and its check insists that
+$[0.5, -0.5]$ gives 1.0 rather than 0.0, because the signs of the taps do not cancel when
+the input is free to flip with them. `fir(x, b, mode, ...)` runs the filter with a
+full-precision accumulator and applies the limiter to the output sample alone.
+
+Its fifth check is the first listing of this reading: a wrap error of exactly 2.0 against
+a saturation error of 0.62. Its sixth scales the input by $1/1.8$ and insists the peak
+comes out at 0.9 and that nothing clips at all — the derive unit's result, measured.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "Where the energy goes when something folds",
                 "visualiser": "spectrum",
@@ -1161,6 +2337,436 @@ assert _err < 1e-9, \
                 "A negative pole gives an alternating cycle at half the sample rate; a positive pole gives a stuck DC offset. Both are audible in the wrong product.",
                 "Magnitude truncation always moves towards zero, so it cannot sustain a granular cycle — at the price of a signal-dependent bias.",
             ],
+            "read": [
+                {
+                    "title": "Fifty codes that will not go away",
+                    "minutes": 17,
+                    "body": r'''
+An exponential smoother on an embedded part, the most ordinary recursive filter there is:
+$y[n] = a\,y[n-1] + (1-a)\,x[n]$ with $a = 0.99$, its state held in a 16-bit word. The
+sensor reads 0.5 for two thousand samples and then the sensor is unplugged and the input
+is exactly zero. The filter is stable, the input is gone, and the output should follow it
+down.
+
+```python
+Q = 2.0 ** -15
+A = 0.99
+
+
+def smooth(x, quantised):
+    """y[n] = a*y[n-1] + (1-a)*x[n], with the stored state rounded when asked."""
+    y = 0.0
+    out = []
+    for v in x:
+        y = A * y + (1.0 - A) * v
+        if quantised:
+            y = round(y / Q) * Q
+        out.append(y)
+    return out
+
+
+signal = [0.5] * 2000 + [0.0] * 4000
+fixed = smooth(signal, True)
+ideal = smooth(signal, False)
+print("after the input is removed, in LSBs of a 16-bit word")
+print(" sample   fixed point   double precision")
+for n in (2000, 2200, 2600, 3000, 4000, 5999):
+    print(f"  {n:5d}   {fixed[n] / Q:11.2f}   {ideal[n] / Q:16.6f}")
+print()
+print("last 8 fixed-point samples, in LSBs:", [round(v / Q, 3) for v in fixed[-8:]])
+print("they are all identical            :", len(set(fixed[-8:])) == 1)
+print("predicted deadband, q/(2*(1-a))   :", 1.0 / (2.0 * (1.0 - A)), "LSB")
+```
+
+```text
+after the input is removed, in LSBs of a 16-bit word
+ sample   fixed point   double precision
+   2000      16171.00       16220.159970
+   2200       2168.00        2173.171759
+   2600         50.00          39.009635
+   3000         50.00           0.700245
+   4000         50.00           0.000030
+   5999         50.00           0.000000
+
+last 8 fixed-point samples, in LSBs: [50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
+they are all identical            : True
+predicted deadband, q/(2*(1-a))   : 49.99999999999996 LSB
+```
+
+The two runs track each other down through four decades and then part company. In double
+precision the output is at $3\times10^{-5}$ LSB by sample 4000 and gone by 5999. In the
+16-bit word it stops at 50 LSB, exactly, and stays there for as long as the part is
+powered. Not decaying slowly — stopped. The last eight samples are the same number.
+
+## The value has found a place to stand
+
+Once the input has gone, the recursion is $y \leftarrow Q(a\,y)$ and nothing else. In one
+step the value would shrink by $y(1-a)$, and the quantiser then moves it by up to $q/2$.
+When the shrink is the smaller of the two, rounding returns the number it started from,
+and the sequence has reached a fixed point of the *quantised* recursion that is not a
+fixed point of the ideal one. Setting $y(1-a) = q/2$ gives the largest such $y$, which is
+the derive unit *The deadband of a first-order section* and its answer
+$\frac{q}{2\left(1-|a|\right)}$. At $a = 0.99$ that is $50q$, and $50q$ is where the
+measurement stopped.
+
+The lab's own case is small enough to read by hand. Eight fractional bits, $a = 0.8$, and
+a start of 20 LSB, under three rounding rules that people reach for interchangeably.
+
+```python
+import math
+
+Q = 2.0 ** -8
+
+
+def to_nearest(v):
+    return round(v / Q) * Q
+
+
+def towards_minus_infinity(v):
+    return math.floor(v / Q) * Q
+
+
+def towards_zero(v):
+    return math.trunc(v / Q) * Q
+
+
+def zero_input(a, y0, rule, steps=30):
+    """y <- rule(a*y), recording each value before it is stepped."""
+    y = y0
+    out = []
+    for _ in range(steps):
+        out.append(y)
+        y = rule(a * y)
+    return out
+
+
+RULES = [("round to nearest    ", to_nearest),
+         ("floor, towards -inf ", towards_minus_infinity),
+         ("truncate towards 0  ", towards_zero)]
+for start in (20, -20):
+    print(f"starting at {start:+3d} LSB, a = 0.8, one LSB = 1/256")
+    for name, rule in RULES:
+        seq = [round(v / Q) for v in zero_input(0.8, start * Q, rule)]
+        print(f"  {name} {seq[:12]} ... settles at {seq[-1]:+d}")
+    print()
+print("deadband q/(2*(1-0.8)) =", 1.0 / (2.0 * 0.2), "LSB")
+```
+
+```text
+starting at +20 LSB, a = 0.8, one LSB = 1/256
+  round to nearest     [20, 16, 13, 10, 8, 6, 5, 4, 3, 2, 2, 2] ... settles at +2
+  floor, towards -inf  [20, 16, 12, 9, 7, 5, 4, 3, 2, 1, 0, 0] ... settles at +0
+  truncate towards 0   [20, 16, 12, 9, 7, 5, 4, 3, 2, 1, 0, 0] ... settles at +0
+
+starting at -20 LSB, a = 0.8, one LSB = 1/256
+  round to nearest     [-20, -16, -13, -10, -8, -6, -5, -4, -3, -2, -2, -2] ... settles at -2
+  floor, towards -inf  [-20, -16, -13, -11, -9, -8, -7, -6, -5, -4, -4, -4] ... settles at -4
+  truncate towards 0   [-20, -16, -12, -9, -7, -5, -4, -3, -2, -1, 0, 0] ... settles at +0
+
+deadband q/(2*(1-0.8)) = 2.5 LSB
+```
+
+Follow the rounded row to its end. At 3 LSB the product is 2.4, which rounds to 2. At 2
+LSB the product is 1.6, which rounds back to 2. The shrink is 0.4 LSB, the quantiser's
+reach is 0.5, and 0.4 is the smaller of the two — so the value cannot get past itself.
+Two is inside the predicted 2.5, as it has to be.
+
+The three rules do not agree, and the disagreement is the point. Truncating towards zero
+takes the magnitude down by at least the fraction it discards and never puts anything
+back, so it reaches exact zero from either sign, on step 10. Flooring is not the same
+operation: it moves towards $-\infty$, so it kills the cycle above zero and manufactures
+a worse one below, locking at $-4$ LSB where round-to-nearest had settled at $-2$. A
+right shift on a two's complement register is a floor, and reaching for one as "the cheap
+truncation" swaps a symmetric two-LSB cycle for a permanent negative offset twice its
+size.
+
+## The mistake: a quantiser can only be wrong by half a step
+
+Half an LSB is what rounding promises, and for an FIR filter the promise is kept: each
+error appears in one output sample and is gone. Carrying that intuition into a recursive
+structure is the error this module exists to correct, and it is a comfortable one to
+carry, because the arithmetic really is the same arithmetic.
+
+```python
+import math
+
+
+def settle(a, frac_bits, rule, y0=0.5, steps=60000):
+    """Run y <- rule(a*y) from y0 until it stops moving, and report where."""
+    q = 2.0 ** -frac_bits
+    y = round(y0 / q) * q
+    for _ in range(steps):
+        nxt = rule(a * y / q) * q
+        if nxt == y:
+            return y
+        y = nxt
+    return y
+
+
+def nearest(t):
+    return round(t)
+
+
+def to_zero(t):
+    return math.trunc(t)
+
+
+q15 = 2.0 ** -15
+print("15 fractional bits, rounding to nearest")
+print("   a      settles at    q/(2(1-a))     as dBFS")
+for a in (0.5, 0.8, 0.9, 0.99, 0.999):
+    v = settle(a, 15, nearest)
+    band = 1.0 / (2.0 * (1.0 - a))
+    db = 20.0 * math.log10(abs(v)) if v else float("-inf")
+    print(f" {a:6.3f}   {abs(v) / q15:8.1f} LSB   {band:8.1f} LSB   {db:8.2f}")
+
+print()
+print("the same filter at a = 0.99, two ways")
+rounded16 = settle(0.99, 15, nearest)
+cut9 = settle(0.99, 8, to_zero)
+print(f"  16-bit word, round to nearest      {abs(rounded16):.8f} "
+      f"= {20 * math.log10(abs(rounded16)):.2f} dBFS")
+print(f"   9-bit word, truncate towards zero {abs(cut9):.8f} = silence")
+print(f"  a 16-bit converter's own floor is  {10 * math.log10(q15 * q15 / 12):.2f} dB, "
+      "spread over the whole band")
+```
+
+```text
+15 fractional bits, rounding to nearest
+   a      settles at    q/(2(1-a))     as dBFS
+  0.500        0.0 LSB        1.0 LSB       -inf
+  0.800        2.0 LSB        2.5 LSB     -84.29
+  0.900        4.0 LSB        5.0 LSB     -78.27
+  0.990       50.0 LSB       50.0 LSB     -56.33
+  0.999      500.0 LSB      500.0 LSB     -36.33
+
+the same filter at a = 0.99, two ways
+  16-bit word, round to nearest      0.00152588 = -56.33 dBFS
+   9-bit word, truncate towards zero 0.00000000 = silence
+  a 16-bit converter's own floor is  -101.10 dB, spread over the whole band
+```
+
+Fifty LSBs is a hundred times the half-LSB the quantiser promised, and 500 is a thousand
+times. Worse, the comparison the word length was bought on is the last line: the whole
+quantisation floor of a 16-bit word is $q^{2}/12$, which is $-101.10$ dB, spread across
+the band. The stuck offset at $a = 0.99$ carries $-56.33$ dB — 44.8 dB more power than
+the entire floor the sixteen bits were chosen to deliver, and it is at one place in the
+spectrum rather than spread over it. Sixteen bits bought a floor and the structure put a
+tone on top of it.
+
+Then the comparison that should settle the argument. The same section in a **nine-bit**
+word, with the cruder and cheaper rounding rule — truncation towards zero — produces
+exactly zero. Not a smaller cycle: none. Seven fewer bits of state, an operation that
+costs less than round-to-nearest, and a filter that goes quiet where the careful 16-bit
+version does not. More resolution is not the axis this failure lives on.
+
+## Where this stops holding
+
+The deadband is a bound and it should be read as one. At $a = 0.8$ it allows 2.5 LSB and
+the filter settles at 2; at $a = 0.5$ it allows 1.0 and the filter reaches exact zero.
+The formula says where a cycle cannot be, not where it will be, and at high $|a|$ the two
+coincide because the grid is fine relative to the band — 50.0 against 50.0, 500.0
+against 500.0 — while at low $|a|$ there is a whole LSB of slack.
+
+The $a = 0.5$ row is decided by the tie-break, which is worth knowing before it decides
+something less convenient. The state arrives at 1 LSB, the product is exactly 0.5 LSB,
+and Python's `round` — like a well-designed converter — breaks that tie to even and
+returns 0. A round-half-away-from-zero rule would return 1 and lock there forever. At the
+amplitudes where limit cycles live, the tie-break is not a detail.
+
+Everything above is first order. A second-order section has zero-input cycles the
+argument does not reach: their amplitude bound involves $a_2$ as well and is larger, and
+the cycle can be a genuine oscillation with a period unrelated to $2$ samples, rather
+than a stuck value or an alternation. The capstone's fourth-order cascade is where that
+shows up, and its check allows a tail of up to 64 LSBs against a first-order intuition of
+a handful.
+
+Magnitude truncation buys the silence at a price. Its error is no longer zero-mean: it
+always moves towards zero, so it shrinks whatever is present by an amount that depends on
+what is present. That is signal-dependent distortion rather than noise, and on a
+low-level signal it is audible in its own way. Nor does it touch the overflow limit
+cycles of module 3, which are sustained by a clamp rather than by rounding and run at
+full scale rather than at a few LSBs.
+
+Last, none of this is visible with an input. A filter whose state is re-excited every
+sample never sits in its deadband, so the fault does not appear on the bench with a
+signal generator connected. It appears in the gaps: the pause between words, the moment
+after a burst, the sensor that was unplugged.
+
+## What you are about to build
+
+The lab *Find the limit cycle, then remove it* builds the four pieces above. `q_round`
+and `q_trunc` differ in one call, and the second must truncate towards zero rather than
+floor — the $-4$ LSB row is what happens when it does not. `zero_input(a, y0, frac_bits,
+steps, mode)` runs $y \leftarrow Q(ay)$ and records each value **before** stepping, so the
+first entry is the $y_0$ you handed it. `deadband(a, frac_bits)` is
+$\frac{q}{2\left(1-|a|\right)}$ with the absolute value, because a pole at $-0.8$ holds a
+cycle of the same amplitude as one at $+0.8$ and only differs in flipping sign every
+sample.
+
+Its checks are the numbers above: the settle at 2 LSB from a start of 20, the same settle
+from a start of 100 because the deadband belongs to the pole and not to the excitation,
+the alternating sign for a negative pole, and truncation reaching zero on step 10. The
+blanks unit *The filter that will not go quiet* asks for the same four facts in the order
+the argument makes them, and the sandbox *A decay that has to stop somewhere* is where to
+watch the per-step shrink get small: hold the angle at zero and take the radius from 0.5
+to 0.98, and what is shrinking is the quantity that has to beat half an LSB.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "A filter with nothing to filter",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A stable first-order section runs on into silence in a 16-bit word and its output stops at 50 LSB instead of reaching zero. What holds it there?",
+                        "opts": [
+                            "The input was not exactly zero, and a residual offset is being amplified by the feedback path",
+                            "The state word has run out of bits, and 50 LSB is the smallest value that format can represent",
+                            "Its coefficient rounded to a value slightly above one, so the section is no longer a stable one",
+                            "The shrink per step has fallen below half an LSB, so rounding hands back the code it was given",
+                        ],
+                        "a": 3,
+                        "whys": [
+                            r"A reasonable first suspicion, and the measurement rules it out: the same code path in double precision, with the same input, reaches $3\times10^{-5}$ LSB. The input is identical; only the rounding differs.",
+                            r"One LSB is the smallest non-zero value the format holds, and 50 of them are 50 available codes above it. Nothing about the format prevents the state from passing through 49, 48 and so on down to zero.",
+                            r"Then the output would grow rather than sit still. A coefficient above one gives an exponential ramp to the rail; this sequence is bit-for-bit constant.",
+                            r"$y(1-a) = 50q \times 0.01 = 0.5q$, and rounding covers exactly that.",
+                        ],
+                        "why": r"""
+With the input gone the recursion is $y \leftarrow Q(a\,y)$. The ideal step would shrink
+the value by $y\left(1-a\right)$, and the quantiser can move it by up to $q/2$ in the
+other direction. At $y = 50q$ and $a = 0.99$ the shrink is exactly $0.5q$, so rounding
+restores it in full and the state is a fixed point of the quantised recursion that is not
+one of the ideal recursion. Setting those two quantities equal is where
+$\frac{q}{2\left(1-|a|\right)}$ comes from, and it gives 50 LSB for this pole.
+""",
+                    },
+                    {
+                        "q": "Two DC blockers run in the same 16-bit arithmetic, one with its pole at $a = 0.9$ and one at $a = 0.999$. How do their zero-input tails compare?",
+                        "opts": [
+                            "The tail at $a = 0.999$ sits about a hundred times higher, because the deadband goes as $1/(1-|a|)$",
+                            "The two are the same size, because the deadband is set by the quantisation step and by nothing else",
+                            "The tail at $a = 0.999$ is smaller, because a pole nearer the unit circle decays more gently",
+                            "The tail at $a = 0.999$ alternates at half the sample rate while the other one holds a DC value",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$1/(2 \times 0.001)$ against $1/(2 \times 0.1)$: 500 LSB against 5, and the measured settling points are 500 and 4.",
+                            r"The step is the numerator and the pole is in the denominator. If the step alone decided it, every filter in a given word length would have the same tail, and a DC blocker at $a = 0.9999$ would be as quiet as one at $a = 0.5$.",
+                            r"Gentle decay is the mechanism, and it points the other way: a smaller shrink per step is beaten by half an LSB sooner, so the value stops sooner and higher up.",
+                            r"Both poles are positive, so both hold a steady value. Alternation at half the sample rate is what a *negative* pole produces, and its amplitude bound is the same $q/(2(1-|a|))$.",
+                        ],
+                        "why": r"""
+The deadband is $\frac{q}{2\left(1-|a|\right)}$, so what matters is the distance from the
+pole to the unit circle. At $a = 0.9$ that distance is 0.1 and the bound is 5 LSB; at
+$a = 0.999$ it is 0.001 and the bound is 500 LSB, a hundredfold. In a 16-bit word 500 LSB
+is $-36$ dBFS of output from a filter with no input — which is why a narrowband section
+is the one to check, and why raising the sample rate, which pushes poles towards
+$z = 1$, makes this worse rather than better.
+""",
+                    },
+                    {
+                        "q": "An FIR filter of the same length, rounding every stored value to the same grid, does not produce a zero-input tail at all. What is the difference?",
+                        "opts": [
+                            "Its taps are all below one in magnitude, so a rounding error cannot be scaled up anywhere in the filter",
+                            "A rounding error enters one output sample and is discarded; no path returns it to the filter's state",
+                            "It is written with a full-precision accumulator, so the arithmetic rounds once instead of once per tap",
+                            "Its error is bounded by half an LSB per tap, and the taps of a low-pass sum to less than one",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Tap magnitude is not what does it. Give an FIR filter taps of 8 and it still has no zero-input tail, because after the input stops the delay line empties and the output is a sum of zeros.",
+                            r"Once the delay line has flushed, an FIR filter's output is a sum over stored *inputs*, all of which are zero.",
+                            r"A wide accumulator does reduce the noise, and it is orthogonal to this: a recursive filter with a full-precision accumulator still rounds the value it stores as state, and that stored value is what circulates.",
+                            r"The taps of a unit-gain low-pass sum to one, not less, and the bound is about error size rather than about persistence. A one-LSB error that never returns is harmless however large the taps are.",
+                        ],
+                        "why": r"""
+The state of an FIR filter is the last $N$ *inputs*, not its own past outputs. Stop the
+input and the delay line flushes; after $N$ samples the filter is summing zeros and its
+output is zero, whatever rounding did on the way. In a recursive filter the rounded value
+is the state, so the error made at step $n$ is fed back through the pole and becomes part
+of the signal the filter reacts to. That is the whole structural difference, and it is
+why $q^2/12$ describes an FIR filter's error as a floor added at the output and describes
+a recursive filter's error as an input it cannot tell from the real one.
+""",
+                    },
+                    {
+                        "q": "The same first-order section is run two ways: a 16-bit state rounded to nearest, and a 9-bit state truncated towards zero. The 9-bit version reaches exact silence and the 16-bit one sticks at 50 LSB. Why?",
+                        "opts": [
+                            "Its coarser grid makes the value decay faster, so it passes through the deadband before it can lock",
+                            "Its deadband is smaller, because a wider quantisation step puts the bound lower for the same pole",
+                            "Truncation towards zero can only shrink the magnitude, and no rounding step is ever able to restore it",
+                            "The two end up equally quiet in the end; the extra bits change how large the tail is rather than whether there is one",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"A coarse grid does not speed up a geometric decay — the multiply is the same multiply. It changes what happens at the bottom of it, and if the rule were round-to-nearest the 9-bit version would lock too, at 6 LSB of its own coarser step.",
+                            r"Backwards: $q$ is in the numerator, so a wider step gives a *larger* deadband in absolute terms. At 9 bits and $a = 0.99$ it is $50 \times 2^{-8}$, which is 64 times the 16-bit value.",
+                            r"Every step either shrinks the magnitude by at least the fraction discarded, or leaves it, and the value cannot rise.",
+                            r"They are not equally quiet: one is a hard zero, held forever, and the other is a constant $1.5\times10^{-3}$. That is a difference in kind and not in size.",
+                        ],
+                        "why": r"""
+Rounding to nearest can move a value away from zero, and that is exactly what sustains
+the cycle: the shrink of $0.5q$ is undone by a rounding step of $0.5q$. Truncation
+towards zero has no such move available — its error always points inwards — so the
+magnitude is non-increasing at every step and strictly decreasing until it reaches zero.
+The word length is not the axis this failure lives on: fewer bits and a cheaper rule beat
+more bits and a careful one. What magnitude truncation costs is elsewhere, in a
+signal-dependent bias that is distortion rather than noise.
+""",
+                    },
+                    {
+                        "q": "Round-to-nearest is replaced by a right shift on the two's complement state word, which floors towards $-\\infty$. What happens to the zero-input behaviour?",
+                        "opts": [
+                            "Nothing changes: flooring and rounding differ only on values that are already exact multiples of the step",
+                            "Cycles above zero die out, and the state instead locks at a small negative value it can never leave",
+                            "Both signs die out, because any form of truncation discards part of the magnitude at every step",
+                            "Cycles grow in both directions, because flooring can displace a value by a whole step rather than half of one",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"They differ on every value that is not already on the grid, which after a multiply by 0.8 is almost all of them — the two traces from $+20$ LSB part company at the third sample.",
+                            r"Flooring always moves towards $-\infty$, which shrinks a positive value and grows a negative one.",
+                            r"That describes truncation towards *zero*, which is a different operation. `math.floor(-1.6)` is $-2.0$ while `math.trunc(-1.6)` is $-1.0$, and only the second moves inwards from both sides.",
+                            r"The displacement is under a whole step, which is true and is not the mechanism. The asymmetry is: from $+20$ LSB the floored run reaches exact zero, so it certainly has not grown in that direction.",
+                        ],
+                        "why": r"""
+A right shift is a floor, and a floor is not magnitude truncation. From $+20$ LSB at
+$a = 0.8$ it reaches zero on step 10, which looks like a fix. From $-20$ LSB it locks at
+$-4$ LSB — twice the amplitude round-to-nearest had settled at, and a permanent DC offset
+rather than a symmetric cycle. This is the cheapest mistake in the module to make, since
+a shift is what a compiler emits for a divide by a power of two, and the check that
+catches it is the one asserting `q_trunc(-1.6 LSB)` is $-1$ LSB rather than $-2$.
+""",
+                    },
+                    {
+                        "q": "The deadband formula allows 2.5 LSB at $a = 0.8$ and the filter settles at exactly 2; it allows 1.0 LSB at $a = 0.5$ and the filter reaches exact zero. What should be read into that?",
+                        "opts": [
+                            "It gives the amplitude of the first step after the input stops, rather than of the settled value",
+                            "It is an upper bound on where a sustained cycle can sit, not a prediction of where one will sit",
+                            "It applies to negative poles, where the cycle alternates, and overstates the case for positive ones",
+                            "It breaks down below $a = 0.8$, where a linear model of the rounding error stops describing it",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The first step after the input stops is wherever the decay had reached, which depends entirely on how loud the signal was — the bound depends on the pole and the step size and on nothing about the excitation.",
+                            r"It answers the question of where the shrink can be beaten, so anything outside it must keep decaying.",
+                            r"The sign of the pole changes only whether the cycle holds or alternates; the bound carries $|a|$ and is the same for $+0.8$ and $-0.8$, as the lab's second check asserts.",
+                            r"Nothing breaks down. At high $|a|$ the settling point lands on the bound exactly — 50.0 against 50.0, 500.0 against 500.0 — and the slack at low $|a|$ is the grid being coarse relative to a small bound, not a failure of the argument.",
+                        ],
+                        "why": r"""
+The derivation asks where the per-step shrink $y\left(1-|a|\right)$ can be undone by a
+rounding step of at most $q/2$, so it marks the largest $y$ at which a cycle is
+*possible*. Above it every value must keep falling. Inside it the state has to land on an
+actual grid point, and which one depends on the trajectory and on the tie-break: at
+$a = 0.8$ the reachable point below 2.5 LSB is 2, and at $a = 0.5$ the bound is 1.0 LSB
+and the only grid point strictly inside it is zero. At $a = 0.99$ and above the grid is
+fine compared with the bound and the two agree to the digit.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "A decay that has to stop somewhere",
                 "visualiser": "z-plane",

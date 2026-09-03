@@ -20,7 +20,7 @@
   "DL501": {"longest": 1, "shortest": 1, "whys": 120, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "DSP510": {"longest": 4, "shortest": 0, "whys": 0, "blanks": {"longest": 3, "shortest": 2, "markup": 0, "whys": 32}},
   "DSP520": {"longest": 8, "shortest": 0, "whys": 48, "blanks": {"longest": 1, "shortest": 0, "markup": 0, "whys": 32}},
-  "DSP530": {"longest": 8, "shortest": 0, "whys": 0, "blanks": {"longest": 6, "shortest": 0, "markup": 0, "whys": 36}},
+  "DSP530": {"longest": 8, "shortest": 0, "whys": 48, "blanks": {"longest": 6, "shortest": 0, "markup": 0, "whys": 36}},
   "EE101": {"longest": 19, "shortest": 16, "whys": 0, "blanks": {"longest": 4, "shortest": 6, "markup": 0, "whys": 0}},
   "EE102": {"longest": 21, "shortest": 5, "whys": 0, "blanks": {"longest": 7, "shortest": 6, "markup": 45, "whys": 0}},
   "EE111": {"longest": 18, "shortest": 6, "whys": 0, "blanks": {"longest": 14, "shortest": 6, "markup": 0, "whys": 352}},
